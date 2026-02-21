@@ -12,6 +12,20 @@ export type StrategyType =
   | "random"
   | "grudger";
 
+export interface OpponentRecord {
+  lastTheirDecision: Decision;
+  cc: number;
+  cd: number;
+  dc: number;
+  dd: number;
+}
+
+export function totalMatches(history: Record<number, OpponentRecord>): number {
+  let n = 0;
+  for (const r of Object.values(history)) n += r.cc + r.cd + r.dc + r.dd;
+  return n;
+}
+
 export type ParticleState = "moving" | "colliding";
 
 export interface Particle {
@@ -26,13 +40,14 @@ export interface Particle {
   score: number;
   strategy: StrategyType;
   useLLM: boolean;
-  matchHistory: { opponentId: number; myDecision: Decision; theirDecision: Decision }[];
+  matchHistory: Record<number, OpponentRecord>;
 }
 
 export interface AgentClassConfig {
   strategy: StrategyType;
   count: number;
   useLLM: boolean;
+  names?: string[];
 }
 
 export interface MatchRecord {

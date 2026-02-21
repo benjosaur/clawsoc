@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ClawSoc
 
-## Getting Started
+Prisoner's Dilemma particle simulation. Particles bounce around a canvas, collide, exchange messages, and play iterated PD against each other.
 
-First, run the development server:
+## Setup
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Configuring Agent Classes
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Edit `agentClasses` in `src/simulation/types.ts` (or pass a custom config to `useSimulation()`):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```ts
+agentClasses: [
+  { strategy: "always_cooperate", count: 2, useLLM: true, names: ["Alice", "Bob"] },
+  { strategy: "tit_for_tat",      count: 3, useLLM: false },
+  { strategy: "grudger",          count: 2, useLLM: false, names: ["Grudge1", "Grudge2"] },
+]
+```
 
-## Learn More
+Each entry defines:
+- **`strategy`** — `always_cooperate`, `always_defect`, `tit_for_tat`, `random`, or `grudger`
+- **`count`** — how many particles of this class to spawn
+- **`useLLM`** — if `true`, messages are generated via the OpenAI API; if `false`, uses templates
+- **`names`** (optional) — custom names for particles in this class. If omitted or if there are more particles than names, falls back to a built-in Greek alphabet list (Alpha, Beta, Gamma, ...)
 
-To learn more about Next.js, take a look at the following resources:
+Total particle count = sum of all `count` values. LLM and template particles coexist in the same simulation.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The default config spawns 20 particles (4 of each strategy), all using template messages.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### LLM Setup
 
-## Deploy on Vercel
+To use LLM-powered messages, set `OPENAI_API_KEY` in `.env.local`:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+OPENAI_API_KEY=sk-...
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Then set `useLLM: true` on any agent class. Only those particles will call the API — the rest use instant template messages.

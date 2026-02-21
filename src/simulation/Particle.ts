@@ -28,9 +28,11 @@ export function createParticles(config: SimulationConfig): Particle[] {
       const x = margin + Math.random() * (config.canvasWidth - margin * 2);
       const y = margin + Math.random() * (config.canvasHeight - margin * 2);
 
+      const label = agentClass.names?.[n] ?? NAMES[i % NAMES.length];
+
       particles.push({
         id: i,
-        label: NAMES[i % NAMES.length],
+        label,
         position: { x, y },
         velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
         radius: config.particleRadius,
@@ -40,7 +42,7 @@ export function createParticles(config: SimulationConfig): Particle[] {
         score: 0,
         strategy: agentClass.strategy,
         useLLM: agentClass.useLLM,
-        matchHistory: [],
+        matchHistory: {},
       });
       i++;
     }

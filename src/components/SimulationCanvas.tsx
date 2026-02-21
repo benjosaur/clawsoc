@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from "react";
 import { SimulationEngine } from "@/simulation/engine";
-import { SimulationConfig, SpeechBubble } from "@/simulation/types";
+import { SimulationConfig, SpeechBubble, totalMatches } from "@/simulation/types";
 
 const BUBBLE_MAX_WIDTH = 100;
 const BUBBLE_PADDING = 6;
@@ -168,7 +168,8 @@ export default function SimulationCanvas({ engineRef, config }: Props) {
         ctx.restore();
 
         // Average score inside circle
-        const avg = p.matchHistory.length > 0 ? score / p.matchHistory.length : 0;
+        const matches = totalMatches(p.matchHistory);
+        const avg = matches > 0 ? score / matches : 0;
         ctx.fillStyle = "#fff";
         ctx.font = `bold ${radius > 12 ? 10 : 8}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";

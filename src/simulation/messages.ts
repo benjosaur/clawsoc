@@ -72,9 +72,8 @@ function pick(arr: string[]): string {
 
 export function generateMessage(self: Particle, opponent: Particle): string {
   // Check if opponent ever defected against us
-  const opponentDefected = self.matchHistory.some(
-    (h) => h.opponentId === opponent.id && h.theirDecision === "defect"
-  );
+  const record = self.matchHistory[opponent.id];
+  const opponentDefected = record ? record.cd + record.dd > 0 : false;
 
   let template: string;
   if (opponentDefected) {

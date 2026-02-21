@@ -1,7 +1,7 @@
 import { CollisionPhase, MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG, FloatingPopup, SpeechBubble } from "./types";
 import { areColliding, resolveElasticCollision, separateParticles, bounceOffWalls, vecAdd } from "./physics";
 import { createParticles } from "./Particle";
-import { playMatch } from "./game";
+import { playMatch, resetMatchCounter } from "./game";
 import { generateMessage } from "./messages";
 
 const PHASE_DURATIONS: Record<CollisionPhase, number> = {
@@ -130,6 +130,7 @@ export class SimulationEngine {
           const record = playMatch(a, b, this.tick);
           fp.matchRecord = record;
           this.matchHistory.push(record);
+          if (this.matchHistory.length > 200) this.matchHistory.splice(0, this.matchHistory.length - 200);
 
           this.totalCooperations += (record.decisionA === "cooperate" ? 1 : 0) + (record.decisionB === "cooperate" ? 1 : 0);
           this.totalDefections += (record.decisionA === "defect" ? 1 : 0) + (record.decisionB === "defect" ? 1 : 0);
@@ -286,6 +287,7 @@ export class SimulationEngine {
     this.speechBubbles = [];
     this.totalCooperations = 0;
     this.totalDefections = 0;
+    resetMatchCounter();
     this.particles = createParticles(this.config);
   }
 }

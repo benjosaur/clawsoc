@@ -10,10 +10,8 @@ export function decide(self: Particle, opponent: Particle): Decision {
 
     case "tit_for_tat": {
       // First encounter: cooperate. Then mirror opponent's last move against us.
-      const lastEncounter = [...self.matchHistory]
-        .reverse()
-        .find((h) => h.opponentId === opponent.id);
-      return lastEncounter ? lastEncounter.theirDecision : "cooperate";
+      const record = self.matchHistory[opponent.id];
+      return record ? record.lastTheirDecision : "cooperate";
     }
 
     case "random":
@@ -21,9 +19,8 @@ export function decide(self: Particle, opponent: Particle): Decision {
 
     case "grudger": {
       // Cooperate until the opponent has ever defected against us.
-      const everBetrayed = self.matchHistory.some(
-        (h) => h.opponentId === opponent.id && h.theirDecision === "defect"
-      );
+      const record = self.matchHistory[opponent.id];
+      const everBetrayed = record ? record.cd + record.dd > 0 : false;
       return everBetrayed ? "defect" : "cooperate";
     }
 

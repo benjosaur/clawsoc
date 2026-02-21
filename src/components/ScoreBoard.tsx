@@ -1,6 +1,6 @@
 "use client";
 
-import { Particle, StrategyType } from "@/simulation/types";
+import { Particle, StrategyType, totalMatches } from "@/simulation/types";
 
 const STRATEGY_SHORT: Record<StrategyType, string> = {
   always_cooperate: "COOP",
@@ -17,7 +17,7 @@ interface Props {
 export default function ScoreBoard({ particles }: Props) {
   const withAvg = particles.map((p) => ({
     ...p,
-    avg: p.matchHistory.length > 0 ? p.score / p.matchHistory.length : 0,
+    avg: totalMatches(p.matchHistory) > 0 ? p.score / totalMatches(p.matchHistory) : 0,
   }));
   const sorted = withAvg.sort((a, b) => b.avg - a.avg);
 

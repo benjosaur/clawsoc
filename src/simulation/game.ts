@@ -9,6 +9,10 @@ const PAYOFF: Record<Decision, Record<Decision, number>> = {
 
 let matchCounter = 0;
 
+export function resetMatchCounter(): void {
+  matchCounter = 0;
+}
+
 export function playMatch(a: Particle, b: Particle, tick: number): MatchRecord {
   const decisionA = decide(a, b);
   const decisionB = decide(b, a);
@@ -19,8 +23,15 @@ export function playMatch(a: Particle, b: Particle, tick: number): MatchRecord {
   a.score += scoreA;
   b.score += scoreB;
 
-  a.matchHistory.push({ opponentId: b.id, myDecision: decisionA, theirDecision: decisionB });
-  b.matchHistory.push({ opponentId: a.id, myDecision: decisionB, theirDecision: decisionA });
+  const arec = a.matchHistory[b.id] ??= { lastTheirDecision: decisionB, cc: 0, cd: 0, dc: 0, dd: 0 };
+  const aKey = (decisionA === "cooperate" ? "c" : "d") + (decisionB === "cooperate" ? "c" : "d") as "cc" | "cd" | "dc" | "dd";
+  arec[aKey]++;
+  arec.lastTheirDecision = decisionB;
+
+  const brec = b.matchHistory[a.id] ??= { lastTheirDecision: decisionA, cc: 0, cd: 0, dc: 0, dd: 0 };
+  const bKey = (decisionB === "cooperate" ? "c" : "d") + (decisionA === "cooperate" ? "c" : "d") as "cc" | "cd" | "dc" | "dd";
+  brec[bKey]++;
+  brec.lastTheirDecision = decisionA;
 
   matchCounter++;
   return {

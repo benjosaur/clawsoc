@@ -18,9 +18,10 @@ export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
   if (!engineRef.current) {
     const engine = new SimulationEngine(config);
     engine.onRequestLLMMessage = (side, self, opponent) => {
-      const priorInteractions = self.matchHistory
-        .filter((h) => h.opponentId === opponent.id)
-        .map((h) => ({ myDecision: h.myDecision, theirDecision: h.theirDecision }));
+      const record = self.matchHistory[opponent.id];
+      const priorInteractions = record
+        ? { cc: record.cc, cd: record.cd, dc: record.dc, dd: record.dd }
+        : null;
 
       fetch("/api/generate-message", {
         method: "POST",
