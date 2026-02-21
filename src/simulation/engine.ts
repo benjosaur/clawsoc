@@ -29,7 +29,14 @@ interface FrozenPair {
   messageA: string | null;
   messageB: string | null;
   matchRecord: MatchRecord | null;
+  waitingForLLM: boolean;
 }
+
+export type LLMRequestCallback = (
+  side: "a" | "b",
+  self: Particle,
+  opponent: Particle,
+) => void;
 
 export class SimulationEngine {
   particles: Particle[];
@@ -41,6 +48,7 @@ export class SimulationEngine {
   speechBubbles: SpeechBubble[] = [];
   totalCooperations: number = 0;
   totalDefections: number = 0;
+  onRequestLLMMessage: LLMRequestCallback | null = null;
 
   constructor(config: SimulationConfig = DEFAULT_CONFIG) {
     this.config = config;
@@ -53,6 +61,10 @@ export class SimulationEngine {
 
   private advanceConversations(): void {
     for (const fp of this.frozenPairs) {
+
+      // If waiting for LLM response, freeze phase advancement
+      if (fp.waitingForLLM) continue;
+
       const elapsed = this.tick - fp.phaseStartTick;
       const phaseDuration = PHASE_DURATIONS[fp.phase];
 
@@ -72,23 +84,45 @@ export class SimulationEngine {
 
       switch (nextPhase) {
         case "messaging_a": {
-          fp.messageA = generateMessage(a, b);
-          this.speechBubbles.push({
-            particleId: a.id,
-            text: fp.messageA,
-            spawnTick: this.tick,
-            durationTicks: PHASE_DURATIONS.messaging_a,
-          });
+          if (this.onRequestLLMMessage && a.useLLM) {
+            fp.waitingForLLM = true;
+            this.speechBubbles.push({
+              particleId: a.id,
+              text: "...",
+              spawnTick: this.tick,
+              durationTicks: Infinity,
+            });
+            this.onRequestLLMMessage("a", a, b);
+          } else {
+            fp.messageA = generateMessage(a, b);
+            this.speechBubbles.push({
+              particleId: a.id,
+              text: fp.messageA,
+              spawnTick: this.tick,
+              durationTicks: PHASE_DURATIONS.messaging_a,
+            });
+          }
           break;
         }
         case "messaging_b": {
-          fp.messageB = generateMessage(b, a);
-          this.speechBubbles.push({
-            particleId: b.id,
-            text: fp.messageB,
-            spawnTick: this.tick,
-            durationTicks: PHASE_DURATIONS.messaging_b,
-          });
+          if (this.onRequestLLMMessage && b.useLLM) {
+            fp.waitingForLLM = true;
+            this.speechBubbles.push({
+              particleId: b.id,
+              text: "...",
+              spawnTick: this.tick,
+              durationTicks: Infinity,
+            });
+            this.onRequestLLMMessage("b", b, a);
+          } else {
+            fp.messageB = generateMessage(b, a);
+            this.speechBubbles.push({
+              particleId: b.id,
+              text: fp.messageB,
+              spawnTick: this.tick,
+              durationTicks: PHASE_DURATIONS.messaging_b,
+            });
+          }
           break;
         }
         case "deciding": {
@@ -211,9 +245,37 @@ export class SimulationEngine {
           messageA: null,
           messageB: null,
           matchRecord: null,
+          waitingForLLM: false,
         });
       }
     }
+  }
+
+  resolveMessage(aId: number, bId: number, side: "a" | "b", text: string): void {
+    const fp = this.frozenPairs.find((f) => f.aId === aId && f.bId === bId);
+    if (!fp) return;
+
+    const particleId = side === "a" ? fp.aId : fp.bId;
+
+    if (side === "a") {
+      fp.messageA = text;
+    } else {
+      fp.messageB = text;
+    }
+
+    // Replace the "..." placeholder bubble with the real message
+    this.speechBubbles = this.speechBubbles.filter(
+      (sb) => !(sb.particleId === particleId && sb.text === "..."),
+    );
+    this.speechBubbles.push({
+      particleId,
+      text,
+      spawnTick: this.tick,
+      durationTicks: PHASE_DURATIONS[side === "a" ? "messaging_a" : "messaging_b"],
+    });
+
+    fp.waitingForLLM = false;
+    fp.phaseStartTick = this.tick; // Reset phase timer so full duration plays after resolve
   }
 
   reset(): void {

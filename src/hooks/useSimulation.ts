@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { SimulationEngine } from "@/simulation/engine";
 import { SimulationConfig, DEFAULT_CONFIG, Particle, MatchRecord } from "@/simulation/types";
+import { generateMessage } from "@/simulation/messages";
 
 export interface SimulationState {
   particles: Particle[];
@@ -13,7 +14,50 @@ export interface SimulationState {
 }
 
 export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
-  const engineRef = useRef<SimulationEngine>(new SimulationEngine(config));
+  const engineRef = useRef<SimulationEngine | null>(null);
+  if (!engineRef.current) {
+    const engine = new SimulationEngine(config);
+    engine.onRequestLLMMessage = (side, self, opponent) => {
+      const priorInteractions = self.matchHistory
+        .filter((h) => h.opponentId === opponent.id)
+        .map((h) => ({ myDecision: h.myDecision, theirDecision: h.theirDecision }));
+
+      fetch("/api/generate-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          strategy: self.strategy,
+          selfLabel: self.label,
+          opponentLabel: opponent.label,
+          priorInteractions,
+        }),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`API ${res.status}`);
+          return res.json();
+        })
+        .then((data: { message: string }) => {
+          const text = data.message || generateMessage(self, opponent);
+          engine.resolveMessage(
+            side === "a" ? self.id : opponent.id,
+            side === "a" ? opponent.id : self.id,
+            side,
+            text,
+          );
+        })
+        .catch((err) => {
+          console.error("LLM message generation failed:", err);
+          const text = generateMessage(self, opponent);
+          engine.resolveMessage(
+            side === "a" ? self.id : opponent.id,
+            side === "a" ? opponent.id : self.id,
+            side,
+            text,
+          );
+        });
+    };
+    engineRef.current = engine;
+  }
   const rafRef = useRef<number>(0);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
@@ -30,12 +74,12 @@ export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
 
   const loop = useCallback(() => {
     if (!pausedRef.current) {
-      engineRef.current.step();
+      engineRef.current!.step();
 
       const now = performance.now();
       if (now - lastUpdateRef.current > 50) {
         lastUpdateRef.current = now;
-        const engine = engineRef.current;
+        const engine = engineRef.current!;
         setState({
           particles: engine.particles.map((p) => ({ ...p, position: { ...p.position }, velocity: { ...p.velocity } })),
           matchHistory: engine.matchHistory.slice(-50),
@@ -62,9 +106,9 @@ export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
   }, []);
 
   const reset = useCallback(() => {
-    engineRef.current.reset();
+    engineRef.current!.reset();
     setState({
-      particles: engineRef.current.particles.map((p) => ({ ...p, position: { ...p.position }, velocity: { ...p.velocity } })),
+      particles: engineRef.current!.particles.map((p) => ({ ...p, position: { ...p.position }, velocity: { ...p.velocity } })),
       matchHistory: [],
       tick: 0,
       totalCooperations: 0,

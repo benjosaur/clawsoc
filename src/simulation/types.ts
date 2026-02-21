@@ -25,7 +25,14 @@ export interface Particle {
   state: ParticleState;
   score: number;
   strategy: StrategyType;
+  useLLM: boolean;
   matchHistory: { opponentId: number; myDecision: Decision; theirDecision: Decision }[];
+}
+
+export interface AgentClassConfig {
+  strategy: StrategyType;
+  count: number;
+  useLLM: boolean;
 }
 
 export interface MatchRecord {
@@ -67,7 +74,7 @@ export interface FloatingPopup {
 export interface SimulationConfig {
   canvasWidth: number;
   canvasHeight: number;
-  particleCount: number;
+  agentClasses: AgentClassConfig[];
   particleRadius: number;
   minSpeed: number;
   maxSpeed: number;
@@ -77,7 +84,13 @@ export interface SimulationConfig {
 export const DEFAULT_CONFIG: SimulationConfig = {
   canvasWidth: 800,
   canvasHeight: 600,
-  particleCount: 20,
+  agentClasses: [
+    { strategy: "always_cooperate", count: 4, useLLM: false },
+    { strategy: "always_defect",    count: 4, useLLM: false },
+    { strategy: "tit_for_tat",      count: 4, useLLM: false },
+    { strategy: "random",           count: 4, useLLM: false },
+    { strategy: "grudger",          count: 4, useLLM: false },
+  ],
   particleRadius: 10,
   minSpeed: 0.7,
   maxSpeed: 1.8,

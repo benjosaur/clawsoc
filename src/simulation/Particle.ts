@@ -1,12 +1,4 @@
-import { Particle, SimulationConfig, StrategyType } from "./types";
-
-const STRATEGIES: StrategyType[] = [
-  "always_cooperate",
-  "always_defect",
-  "tit_for_tat",
-  "random",
-  "grudger",
-];
+import { Particle, SimulationConfig } from "./types";
 
 const COLORS = [
   "#dc2626", "#ea580c", "#d97706", "#ca8a04", "#65a30d",
@@ -24,29 +16,34 @@ const NAMES = [
 
 export function createParticles(config: SimulationConfig): Particle[] {
   const particles: Particle[] = [];
+  let i = 0;
 
-  for (let i = 0; i < config.particleCount; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = config.minSpeed + Math.random() * (config.maxSpeed - config.minSpeed);
+  for (const agentClass of config.agentClasses) {
+    for (let n = 0; n < agentClass.count; n++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = config.minSpeed + Math.random() * (config.maxSpeed - config.minSpeed);
 
-    // Place particles with margin from edges
-    const margin = config.particleRadius * 3;
-    const x = margin + Math.random() * (config.canvasWidth - margin * 2);
-    const y = margin + Math.random() * (config.canvasHeight - margin * 2);
+      // Place particles with margin from edges
+      const margin = config.particleRadius * 3;
+      const x = margin + Math.random() * (config.canvasWidth - margin * 2);
+      const y = margin + Math.random() * (config.canvasHeight - margin * 2);
 
-    particles.push({
-      id: i,
-      label: NAMES[i % NAMES.length],
-      position: { x, y },
-      velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
-      radius: config.particleRadius,
-      mass: 1,
-      color: COLORS[i % COLORS.length],
-      state: "moving",
-      score: 0,
-      strategy: STRATEGIES[i % STRATEGIES.length],
-      matchHistory: [],
-    });
+      particles.push({
+        id: i,
+        label: NAMES[i % NAMES.length],
+        position: { x, y },
+        velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+        radius: config.particleRadius,
+        mass: 1,
+        color: COLORS[i % COLORS.length],
+        state: "moving",
+        score: 0,
+        strategy: agentClass.strategy,
+        useLLM: agentClass.useLLM,
+        matchHistory: [],
+      });
+      i++;
+    }
   }
 
   // Ensure no initial overlaps by nudging particles apart
