@@ -40,6 +40,16 @@ export interface MatchRecord {
   timestamp: number;
 }
 
+export interface FloatingPopup {
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  spawnTick: number;
+  delayTicks: number;
+  durationTicks: number;
+}
+
 export interface SimulationConfig {
   canvasWidth: number;
   canvasHeight: number;
@@ -54,8 +64,8 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   canvasWidth: 800,
   canvasHeight: 600,
   particleCount: 20,
-  particleRadius: 16,
-  minSpeed: 1,
-  maxSpeed: 3,
-  freezeDurationTicks: 60,
+  particleRadius: 10,
+  minSpeed: 0.7,
+  maxSpeed: 1.8,
+  freezeDurationTicks: 45,
 };

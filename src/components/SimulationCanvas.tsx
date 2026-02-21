@@ -16,8 +16,16 @@ export default function SimulationCanvas({ engineRef, config }: Props) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = config.canvasWidth * dpr;
+    canvas.height = config.canvasHeight * dpr;
+    canvas.style.width = `${config.canvasWidth}px`;
+    canvas.style.height = `${config.canvasHeight}px`;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    ctx.scale(dpr, dpr);
 
     let raf: number;
 
@@ -25,26 +33,21 @@ export default function SimulationCanvas({ engineRef, config }: Props) {
       if (!ctx || !engineRef.current) return;
 
       const { canvasWidth, canvasHeight } = config;
-      const particles = engineRef.current.particles;
+      const engine = engineRef.current;
+      const particles = engine.particles;
 
       // Background
-      ctx.fillStyle = "#0f172a";
+      ctx.fillStyle = "#fafafa";
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-      // Subtle grid
-      ctx.strokeStyle = "#1e293b";
-      ctx.lineWidth = 0.5;
-      for (let x = 0; x < canvasWidth; x += 40) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvasHeight);
-        ctx.stroke();
-      }
-      for (let y = 0; y < canvasHeight; y += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvasWidth, y);
-        ctx.stroke();
+      // Subtle dot grid
+      ctx.fillStyle = "#e2e2e2";
+      for (let x = 20; x < canvasWidth; x += 20) {
+        for (let y = 20; y < canvasHeight; y += 20) {
+          ctx.beginPath();
+          ctx.arc(x, y, 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       // Draw particles
@@ -53,10 +56,10 @@ export default function SimulationCanvas({ engineRef, config }: Props) {
 
         ctx.save();
 
-        // Glow effect for colliding particles
+        // Glow for colliding particles
         if (state === "colliding") {
-          ctx.shadowColor = "white";
-          ctx.shadowBlur = 20;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 24;
         }
 
         // Circle
@@ -66,8 +69,9 @@ export default function SimulationCanvas({ engineRef, config }: Props) {
         ctx.fill();
 
         if (state === "colliding") {
+          ctx.shadowBlur = 0;
           ctx.strokeStyle = "#facc15";
-          ctx.lineWidth = 2.5;
+          ctx.lineWidth = 2;
           ctx.stroke();
         }
 
@@ -75,16 +79,36 @@ export default function SimulationCanvas({ engineRef, config }: Props) {
 
         // Score inside circle
         ctx.fillStyle = "#fff";
-        ctx.font = "bold 10px monospace";
+        ctx.font = `bold ${radius > 12 ? 10 : 8}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(String(score), position.x, position.y);
+        ctx.fillText(String(score), position.x, position.y + 0.5);
 
         // Name label above
-        ctx.fillStyle = "#94a3b8";
-        ctx.font = "9px sans-serif";
+        ctx.fillStyle = "#71717a";
+        ctx.font = "8px Inter, system-ui, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(label, position.x, position.y - radius - 6);
+        ctx.fillText(label, position.x, position.y - radius - 4);
+      }
+
+      // Draw floating popups
+      for (const popup of engine.popups) {
+        const age = engine.tick - popup.spawnTick;
+        if (age < popup.delayTicks) continue;
+
+        const visibleAge = age - popup.delayTicks;
+        const progress = visibleAge / popup.durationTicks;
+        const alpha = 1 - progress;
+        const yOffset = progress * 18;
+
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, alpha);
+        ctx.fillStyle = popup.color;
+        ctx.font = "bold 9px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(popup.text, popup.x, popup.y - yOffset);
+        ctx.restore();
       }
 
       raf = requestAnimationFrame(draw);
@@ -97,9 +121,7 @@ export default function SimulationCanvas({ engineRef, config }: Props) {
   return (
     <canvas
       ref={canvasRef}
-      width={config.canvasWidth}
-      height={config.canvasHeight}
-      className="rounded-lg border border-slate-700"
+      className="rounded border border-zinc-200"
     />
   );
 }

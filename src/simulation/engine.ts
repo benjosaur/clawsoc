@@ -1,4 +1,4 @@
-import { MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG } from "./types";
+import { MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG, FloatingPopup } from "./types";
 import { areColliding, resolveElasticCollision, separateParticles, bounceOffWalls, vecAdd } from "./physics";
 import { createParticles } from "./Particle";
 import { playMatch } from "./game";
@@ -15,6 +15,9 @@ export class SimulationEngine {
   tick: number = 0;
   matchHistory: MatchRecord[] = [];
   frozenPairs: FrozenPair[] = [];
+  popups: FloatingPopup[] = [];
+  totalCooperations: number = 0;
+  totalDefections: number = 0;
 
   constructor(config: SimulationConfig = DEFAULT_CONFIG) {
     this.config = config;
@@ -27,6 +30,11 @@ export class SimulationEngine {
 
   step(): void {
     this.tick++;
+
+    // Remove expired popups
+    this.popups = this.popups.filter(
+      (p) => this.tick - p.spawnTick < p.delayTicks + p.durationTicks
+    );
 
     // 1. Resolve finished frozen pairs
     const toUnfreeze: FrozenPair[] = [];
@@ -43,23 +51,16 @@ export class SimulationEngine {
       const b = this.particles.find((p) => p.id === fp.bId);
       if (!a || !b) continue;
 
-      // Only unfreeze if not involved in another active pair
       const aStillFrozen = this.isFrozen(a.id);
       const bStillFrozen = this.isFrozen(b.id);
 
-      if (!aStillFrozen) {
-        a.state = "moving";
-      }
-      if (!bStillFrozen) {
-        b.state = "moving";
-      }
+      if (!aStillFrozen) a.state = "moving";
+      if (!bStillFrozen) b.state = "moving";
 
-      // Apply elastic collision
       const { va, vb } = resolveElasticCollision(a, b);
       if (!aStillFrozen) a.velocity = va;
       if (!bStillFrozen) b.velocity = vb;
 
-      // Separate to prevent re-collision
       separateParticles(a, b);
     }
 
@@ -79,12 +80,39 @@ export class SimulationEngine {
         if (a.state !== "moving" || b.state !== "moving") continue;
         if (!areColliding(a, b)) continue;
 
-        // Freeze both and play match
         a.state = "colliding";
         b.state = "colliding";
 
         const record = playMatch(a, b, this.tick);
         this.matchHistory.push(record);
+
+        // Track global counters
+        this.totalCooperations += (record.decisionA === "cooperate" ? 1 : 0) + (record.decisionB === "cooperate" ? 1 : 0);
+        this.totalDefections += (record.decisionA === "defect" ? 1 : 0) + (record.decisionB === "defect" ? 1 : 0);
+
+        // Spawn popups for each particle
+        const midX = (a.position.x + b.position.x) / 2;
+        const midY = (a.position.y + b.position.y) / 2;
+        const offset = 14;
+
+        this.popups.push({
+          x: a.position.x < midX ? midX - offset : midX + offset,
+          y: midY - 16,
+          text: "+" + record.scoreA,
+          color: record.decisionA === "cooperate" ? "#16a34a" : "#dc2626",
+          spawnTick: this.tick,
+          delayTicks: 15,
+          durationTicks: 40,
+        });
+        this.popups.push({
+          x: b.position.x < midX ? midX - offset : midX + offset,
+          y: midY - 16,
+          text: "+" + record.scoreB,
+          color: record.decisionB === "cooperate" ? "#16a34a" : "#dc2626",
+          spawnTick: this.tick,
+          delayTicks: 15,
+          durationTicks: 40,
+        });
 
         this.frozenPairs.push({
           aId: a.id,
@@ -99,6 +127,9 @@ export class SimulationEngine {
     this.tick = 0;
     this.matchHistory = [];
     this.frozenPairs = [];
+    this.popups = [];
+    this.totalCooperations = 0;
+    this.totalDefections = 0;
     this.particles = createParticles(this.config);
   }
 }

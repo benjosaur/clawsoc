@@ -8,6 +8,8 @@ export interface SimulationState {
   particles: Particle[];
   matchHistory: MatchRecord[];
   tick: number;
+  totalCooperations: number;
+  totalDefections: number;
 }
 
 export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
@@ -19,6 +21,8 @@ export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
     particles: engineRef.current.particles,
     matchHistory: [],
     tick: 0,
+    totalCooperations: 0,
+    totalDefections: 0,
   });
 
   // Throttle React state updates to ~20fps
@@ -36,6 +40,8 @@ export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
           particles: engine.particles.map((p) => ({ ...p, position: { ...p.position }, velocity: { ...p.velocity } })),
           matchHistory: engine.matchHistory.slice(-50),
           tick: engine.tick,
+          totalCooperations: engine.totalCooperations,
+          totalDefections: engine.totalDefections,
         });
       }
     }
@@ -61,6 +67,8 @@ export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
       particles: engineRef.current.particles.map((p) => ({ ...p, position: { ...p.position }, velocity: { ...p.velocity } })),
       matchHistory: [],
       tick: 0,
+      totalCooperations: 0,
+      totalDefections: 0,
     });
   }, []);
 

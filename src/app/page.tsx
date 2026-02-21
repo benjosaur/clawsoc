@@ -8,39 +8,49 @@ import MatchHistoryPanel from "@/components/MatchHistoryPanel";
 
 export default function Home() {
   const { state, paused, togglePause, reset, engineRef } = useSimulation(DEFAULT_CONFIG);
+  const total = state.totalCooperations + state.totalDefections;
+  const coopPct = total > 0 ? Math.round((state.totalCooperations / total) * 100) : 0;
 
   return (
-    <main className="min-h-screen p-6 flex flex-col items-center gap-4">
-      <h1 className="text-2xl font-bold tracking-tight text-slate-100">
-        ClawSoc <span className="text-slate-500 font-normal">-- Society of LLMs</span>
-      </h1>
+    <main className="min-h-screen p-8 flex flex-col items-center gap-5">
+      <div className="flex items-baseline gap-2">
+        <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
+          ClawSoc
+        </h1>
+        <span className="text-sm text-zinc-400 font-normal tracking-wide">
+          Society of LLMs
+        </span>
+      </div>
 
-      <div className="flex gap-4">
-        {/* Left: Simulation */}
+      <div className="flex gap-5">
         <div className="flex flex-col gap-3">
           <SimulationCanvas engineRef={engineRef} config={DEFAULT_CONFIG} />
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={togglePause}
-              className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-sm font-medium transition-colors"
+              className="px-3 py-1 border border-zinc-200 hover:bg-zinc-50 rounded text-xs font-medium text-zinc-700 transition-colors"
             >
               {paused ? "Resume" : "Pause"}
             </button>
             <button
               onClick={reset}
-              className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-sm font-medium transition-colors"
+              className="px-3 py-1 border border-zinc-200 hover:bg-zinc-50 rounded text-xs font-medium text-zinc-700 transition-colors"
             >
               Reset
             </button>
-            <span className="text-xs text-slate-500 ml-auto font-mono">
-              tick {state.tick}
-            </span>
+            <div className="ml-auto flex items-center gap-3 text-[11px] font-mono">
+              <span className="text-emerald-600">{state.totalCooperations}C</span>
+              <span className="text-red-500">{state.totalDefections}D</span>
+              {total > 0 && (
+                <span className="text-zinc-400">{coopPct}% coop</span>
+              )}
+              <span className="text-zinc-300">t={state.tick}</span>
+            </div>
           </div>
         </div>
 
-        {/* Right: Panel */}
-        <div className="w-64 flex flex-col gap-3">
+        <div className="w-56 flex flex-col gap-4">
           <ScoreBoard particles={state.particles} />
           <MatchHistoryPanel matches={state.matchHistory} />
         </div>

@@ -9,8 +9,8 @@ interface Props {
 function DecisionBadge({ decision }: { decision: "cooperate" | "defect" }) {
   return (
     <span
-      className={`font-bold ${
-        decision === "cooperate" ? "text-green-400" : "text-red-400"
+      className={`font-semibold ${
+        decision === "cooperate" ? "text-emerald-600" : "text-red-500"
       }`}
     >
       {decision === "cooperate" ? "C" : "D"}
@@ -22,20 +22,22 @@ export default function MatchHistoryPanel({ matches }: Props) {
   const recent = [...matches].reverse();
 
   return (
-    <div className="bg-slate-800 rounded-lg p-3">
-      <h2 className="text-sm font-bold text-slate-200 mb-2">Match History</h2>
-      <div className="space-y-1 max-h-[340px] overflow-y-auto">
+    <div>
+      <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-2">
+        Match Log
+      </h2>
+      <div className="space-y-px max-h-[320px] overflow-y-auto">
         {recent.length === 0 && (
-          <p className="text-xs text-slate-500">No matches yet...</p>
+          <p className="text-[11px] text-zinc-300 font-mono">waiting...</p>
         )}
         {recent.map((m) => (
-          <div key={m.id} className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
-            <span className="truncate max-w-[60px]">{m.particleA.label}</span>
+          <div key={m.id} className="text-[10px] font-mono text-zinc-500 flex items-center gap-1">
+            <span className="truncate max-w-[52px]">{m.particleA.label}</span>
             <DecisionBadge decision={m.decisionA} />
-            <span className="text-slate-600">vs</span>
+            <span className="text-zinc-300">:</span>
             <DecisionBadge decision={m.decisionB} />
-            <span className="truncate max-w-[60px]">{m.particleB.label}</span>
-            <span className="text-slate-600 ml-auto">
+            <span className="truncate max-w-[52px]">{m.particleB.label}</span>
+            <span className="text-zinc-300 ml-auto tabular-nums">
               {m.scoreA}/{m.scoreB}
             </span>
           </div>
