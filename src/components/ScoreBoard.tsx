@@ -15,7 +15,11 @@ interface Props {
 }
 
 export default function ScoreBoard({ particles }: Props) {
-  const sorted = [...particles].sort((a, b) => b.score - a.score);
+  const withAvg = particles.map((p) => ({
+    ...p,
+    avg: p.matchHistory.length > 0 ? p.score / p.matchHistory.length : 0,
+  }));
+  const sorted = withAvg.sort((a, b) => b.avg - a.avg);
 
   return (
     <div>
@@ -37,8 +41,8 @@ export default function ScoreBoard({ particles }: Props) {
             <span className="text-zinc-300 text-[9px] tracking-wide">
               {STRATEGY_SHORT[p.strategy]}
             </span>
-            <span className="text-zinc-900 font-semibold w-6 text-right tabular-nums">
-              {p.score}
+            <span className="text-zinc-900 font-semibold w-8 text-right tabular-nums">
+              {p.avg.toFixed(1)}
             </span>
           </div>
         ))}

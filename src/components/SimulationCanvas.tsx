@@ -2,7 +2,100 @@
 
 import { useRef, useEffect } from "react";
 import { SimulationEngine } from "@/simulation/engine";
-import { SimulationConfig } from "@/simulation/types";
+import { SimulationConfig, SpeechBubble } from "@/simulation/types";
+
+const BUBBLE_MAX_WIDTH = 100;
+const BUBBLE_PADDING = 6;
+const BUBBLE_FONT = "7px Inter, system-ui, sans-serif";
+const TYPING_TICKS = 12;
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const test = current ? current + " " + word : word;
+    if (ctx.measureText(test).width > maxWidth) {
+      if (current) lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+function drawSpeechBubble(
+  ctx: CanvasRenderingContext2D,
+  bubble: SpeechBubble,
+  particle: { x: number; y: number; radius: number },
+  currentTick: number
+) {
+  const age = currentTick - bubble.spawnTick;
+  if (age < 0) return;
+
+  // Fade in for first 5 ticks, fade out for last 8 ticks
+  let alpha = 1;
+  if (age < 5) alpha = age / 5;
+  else if (age > bubble.durationTicks - 8) alpha = (bubble.durationTicks - age) / 8;
+  alpha = Math.max(0, Math.min(1, alpha));
+
+  const isTyping = age < TYPING_TICKS;
+  const displayText = isTyping ? "..." : bubble.text;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = BUBBLE_FONT;
+
+  const lines = isTyping ? ["..."] : wrapText(ctx, displayText, BUBBLE_MAX_WIDTH - BUBBLE_PADDING * 2);
+  const lineHeight = 9;
+  const textWidth = Math.min(
+    BUBBLE_MAX_WIDTH,
+    Math.max(...lines.map((l) => ctx.measureText(l).width)) + BUBBLE_PADDING * 2
+  );
+  const textHeight = lines.length * lineHeight + BUBBLE_PADDING * 2;
+
+  const bx = particle.x - textWidth / 2;
+  const by = Math.max(2, particle.y - particle.radius - textHeight - 10);
+  const pointerSize = 4;
+
+  // Bubble background
+  const cornerRadius = 4;
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#d4d4d8";
+  ctx.lineWidth = 0.5;
+
+  ctx.beginPath();
+  ctx.moveTo(bx + cornerRadius, by);
+  ctx.lineTo(bx + textWidth - cornerRadius, by);
+  ctx.quadraticCurveTo(bx + textWidth, by, bx + textWidth, by + cornerRadius);
+  ctx.lineTo(bx + textWidth, by + textHeight - cornerRadius);
+  ctx.quadraticCurveTo(bx + textWidth, by + textHeight, bx + textWidth - cornerRadius, by + textHeight);
+  // Pointer triangle
+  ctx.lineTo(bx + textWidth / 2 + pointerSize, by + textHeight);
+  ctx.lineTo(bx + textWidth / 2, by + textHeight + pointerSize);
+  ctx.lineTo(bx + textWidth / 2 - pointerSize, by + textHeight);
+  ctx.lineTo(bx + cornerRadius, by + textHeight);
+  ctx.quadraticCurveTo(bx, by + textHeight, bx, by + textHeight - cornerRadius);
+  ctx.lineTo(bx, by + cornerRadius);
+  ctx.quadraticCurveTo(bx, by, bx + cornerRadius, by);
+  ctx.closePath();
+
+  ctx.fill();
+  ctx.stroke();
+
+  // Text
+  ctx.fillStyle = isTyping ? "#a1a1aa" : "#27272a";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], bx + BUBBLE_PADDING, by + BUBBLE_PADDING + i * lineHeight);
+  }
+
+  ctx.restore();
+}
 
 interface Props {
   engineRef: React.RefObject<SimulationEngine | null>;
@@ -70,25 +163,30 @@ export default function SimulationCanvas({ engineRef, config }: Props) {
 
         if (state === "colliding") {
           ctx.shadowBlur = 0;
-          ctx.strokeStyle = "#facc15";
-          ctx.lineWidth = 2;
-          ctx.stroke();
         }
 
         ctx.restore();
 
-        // Score inside circle
+        // Average score inside circle
+        const avg = p.matchHistory.length > 0 ? score / p.matchHistory.length : 0;
         ctx.fillStyle = "#fff";
         ctx.font = `bold ${radius > 12 ? 10 : 8}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(String(score), position.x, position.y + 0.5);
+        ctx.fillText(avg.toFixed(1), position.x, position.y + 0.5);
 
         // Name label above
         ctx.fillStyle = "#71717a";
         ctx.font = "8px Inter, system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.fillText(label, position.x, position.y - radius - 4);
+      }
+
+      // Draw speech bubbles
+      for (const bubble of engine.speechBubbles) {
+        const p = particles.find((pt) => pt.id === bubble.particleId);
+        if (!p) continue;
+        drawSpeechBubble(ctx, bubble, { x: p.position.x, y: p.position.y, radius: p.radius }, engine.tick);
       }
 
       // Draw floating popups

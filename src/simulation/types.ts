@@ -40,6 +40,20 @@ export interface MatchRecord {
   timestamp: number;
 }
 
+export type CollisionPhase =
+  | "greeting"
+  | "messaging_a"
+  | "messaging_b"
+  | "deciding"
+  | "resolved";
+
+export interface SpeechBubble {
+  particleId: number;
+  text: string;
+  spawnTick: number;
+  durationTicks: number;
+}
+
 export interface FloatingPopup {
   x: number;
   y: number;
