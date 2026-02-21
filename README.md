@@ -1,0 +1,2 @@
+# clawsoc
+Society of LLMs
