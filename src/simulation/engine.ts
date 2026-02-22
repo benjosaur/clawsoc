@@ -1,4 +1,4 @@
-import { CollisionPhase, MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG, FloatingPopup, SpeechBubble } from "./types";
+import { CollisionPhase, GameLogEntry, MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG, FloatingPopup } from "./types";
 import { areColliding, resolveElasticCollision, separateParticles, bounceOffWalls, vecAdd } from "./physics";
 import { createParticles } from "./Particle";
 import { playMatch, resetMatchCounter } from "./game";
@@ -42,10 +42,9 @@ export class SimulationEngine {
   particles: Particle[];
   config: SimulationConfig;
   tick: number = 0;
-  matchHistory: MatchRecord[] = [];
+  gameLog: GameLogEntry[] = [];
   frozenPairs: FrozenPair[] = [];
   popups: FloatingPopup[] = [];
-  speechBubbles: SpeechBubble[] = [];
   totalCooperations: number = 0;
   totalDefections: number = 0;
   onRequestLLMMessage: LLMRequestCallback | null = null;
@@ -86,51 +85,29 @@ export class SimulationEngine {
         case "messaging_a": {
           if (this.onRequestLLMMessage && a.useLLM) {
             fp.waitingForLLM = true;
-            this.speechBubbles.push({
-              particleId: a.id,
-              text: "...",
-              spawnTick: this.tick,
-              durationTicks: Infinity,
-            });
             this.onRequestLLMMessage("a", a, b);
           } else {
             fp.messageA = generateMessage(a, b);
-            this.speechBubbles.push({
-              particleId: a.id,
-              text: fp.messageA,
-              spawnTick: this.tick,
-              durationTicks: PHASE_DURATIONS.messaging_a,
-            });
           }
           break;
         }
         case "messaging_b": {
           if (this.onRequestLLMMessage && b.useLLM) {
             fp.waitingForLLM = true;
-            this.speechBubbles.push({
-              particleId: b.id,
-              text: "...",
-              spawnTick: this.tick,
-              durationTicks: Infinity,
-            });
             this.onRequestLLMMessage("b", b, a);
           } else {
             fp.messageB = generateMessage(b, a);
-            this.speechBubbles.push({
-              particleId: b.id,
-              text: fp.messageB,
-              spawnTick: this.tick,
-              durationTicks: PHASE_DURATIONS.messaging_b,
-            });
           }
           break;
         }
         case "deciding": {
           // Play the match now
           const record = playMatch(a, b, this.tick);
+          if (fp.messageA) record.messageA = fp.messageA;
+          if (fp.messageB) record.messageB = fp.messageB;
           fp.matchRecord = record;
-          this.matchHistory.push(record);
-          if (this.matchHistory.length > 200) this.matchHistory.splice(0, this.matchHistory.length - 200);
+          this.gameLog.push(record);
+          if (this.gameLog.length > 200) this.gameLog.splice(0, this.gameLog.length - 200);
 
           this.totalCooperations += (record.decisionA === "cooperate" ? 1 : 0) + (record.decisionB === "cooperate" ? 1 : 0);
           this.totalDefections += (record.decisionA === "defect" ? 1 : 0) + (record.decisionB === "defect" ? 1 : 0);
@@ -179,11 +156,6 @@ export class SimulationEngine {
     // Remove expired popups
     this.popups = this.popups.filter(
       (p) => this.tick - p.spawnTick < p.delayTicks + p.durationTicks
-    );
-
-    // Remove expired speech bubbles
-    this.speechBubbles = this.speechBubbles.filter(
-      (sb) => this.tick - sb.spawnTick < sb.durationTicks
     );
 
     // 1. Advance conversation phases
@@ -256,35 +228,56 @@ export class SimulationEngine {
     const fp = this.frozenPairs.find((f) => f.aId === aId && f.bId === bId);
     if (!fp) return;
 
-    const particleId = side === "a" ? fp.aId : fp.bId;
-
     if (side === "a") {
       fp.messageA = text;
     } else {
       fp.messageB = text;
     }
 
-    // Replace the "..." placeholder bubble with the real message
-    this.speechBubbles = this.speechBubbles.filter(
-      (sb) => !(sb.particleId === particleId && sb.text === "..."),
-    );
-    this.speechBubbles.push({
-      particleId,
-      text,
-      spawnTick: this.tick,
-      durationTicks: PHASE_DURATIONS[side === "a" ? "messaging_a" : "messaging_b"],
-    });
-
     fp.waitingForLLM = false;
     fp.phaseStartTick = this.tick; // Reset phase timer so full duration plays after resolve
   }
 
+  private timeoutCounter = 0;
+
+  abortPair(aId: number, bId: number): void {
+    const idx = this.frozenPairs.findIndex((f) => f.aId === aId && f.bId === bId);
+    if (idx === -1) return;
+
+    const fp = this.frozenPairs[idx];
+    this.frozenPairs.splice(idx, 1);
+
+    const a = this.particles.find((p) => p.id === fp.aId);
+    const b = this.particles.find((p) => p.id === fp.bId);
+    if (!a || !b) return;
+
+    // Unfreeze if not in another pair
+    if (!this.isFrozen(a.id)) a.state = "moving";
+    if (!this.isFrozen(b.id)) b.state = "moving";
+
+    const { va, vb } = resolveElasticCollision(a, b);
+    if (!this.isFrozen(a.id)) a.velocity = va;
+    if (!this.isFrozen(b.id)) b.velocity = vb;
+    separateParticles(a, b);
+
+    this.timeoutCounter++;
+    this.gameLog.push({
+      type: "timeout",
+      id: `timeout-${this.timeoutCounter}`,
+      tick: this.tick,
+      particleA: { id: a.id, label: a.label },
+      particleB: { id: b.id, label: b.label },
+      reason: "LLM response timed out",
+      timestamp: Date.now(),
+    });
+    if (this.gameLog.length > 200) this.gameLog.splice(0, this.gameLog.length - 200);
+  }
+
   reset(): void {
     this.tick = 0;
-    this.matchHistory = [];
+    this.gameLog = [];
     this.frozenPairs = [];
     this.popups = [];
-    this.speechBubbles = [];
     this.totalCooperations = 0;
     this.totalDefections = 0;
     resetMatchCounter();

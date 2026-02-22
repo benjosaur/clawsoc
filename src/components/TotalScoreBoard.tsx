@@ -14,7 +14,7 @@ interface ParticleData {
   id: number;
   label: string;
   color: string;
-  avgScore: number;
+  score: number;
   strategy: StrategyType;
 }
 
@@ -22,13 +22,13 @@ interface Props {
   particles: ParticleData[];
 }
 
-export default function ScoreBoard({ particles }: Props) {
-  const sorted = [...particles].sort((a, b) => b.avgScore - a.avgScore);
+export default function TotalScoreBoard({ particles }: Props) {
+  const sorted = [...particles].sort((a, b) => b.score - a.score);
 
   return (
     <div>
       <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-2">
-        Avg Score
+        Total Score
       </h2>
       <div className="space-y-0.5">
         {sorted.map((p, i) => (
@@ -46,7 +46,7 @@ export default function ScoreBoard({ particles }: Props) {
               {STRATEGY_SHORT[p.strategy]}
             </span>
             <span className="text-zinc-900 font-semibold w-8 text-right tabular-nums">
-              {p.avgScore.toFixed(1)}
+              {p.score}
             </span>
           </div>
         ))}

@@ -51,6 +51,7 @@ export interface AgentClassConfig {
 }
 
 export interface MatchRecord {
+  type: "match";
   id: string;
   tick: number;
   particleA: { id: number; label: string; strategy: StrategyType };
@@ -59,8 +60,22 @@ export interface MatchRecord {
   decisionB: Decision;
   scoreA: number;
   scoreB: number;
+  messageA?: string;
+  messageB?: string;
   timestamp: number;
 }
+
+export interface TimeoutRecord {
+  type: "timeout";
+  id: string;
+  tick: number;
+  particleA: { id: number; label: string };
+  particleB: { id: number; label: string };
+  reason: string;
+  timestamp: number;
+}
+
+export type GameLogEntry = MatchRecord | TimeoutRecord;
 
 export type CollisionPhase =
   | "greeting"
@@ -68,13 +83,6 @@ export type CollisionPhase =
   | "messaging_b"
   | "deciding"
   | "resolved";
-
-export interface SpeechBubble {
-  particleId: number;
-  text: string;
-  spawnTick: number;
-  durationTicks: number;
-}
 
 export interface FloatingPopup {
   x: number;

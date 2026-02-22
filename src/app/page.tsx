@@ -1,13 +1,14 @@
 "use client";
 
 import { DEFAULT_CONFIG } from "@/simulation/types";
-import { useSimulation } from "@/hooks/useSimulation";
+import { useServerSimulation } from "@/hooks/useServerSimulation";
 import SimulationCanvas from "@/components/SimulationCanvas";
 import ScoreBoard from "@/components/ScoreBoard";
+import TotalScoreBoard from "@/components/TotalScoreBoard";
 import MatchHistoryPanel from "@/components/MatchHistoryPanel";
 
 export default function Home() {
-  const { state, paused, togglePause, reset, engineRef } = useSimulation(DEFAULT_CONFIG);
+  const { state, paused, togglePause, reset, viewRef, interpRef, connected } = useServerSimulation();
   const total = state.totalCooperations + state.totalDefections;
   const coopPct = total > 0 ? Math.round((state.totalCooperations / total) * 100) : 0;
 
@@ -24,7 +25,7 @@ export default function Home() {
 
       <div className="flex gap-5">
         <div className="flex flex-col gap-3">
-          <SimulationCanvas engineRef={engineRef} config={DEFAULT_CONFIG} />
+          <SimulationCanvas viewRef={viewRef} interpRef={interpRef} config={DEFAULT_CONFIG} />
 
           <div className="flex items-center gap-2">
             <button
@@ -39,6 +40,9 @@ export default function Home() {
             >
               Reset
             </button>
+            {!connected && (
+              <span className="text-[10px] text-amber-500 font-mono">reconnecting...</span>
+            )}
             <div className="ml-auto flex items-center gap-3 text-[11px] font-mono">
               <span className="text-emerald-600">{state.totalCooperations}C</span>
               <span className="text-red-500">{state.totalDefections}D</span>
@@ -52,7 +56,8 @@ export default function Home() {
 
         <div className="w-56 flex flex-col gap-4">
           <ScoreBoard particles={state.particles} />
-          <MatchHistoryPanel matches={state.matchHistory} />
+          <TotalScoreBoard particles={state.particles} />
+          <MatchHistoryPanel entries={state.gameLog} />
         </div>
       </div>
     </main>

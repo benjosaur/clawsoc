@@ -2,12 +2,12 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { SimulationEngine } from "@/simulation/engine";
-import { SimulationConfig, DEFAULT_CONFIG, Particle, MatchRecord } from "@/simulation/types";
+import { SimulationConfig, DEFAULT_CONFIG, Particle, GameLogEntry } from "@/simulation/types";
 import { generateMessage } from "@/simulation/messages";
 
 export interface SimulationState {
   particles: Particle[];
-  matchHistory: MatchRecord[];
+  gameLog: GameLogEntry[];
   tick: number;
   totalCooperations: number;
   totalDefections: number;
@@ -18,44 +18,14 @@ export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
   if (!engineRef.current) {
     const engine = new SimulationEngine(config);
     engine.onRequestLLMMessage = (side, self, opponent) => {
-      const record = self.matchHistory[opponent.id];
-      const priorInteractions = record
-        ? { cc: record.cc, cd: record.cd, dc: record.dc, dd: record.dd }
-        : null;
-
-      fetch("/api/generate-message", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          strategy: self.strategy,
-          selfLabel: self.label,
-          opponentLabel: opponent.label,
-          priorInteractions,
-        }),
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error(`API ${res.status}`);
-          return res.json();
-        })
-        .then((data: { message: string }) => {
-          const text = data.message || generateMessage(self, opponent);
-          engine.resolveMessage(
-            side === "a" ? self.id : opponent.id,
-            side === "a" ? opponent.id : self.id,
-            side,
-            text,
-          );
-        })
-        .catch((err) => {
-          console.error("LLM message generation failed:", err);
-          const text = generateMessage(self, opponent);
-          engine.resolveMessage(
-            side === "a" ? self.id : opponent.id,
-            side === "a" ? opponent.id : self.id,
-            side,
-            text,
-          );
-        });
+      // Client-only fallback: use template messages (no API route)
+      const text = generateMessage(self, opponent);
+      engine.resolveMessage(
+        side === "a" ? self.id : opponent.id,
+        side === "a" ? opponent.id : self.id,
+        side,
+        text,
+      );
     };
     engineRef.current = engine;
   }
@@ -64,7 +34,7 @@ export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
   const pausedRef = useRef(false);
   const [state, setState] = useState<SimulationState>({
     particles: engineRef.current.particles,
-    matchHistory: [],
+    gameLog: [],
     tick: 0,
     totalCooperations: 0,
     totalDefections: 0,
@@ -83,7 +53,7 @@ export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
         const engine = engineRef.current!;
         setState({
           particles: engine.particles.map((p) => ({ ...p, position: { ...p.position }, velocity: { ...p.velocity } })),
-          matchHistory: engine.matchHistory.slice(-50),
+          gameLog: engine.gameLog.slice(-50),
           tick: engine.tick,
           totalCooperations: engine.totalCooperations,
           totalDefections: engine.totalDefections,
@@ -110,7 +80,7 @@ export function useSimulation(config: SimulationConfig = DEFAULT_CONFIG) {
     engineRef.current!.reset();
     setState({
       particles: engineRef.current!.particles.map((p) => ({ ...p, position: { ...p.position }, velocity: { ...p.velocity } })),
-      matchHistory: [],
+      gameLog: [],
       tick: 0,
       totalCooperations: 0,
       totalDefections: 0,

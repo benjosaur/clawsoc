@@ -35,6 +35,7 @@ export function playMatch(a: Particle, b: Particle, tick: number): MatchRecord {
 
   matchCounter++;
   return {
+    type: "match",
     id: `match-${matchCounter}`,
     tick,
     particleA: { id: a.id, label: a.label, strategy: a.strategy },
