@@ -12,32 +12,48 @@ interface Props {
   viewRef: React.RefObject<CanvasView | null>;
   interpRef: React.RefObject<InterpState>;
   config: SimulationConfig;
+  containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export default function SimulationCanvas({ viewRef, interpRef, config }: Props) {
+export default function SimulationCanvas({ viewRef, interpRef, config, containerRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = config.canvasWidth * dpr;
-    canvas.height = config.canvasHeight * dpr;
-    canvas.style.width = `${config.canvasWidth}px`;
-    canvas.style.height = `${config.canvasHeight}px`;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.scale(dpr, dpr);
+    const worldW = config.canvasWidth;
+    const worldH = config.canvasHeight;
+    let scale = 1;
+    let dpr = window.devicePixelRatio || 1;
+
+    function resize() {
+      if (!canvas || !ctx || !container) return;
+      dpr = window.devicePixelRatio || 1;
+      const cw = container.clientWidth;
+      scale = cw / worldW;
+      const ch = Math.round(cw * (worldH / worldW));
+
+      canvas.width = Math.round(cw * dpr);
+      canvas.height = Math.round(ch * dpr);
+      canvas.style.width = `${cw}px`;
+      canvas.style.height = `${ch}px`;
+    }
+
+    resize();
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
 
     let raf: number;
 
     function draw() {
-      if (!ctx) return;
+      if (!ctx || !canvas) return;
 
-      const { canvasWidth, canvasHeight } = config;
       const { prev, curr, frameTime } = interpRef.current;
 
       if (!curr) {
@@ -50,14 +66,17 @@ export default function SimulationCanvas({ viewRef, interpRef, config }: Props) 
         ? Math.min(1, (performance.now() - frameTime) / FRAME_INTERVAL)
         : 1;
 
+      // Reset transform then apply DPR + world→screen scale
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+
       // Background
       ctx.fillStyle = "#fafafa";
-      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      ctx.fillRect(0, 0, worldW, worldH);
 
       // Subtle dot grid
       ctx.fillStyle = "#e2e2e2";
-      for (let x = 20; x < canvasWidth; x += 20) {
-        for (let y = 20; y < canvasHeight; y += 20) {
+      for (let x = 20; x < worldW; x += 20) {
+        for (let y = 20; y < worldH; y += 20) {
           ctx.beginPath();
           ctx.arc(x, y, 0.5, 0, Math.PI * 2);
           ctx.fill();
@@ -98,22 +117,24 @@ export default function SimulationCanvas({ viewRef, interpRef, config }: Props) 
 
         ctx.restore();
 
-        // Average score inside circle
+        // Average score inside circle — scale font inversely so it stays readable
+        const fontScale = Math.max(1, 1 / scale);
         ctx.fillStyle = "#fff";
-        ctx.font = `bold ${p.radius > 12 ? 10 : 8}px Inter, system-ui, sans-serif`;
+        ctx.font = `bold ${(p.radius > 12 ? 10 : 8) * fontScale}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(p.avgScore.toFixed(1), x, y + 0.5);
 
         // Name label above
         ctx.fillStyle = "#71717a";
-        ctx.font = "8px Inter, system-ui, sans-serif";
+        ctx.font = `${8 * fontScale}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(p.label, x, y - p.radius - 4);
       }
 
       // Draw floating popups (fully client-side animation from spawnTime)
       const now = performance.now();
+      const fontScale = Math.max(1, 1 / scale);
       for (const popup of curr.popups) {
         const progress = Math.min(1, (now - popup.spawnTime) / POPUP_DURATION_MS);
         if (progress >= 1) continue;
@@ -123,7 +144,7 @@ export default function SimulationCanvas({ viewRef, interpRef, config }: Props) 
         ctx.save();
         ctx.globalAlpha = Math.max(0, alpha);
         ctx.fillStyle = popup.color;
-        ctx.font = "bold 9px Inter, system-ui, sans-serif";
+        ctx.font = `bold ${9 * fontScale}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(popup.text, popup.x, popup.y - yOffset);
@@ -134,13 +155,16 @@ export default function SimulationCanvas({ viewRef, interpRef, config }: Props) 
     }
 
     raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [viewRef, interpRef, config]);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [viewRef, interpRef, config, containerRef]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="rounded border border-zinc-200"
+      className="rounded border border-zinc-200 w-full"
     />
   );
 }
