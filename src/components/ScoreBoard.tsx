@@ -26,11 +26,11 @@ export default function ScoreBoard({ particles }: Props) {
   const sorted = [...particles].sort((a, b) => b.avgScore - a.avgScore);
 
   return (
-    <div>
-      <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-2">
+    <>
+      <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
         Avg Score
       </h2>
-      <div className="space-y-0.5">
+      <div className="space-y-0.5 overflow-y-auto min-h-0 flex-1">
         {sorted.map((p, i) => (
           <div
             key={p.id}
@@ -51,6 +51,6 @@ export default function ScoreBoard({ particles }: Props) {
           </div>
         ))}
       </div>
-    </div>
+    </>
   );
 }

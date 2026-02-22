@@ -54,10 +54,16 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="w-56 flex flex-col gap-4">
-          <ScoreBoard particles={state.particles} />
-          <TotalScoreBoard particles={state.particles} />
-          <MatchHistoryPanel entries={state.gameLog} />
+        <div className="w-56 flex flex-col gap-1" style={{ height: DEFAULT_CONFIG.canvasHeight }}>
+          <div className="flex-1 min-h-0 flex flex-col">
+            <ScoreBoard particles={state.particles} />
+          </div>
+          <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
+            <TotalScoreBoard particles={state.particles} />
+          </div>
+          <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
+            <MatchHistoryPanel entries={state.gameLog} />
+          </div>
         </div>
       </div>
     </main>
