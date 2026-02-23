@@ -13,10 +13,13 @@ interface Props {
   interpRef: React.RefObject<InterpState>;
   config: SimulationConfig;
   containerRef: React.RefObject<HTMLDivElement | null>;
+  selectedId?: number | null;
 }
 
-export default function SimulationCanvas({ viewRef, interpRef, config, containerRef }: Props) {
+export default function SimulationCanvas({ viewRef, interpRef, config, containerRef, selectedId }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -66,12 +69,39 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
         ? Math.min(1, (performance.now() - frameTime) / FRAME_INTERVAL)
         : 1;
 
-      // Reset transform then apply DPR + world→screen scale
-      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+      // Build prev position lookup for lerp
+      const prevMap = new Map<number, { x: number; y: number }>();
+      if (prev) {
+        for (const p of prev.particles) {
+          prevMap.set(p.id, { x: p.x, y: p.y });
+        }
+      }
 
-      // Background
+      // Zoom: 2x centered on selected particle
+      const sel = selectedIdRef.current;
+      let zoom = 1;
+      let camX = 0;
+      let camY = 0;
+
+      if (sel != null && curr) {
+        const sp = curr.particles.find((p) => p.id === sel);
+        if (sp) {
+          const pp = prevMap.get(sp.id);
+          const sx = pp ? pp.x + (sp.x - pp.x) * t : sp.x;
+          const sy = pp ? pp.y + (sp.y - pp.y) * t : sp.y;
+          zoom = 2;
+          const s = dpr * scale * zoom;
+          camX = canvas.width / 2 - sx * s;
+          camY = canvas.height / 2 - sy * s;
+        }
+      }
+
+      const s = dpr * scale * zoom;
+      ctx.setTransform(s, 0, 0, s, camX, camY);
+
+      // Background — fill generously to cover zoomed viewport
       ctx.fillStyle = "#fafafa";
-      ctx.fillRect(0, 0, worldW, worldH);
+      ctx.fillRect(-worldW, -worldH, worldW * 3, worldH * 3);
 
       // Subtle dot grid
       ctx.fillStyle = "#e2e2e2";
@@ -83,15 +113,8 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
         }
       }
 
-      // Build prev position lookup for lerp
-      const prevMap = new Map<number, { x: number; y: number }>();
-      if (prev) {
-        for (const p of prev.particles) {
-          prevMap.set(p.id, { x: p.x, y: p.y });
-        }
-      }
-
       // Draw particles with interpolated positions
+      const now = performance.now();
       for (const p of curr.particles) {
         const pp = prevMap.get(p.id);
         const x = pp ? pp.x + (p.x - pp.x) * t : p.x;
@@ -133,8 +156,7 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
       }
 
       // Draw floating popups (fully client-side animation from spawnTime)
-      const now = performance.now();
-      const fontScale = Math.max(1, 1 / scale);
+      const popupFontScale = Math.max(1, 1 / scale);
       for (const popup of curr.popups) {
         const progress = Math.min(1, (now - popup.spawnTime) / POPUP_DURATION_MS);
         if (progress >= 1) continue;
@@ -144,7 +166,7 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
         ctx.save();
         ctx.globalAlpha = Math.max(0, alpha);
         ctx.fillStyle = popup.color;
-        ctx.font = `bold ${9 * fontScale}px Inter, system-ui, sans-serif`;
+        ctx.font = `bold ${9 * popupFontScale}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(popup.text, popup.x, popup.y - yOffset);

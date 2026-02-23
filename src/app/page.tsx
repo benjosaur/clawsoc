@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { DEFAULT_CONFIG } from "@/simulation/types";
 import { useServerSimulation } from "@/hooks/useServerSimulation";
 import SimulationCanvas from "@/components/SimulationCanvas";
 import ScoreBoard from "@/components/ScoreBoard";
 import TotalScoreBoard from "@/components/TotalScoreBoard";
 import MatchHistoryPanel from "@/components/MatchHistoryPanel";
+import PlayerSearch from "@/components/PlayerSearch";
 import PanelTabs from "@/components/PanelTabs";
 
 export default function Home() {
@@ -15,6 +16,8 @@ export default function Home() {
   const total = state.totalCooperations + state.totalDefections;
   const coopPct =
     total > 0 ? Math.round((state.totalCooperations / total) * 100) : 0;
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const handleSelect = useCallback((id: number | null) => setSelectedId(id), []);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const [canvasHeight, setCanvasHeight] = useState<number>(
     DEFAULT_CONFIG.canvasHeight,
@@ -35,19 +38,24 @@ export default function Home() {
     return () => ro.disconnect();
   }, []);
 
-  const avgPanel = <ScoreBoard particles={state.particles} />;
-  const totalPanel = <TotalScoreBoard particles={state.particles} />;
-  const logPanel = <MatchHistoryPanel entries={state.gameLog} />;
+  const avgPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} />;
+  const totalPanel = <TotalScoreBoard particles={state.particles} selectedId={selectedId} />;
+  const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} />;
 
   return (
     <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-4 md:gap-5">
-      <div className="flex items-baseline gap-2">
+      <div className="flex items-center gap-3">
         <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
           ClawSoc
         </h1>
         <span className="text-sm text-zinc-400 font-normal tracking-wide">
           We live in a society 🤡
         </span>
+        <PlayerSearch
+          particles={state.particles}
+          selectedId={selectedId}
+          onSelect={handleSelect}
+        />
       </div>
 
       {/* Desktop: side-by-side | Mobile: stacked */}
@@ -63,6 +71,7 @@ export default function Home() {
               interpRef={interpRef}
               config={DEFAULT_CONFIG}
               containerRef={canvasContainerRef}
+              selectedId={selectedId}
             />
           </div>
 

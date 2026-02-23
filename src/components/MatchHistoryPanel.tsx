@@ -4,6 +4,7 @@ import { GameLogEntry } from "@/simulation/types";
 
 interface Props {
   entries: GameLogEntry[];
+  selectedId?: number | null;
 }
 
 function DecisionBadge({ decision }: { decision: "cooperate" | "defect" }) {
@@ -18,8 +19,14 @@ function DecisionBadge({ decision }: { decision: "cooperate" | "defect" }) {
   );
 }
 
-export default function MatchHistoryPanel({ entries }: Props) {
+export default function MatchHistoryPanel({ entries, selectedId }: Props) {
   const recent = [...entries].reverse();
+  const filtered =
+    selectedId != null
+      ? recent.filter(
+          (e) => e.particleA.id === selectedId || e.particleB.id === selectedId,
+        )
+      : recent;
 
   return (
     <>
@@ -27,12 +34,17 @@ export default function MatchHistoryPanel({ entries }: Props) {
         Game Log
       </h2>
       <div className="space-y-1 overflow-y-auto min-h-0 flex-1">
-        {recent.length === 0 && (
-          <p className="text-[11px] text-zinc-400 font-mono">waiting...</p>
+        {filtered.length === 0 && (
+          <p className="text-[11px] text-zinc-400 font-mono">
+            {selectedId != null ? "no games yet" : "waiting..."}
+          </p>
         )}
-        {recent.map((entry) =>
+        {filtered.map((entry) =>
           entry.type === "match" ? (
-            <div key={entry.id} className="text-[10px] font-mono text-zinc-600 flex gap-2">
+            <div
+              key={entry.id}
+              className="text-[10px] font-mono text-zinc-600 flex gap-2"
+            >
               {/* Left: player A */}
               <div className="flex-1 min-w-0 text-left">
                 <div className="flex items-center gap-1">
@@ -61,7 +73,10 @@ export default function MatchHistoryPanel({ entries }: Props) {
               </div>
             </div>
           ) : (
-            <div key={entry.id} className="text-[10px] font-mono text-zinc-500 flex gap-2">
+            <div
+              key={entry.id}
+              className="text-[10px] font-mono text-zinc-500 flex gap-2"
+            >
               <div className="flex-1 min-w-0 text-left truncate">{entry.particleA.label}</div>
               <span className="text-zinc-400 italic text-[9px] flex-shrink-0">timed out</span>
               <div className="flex-1 min-w-0 text-right truncate">{entry.particleB.label}</div>
