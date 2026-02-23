@@ -181,6 +181,7 @@ async function main() {
 
   const wss = new WebSocketServer({ noServer: true });
   const clients = new Set<WebSocket>();
+  const upgrade = app.getUpgradeHandler();
 
   server.on("upgrade", (req, socket, head) => {
     const { pathname } = parse(req.url || "/", true);
@@ -189,7 +190,7 @@ async function main() {
         wss.emit("connection", ws, req);
       });
     } else {
-      socket.destroy();
+      upgrade(req, socket, head);
     }
   });
 
