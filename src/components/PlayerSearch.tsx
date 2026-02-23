@@ -73,6 +73,11 @@ export default function PlayerSearch({ particles, selectedId, onSelect }: Props)
         type="text"
         value={query}
         onChange={(e) => handleChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && matches.length > 0) {
+            handleSelect(matches[0].id);
+          }
+        }}
         onFocus={() => query.length > 0 && setOpen(true)}
         placeholder="Find player…"
         className="w-28 pl-5 pr-2 py-1 border border-zinc-200 rounded text-xs font-mono text-zinc-700 placeholder:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-amber-300 focus:border-amber-300"
