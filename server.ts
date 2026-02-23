@@ -132,13 +132,25 @@ function buildFastFrame(): string {
   return JSON.stringify(frame);
 }
 
+function coopColor(particle: typeof engine.particles[number]): string {
+  let coops = 0, total = 0;
+  for (const r of Object.values(particle.matchHistory)) {
+    coops += r.cc + r.cd;
+    total += r.cc + r.cd + r.dc + r.dd;
+  }
+  if (total === 0) return "hsl(60,50%,45%)"; // neutral amber before any matches
+  const ratio = coops / total; // 0 = always defect, 1 = always cooperate
+  const hue = ratio * 120;     // 0° red → 120° green
+  return `hsl(${Math.round(hue)},70%,42%)`;
+}
+
 function buildSlowFrame(): string {
   const particles = engine.particles.map((p) => {
     const matches = totalMatches(p.matchHistory);
     return {
       id: p.id,
       label: p.label,
-      color: p.color,
+      color: coopColor(p),
       radius: p.radius,
       score: p.score,
       avgScore: matches > 0 ? Math.round((p.score / matches) * 10) / 10 : 0,

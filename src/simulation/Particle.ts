@@ -12,7 +12,14 @@ const NAMES = [
   "Zeta", "Eta", "Theta", "Iota", "Kappa",
   "Lambda", "Mu", "Nu", "Xi", "Omicron",
   "Pi", "Rho", "Sigma", "Tau", "Upsilon",
+  "Phi", "Chi", "Psi", "Omega",
 ];
+
+function uniqueName(index: number): string {
+  const base = NAMES[index % NAMES.length];
+  const gen = Math.floor(index / NAMES.length);
+  return gen === 0 ? base : `${base}${gen + 1}`;
+}
 
 export function createParticles(config: SimulationConfig): Particle[] {
   const particles: Particle[] = [];
@@ -28,7 +35,7 @@ export function createParticles(config: SimulationConfig): Particle[] {
       const x = margin + Math.random() * (config.canvasWidth - margin * 2);
       const y = margin + Math.random() * (config.canvasHeight - margin * 2);
 
-      const label = agentClass.names?.[n] ?? NAMES[i % NAMES.length];
+      const label = agentClass.names?.[n] ?? uniqueName(i);
 
       particles.push({
         id: i,

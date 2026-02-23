@@ -123,7 +123,7 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
         ctx.font = `bold ${(p.radius > 12 ? 10 : 8) * fontScale}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(p.avgScore.toFixed(1), x, y + 0.5);
+        ctx.fillText(Math.round(p.avgScore).toString(), x, y + 0.5);
 
         // Name label above
         ctx.fillStyle = "#71717a";
