@@ -14,17 +14,12 @@ const port = parseInt(process.env.PORT || "3000", 10);
 
 // --- OpenAI setup ---
 
-const SYSTEM_PROMPTS: Record<StrategyType, string> = {
-  always_cooperate:
-    "You are a deeply trusting, cooperative agent who always seeks mutual benefit.",
-  always_defect:
-    "You are a ruthless, self-interested agent who always prioritizes your own gain.",
-  tit_for_tat:
-    "You are a fair, reciprocal agent. You mirror how others treat you.",
-  random:
-    "You are unpredictable and chaotic. Your mood changes constantly.",
-  grudger:
-    "You start trusting but never forgive betrayal. You hold grudges forever.",
+const STRATEGY_PERSONA: Record<StrategyType, string> = {
+  always_cooperate: "You always cooperate.",
+  always_defect: "You always defect.",
+  tit_for_tat: "You mirror your opponent's last move.",
+  random: "You are unpredictable.",
+  grudger: "You cooperate until betrayed, then always defect.",
 };
 
 let openai: OpenAI | null = null;
@@ -54,20 +49,28 @@ engine.onRequestLLMMessage = (side, self, opponent) => {
   const aId = side === "a" ? self.id : opponent.id;
   const bId = side === "a" ? opponent.id : self.id;
 
-  const record = self.matchHistory[opponent.id];
-  let historyContext = "";
-  if (record) {
-    const parts: string[] = [];
-    if (record.cc > 0) parts.push(`${record.cc}x both cooperated`);
-    if (record.cd > 0) parts.push(`${record.cd}x you cooperated, they defected`);
-    if (record.dc > 0) parts.push(`${record.dc}x you defected, they cooperated`);
-    if (record.dd > 0) parts.push(`${record.dd}x both defected`);
-    if (parts.length > 0) {
-      historyContext = ` Your past interactions with ${opponent.label}: ${parts.join(". ")}.`;
-    }
+  // Opponent's overall defection %
+  const oppMatches = totalMatches(opponent.matchHistory);
+  let oppDefectPct = 0;
+  if (oppMatches > 0) {
+    let oppDefections = 0;
+    for (const r of Object.values(opponent.matchHistory)) oppDefections += r.dc + r.dd;
+    oppDefectPct = Math.round((oppDefections / oppMatches) * 100);
   }
 
-  const userPrompt = `You are ${self.label}, meeting ${opponent.label} in a Prisoner's Dilemma game.${historyContext} Generate a short message (1-2 sentences) to say to them before you both make your decision. Stay in character. Do not mention the game mechanics directly.`;
+  // Your record vs this opponent
+  const record = self.matchHistory[opponent.id];
+  let vsRecord = "No prior meetings.";
+  if (record) {
+    const total = record.cc + record.cd + record.dc + record.dd;
+    vsRecord = `${total} prior games: both cooperated=${record.cc}, you cooperated they defected=${record.cd}, you defected they cooperated=${record.dc}, both defected=${record.dd}`;
+  }
+
+  const systemPrompt = `Prisoner's Dilemma. Payoffs: CC=3/3, CD=0/5, DC=5/0, DD=1/1.
+${STRATEGY_PERSONA[self.strategy]}
+Opponent: ${opponent.label} (defects ${oppDefectPct}% overall). ${vsRecord}`;
+
+  const userPrompt = `Say 1-2 sentences to ${opponent.label} before you both decide. Stay in character.`;
 
   // 30s timeout via AbortController
   const controller = new AbortController();
@@ -78,7 +81,7 @@ engine.onRequestLLMMessage = (side, self, opponent) => {
       {
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: SYSTEM_PROMPTS[self.strategy] },
+          { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         max_tokens: 60,
