@@ -19,6 +19,10 @@ export interface SlowFrame {
     score: number;
     avgScore: number;
     strategy: StrategyType;
+    cc: number;
+    cd: number;
+    dc: number;
+    dd: number;
   }[];
   gameLog: GameLogEntry[];
   totalC: number;

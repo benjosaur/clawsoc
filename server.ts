@@ -150,6 +150,10 @@ function coopColor(particle: typeof engine.particles[number]): string {
 function buildSlowFrame(): string {
   const particles = engine.particles.map((p) => {
     const matches = totalMatches(p.matchHistory);
+    let cc = 0, cd = 0, dc = 0, dd = 0;
+    for (const r of Object.values(p.matchHistory)) {
+      cc += r.cc; cd += r.cd; dc += r.dc; dd += r.dd;
+    }
     return {
       id: p.id,
       label: p.label,
@@ -158,6 +162,7 @@ function buildSlowFrame(): string {
       score: p.score,
       avgScore: matches > 0 ? Math.round((p.score / matches) * 10) / 10 : 0,
       strategy: p.strategy,
+      cc, cd, dc, dd,
     };
   });
 

@@ -5,6 +5,7 @@ import { GameLogEntry } from "@/simulation/types";
 interface Props {
   entries: GameLogEntry[];
   selectedId?: number | null;
+  label?: string;
 }
 
 function DecisionBadge({ decision }: { decision: "cooperate" | "defect" }) {
@@ -19,7 +20,7 @@ function DecisionBadge({ decision }: { decision: "cooperate" | "defect" }) {
   );
 }
 
-export default function MatchHistoryPanel({ entries, selectedId }: Props) {
+export default function MatchHistoryPanel({ entries, selectedId, label }: Props) {
   const recent = [...entries].reverse();
   const filtered =
     selectedId != null
@@ -31,7 +32,7 @@ export default function MatchHistoryPanel({ entries, selectedId }: Props) {
   return (
     <>
       <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
-        Game Log
+        {label ?? "Game Log"}
       </h2>
       <div className="space-y-1 overflow-y-auto min-h-0 flex-1">
         {filtered.length === 0 && (

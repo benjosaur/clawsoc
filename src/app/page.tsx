@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import { DEFAULT_CONFIG } from "@/simulation/types";
+import type { GameLogEntry } from "@/simulation/types";
 import { useServerSimulation } from "@/hooks/useServerSimulation";
 import SimulationCanvas from "@/components/SimulationCanvas";
 import ScoreBoard from "@/components/ScoreBoard";
@@ -9,6 +10,7 @@ import TotalScoreBoard from "@/components/TotalScoreBoard";
 import MatchHistoryPanel from "@/components/MatchHistoryPanel";
 import PlayerSearch from "@/components/PlayerSearch";
 import PanelTabs from "@/components/PanelTabs";
+import PlayerStats from "@/components/PlayerStats";
 
 export default function Home() {
   const { state, paused, togglePause, reset, viewRef, interpRef, connected } =
@@ -22,6 +24,30 @@ export default function Home() {
   const [canvasHeight, setCanvasHeight] = useState<number>(
     DEFAULT_CONFIG.canvasHeight,
   );
+
+  // Accumulated player-specific match log (persists across server refreshes)
+  const [playerLog, setPlayerLog] = useState<GameLogEntry[]>([]);
+  const seenLogIds = useRef<Set<string>>(new Set());
+
+  // Reset accumulated log when selection changes
+  useEffect(() => {
+    setPlayerLog([]);
+    seenLogIds.current.clear();
+  }, [selectedId]);
+
+  // Merge new player-specific entries as they arrive
+  useEffect(() => {
+    if (selectedId == null) return;
+    const fresh = state.gameLog.filter(
+      (e) =>
+        (e.particleA.id === selectedId || e.particleB.id === selectedId) &&
+        !seenLogIds.current.has(e.id),
+    );
+    if (fresh.length > 0) {
+      for (const e of fresh) seenLogIds.current.add(e.id);
+      setPlayerLog((prev) => [...prev, ...fresh]);
+    }
+  }, [state.gameLog, selectedId]);
 
   useEffect(() => {
     const el = canvasContainerRef.current;
@@ -41,6 +67,11 @@ export default function Home() {
   const avgPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} />;
   const totalPanel = <TotalScoreBoard particles={state.particles} selectedId={selectedId} />;
   const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} />;
+  const selectedParticle = selectedId != null
+    ? state.particles.find((p) => p.id === selectedId)
+    : undefined;
+  const playerStatsPanel = <PlayerStats particle={selectedParticle} allParticles={state.particles} onDeselect={() => setSelectedId(null)} />;
+  const playerLogPanel = <MatchHistoryPanel entries={playerLog} label="Match Log" />;
 
   return (
     <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-4 md:gap-5">
@@ -106,18 +137,35 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Desktop sidebar — match canvas height, each panel gets 1/3 */}
+        {/* Desktop sidebar — match canvas height */}
         <div
           className="hidden md:flex w-64 lg:w-72 xl:w-80 shrink-0 flex-col gap-1"
           style={{ height: canvasHeight }}
         >
-          <div className="flex-1 min-h-0 flex flex-col">{avgPanel}</div>
-          <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
-            {totalPanel}
-          </div>
-          <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
-            {logPanel}
-          </div>
+          {selectedId != null ? (
+            <>
+              <div className="flex-[2] min-h-0 flex flex-col">{avgPanel}</div>
+              <div className="flex-[2] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
+                {totalPanel}
+              </div>
+              <div className="flex-[3] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
+                {playerStatsPanel}
+              </div>
+              <div className="flex-[3] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
+                {playerLogPanel}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex-1 min-h-0 flex flex-col">{avgPanel}</div>
+              <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
+                {totalPanel}
+              </div>
+              <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
+                {logPanel}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Mobile tabs */}
@@ -126,6 +174,7 @@ export default function Home() {
             avgPanel={avgPanel}
             totalPanel={totalPanel}
             logPanel={logPanel}
+            playerPanel={selectedId != null ? playerStatsPanel : undefined}
           />
         </div>
       </div>

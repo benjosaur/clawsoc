@@ -13,6 +13,10 @@ interface ParticleMeta {
   score: number;
   avgScore: number;
   strategy: StrategyType;
+  cc: number;
+  cd: number;
+  dc: number;
+  dd: number;
 }
 
 export interface ServerSimulationState {

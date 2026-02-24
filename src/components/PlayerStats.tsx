@@ -1,0 +1,162 @@
+"use client";
+
+import type { StrategyType } from "@/simulation/types";
+
+const STRATEGY_SHORT: Record<StrategyType, string> = {
+  always_cooperate: "COOP",
+  always_defect: "DEFT",
+  tit_for_tat: "TFT",
+  random: "RAND",
+  grudger: "GRDG",
+};
+
+interface ParticleData {
+  id: number;
+  label: string;
+  color: string;
+  score: number;
+  avgScore: number;
+  strategy: StrategyType;
+  cc: number;
+  cd: number;
+  dc: number;
+  dd: number;
+}
+
+interface Props {
+  particle: ParticleData | undefined;
+  allParticles: ParticleData[];
+  onDeselect?: () => void;
+}
+
+export default function PlayerStats({ particle, allParticles, onDeselect }: Props) {
+  if (!particle) {
+    return (
+      <>
+        <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
+          Player Stats
+        </h2>
+        <div className="flex-1 flex items-center justify-center text-[11px] text-zinc-300">
+          Select a player
+        </div>
+      </>
+    );
+  }
+
+  const cc = particle.cc || 0;
+  const cd = particle.cd || 0;
+  const dc = particle.dc || 0;
+  const dd = particle.dd || 0;
+  const total = cc + cd + dc + dd;
+  const coopPct = total > 0 ? (cc + cd) / total * 100 : 0;
+
+  // Rankings
+  const byTotal = [...allParticles].sort((a, b) => b.score - a.score);
+  const byAvg = [...allParticles].sort((a, b) => b.avgScore - a.avgScore);
+  const rankTotal = byTotal.findIndex((p) => p.id === particle.id) + 1;
+  const rankAvg = byAvg.findIndex((p) => p.id === particle.id) + 1;
+  const n = allParticles.length || 1;
+
+  // Lobby averages
+  const lobbyAvgTotal = allParticles.reduce((s, p) => s + p.score, 0) / n;
+  const lobbyAvgAvg = allParticles.reduce((s, p) => s + p.avgScore, 0) / n;
+  const deltaTotal = particle.score - lobbyAvgTotal;
+  const deltaAvg = particle.avgScore - lobbyAvgAvg;
+
+  return (
+    <>
+      <div className="flex items-center mb-1 flex-shrink-0">
+        <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest">
+          Player Stats
+        </h2>
+        {onDeselect && (
+          <button
+            onClick={onDeselect}
+            className="ml-auto text-zinc-300 hover:text-zinc-500 transition-colors text-xs leading-none px-0.5"
+            aria-label="Deselect player"
+          >
+            &times;
+          </button>
+        )}
+      </div>
+      <div className="overflow-y-auto min-h-0 flex-1 text-[11px] font-mono">
+        {/* Name + strategy */}
+        <div className="flex items-center gap-1.5">
+          <span
+            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+            style={{ backgroundColor: particle.color }}
+          />
+          <span className="text-zinc-800 font-semibold truncate">{particle.label}</span>
+          <span className="text-zinc-300 text-[9px] tracking-wide">
+            {STRATEGY_SHORT[particle.strategy]}
+          </span>
+        </div>
+
+        {/* Score + rank rows */}
+        <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px]">
+          <div className="flex items-center justify-between">
+            <span className="text-zinc-400">Total</span>
+            <span className="flex items-center gap-1">
+              <span className="text-zinc-800 font-semibold">{particle.score}</span>
+              <Delta value={deltaTotal} />
+              <span className="text-zinc-400">#{rankTotal}</span>
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-zinc-400">Avg</span>
+            <span className="flex items-center gap-1">
+              <span className="text-zinc-800 font-semibold">{particle.avgScore.toFixed(1)}</span>
+              <Delta value={deltaAvg} />
+              <span className="text-zinc-400">#{rankAvg}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Cooperation bar */}
+        <div className="mt-2 space-y-0.5">
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="text-zinc-400">{total} games</span>
+            <span className="font-semibold" style={{ color: particle.color }}>
+              {coopPct.toFixed(0)}% coop
+            </span>
+          </div>
+          <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${coopPct}%`, backgroundColor: particle.color }}
+            />
+          </div>
+        </div>
+
+        {/* Outcome matrix */}
+        <table className="mt-2 w-full text-[10px] border-collapse">
+          <thead>
+            <tr>
+              <th />
+              <th className="text-zinc-400 font-normal text-right px-1">Opp C</th>
+              <th className="text-zinc-400 font-normal text-right px-1">Opp D</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="text-zinc-400 pr-1">You C</td>
+              <td className="text-right px-1 text-emerald-700 font-medium">{cc}</td>
+              <td className="text-right px-1 text-amber-600 font-medium">{cd}</td>
+            </tr>
+            <tr>
+              <td className="text-zinc-400 pr-1">You D</td>
+              <td className="text-right px-1 text-orange-600 font-medium">{dc}</td>
+              <td className="text-right px-1 text-red-600 font-medium">{dd}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function Delta({ value }: { value: number }) {
+  const sign = value >= 0 ? "+" : "";
+  const color = value > 0 ? "text-emerald-600" : value < 0 ? "text-red-500" : "text-zinc-400";
+  return <span className={`${color} text-[10px]`}>{sign}{value.toFixed(1)}</span>;
+}

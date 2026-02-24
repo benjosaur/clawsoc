@@ -1,28 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-type Tab = "avg" | "total" | "log";
+type Tab = "avg" | "total" | "log" | "player";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "avg", label: "Avg" },
-  { id: "total", label: "Total" },
-  { id: "log", label: "Log" },
-];
+interface TabDef { id: Tab; label: string }
 
 interface Props {
   avgPanel: React.ReactNode;
   totalPanel: React.ReactNode;
   logPanel: React.ReactNode;
+  playerPanel?: React.ReactNode;
 }
 
-export default function PanelTabs({ avgPanel, totalPanel, logPanel }: Props) {
+export default function PanelTabs({ avgPanel, totalPanel, logPanel, playerPanel }: Props) {
+  const tabs: TabDef[] = [
+    { id: "avg", label: "Avg" },
+    { id: "total", label: "Total" },
+    { id: "log", label: "Log" },
+  ];
+  if (playerPanel) tabs.push({ id: "player", label: "Player" });
+
   const [active, setActive] = useState<Tab>("avg");
+
+  // Auto-switch to player tab when a player is selected
+  useEffect(() => {
+    if (playerPanel) setActive("player");
+    else if (active === "player") setActive("avg");
+  }, [playerPanel != null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
       <div className="flex border-b border-zinc-200">
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActive(tab.id)}
@@ -40,6 +50,7 @@ export default function PanelTabs({ avgPanel, totalPanel, logPanel }: Props) {
         {active === "avg" && avgPanel}
         {active === "total" && totalPanel}
         {active === "log" && logPanel}
+        {active === "player" && playerPanel}
       </div>
     </div>
   );
