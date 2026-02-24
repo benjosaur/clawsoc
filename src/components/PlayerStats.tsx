@@ -92,24 +92,24 @@ export default function PlayerStats({ particle, allParticles, onDeselect }: Prop
           </span>
         </div>
 
-        {/* Score + rank rows */}
-        <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px]">
-          <div className="flex items-center justify-between">
+        {/* Score row */}
+        <div className="mt-1.5 flex items-center justify-between text-[10px]">
+          <span className="flex items-center gap-1">
             <span className="text-zinc-400">Total</span>
-            <span className="flex items-center gap-1">
-              <span className="text-zinc-800 font-semibold">{particle.score}</span>
-              <Delta value={deltaTotal} />
-              <span className="text-zinc-400">#{rankTotal}</span>
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
+            <span className="text-zinc-800 font-semibold">{particle.score}</span>
+            <Delta value={deltaTotal} />
+          </span>
+          <span className="flex items-center gap-1">
             <span className="text-zinc-400">Avg</span>
-            <span className="flex items-center gap-1">
-              <span className="text-zinc-800 font-semibold">{particle.avgScore.toFixed(1)}</span>
-              <Delta value={deltaAvg} />
-              <span className="text-zinc-400">#{rankAvg}</span>
-            </span>
-          </div>
+            <span className="text-zinc-800 font-semibold">{particle.avgScore.toFixed(1)}</span>
+            <Delta value={deltaAvg} />
+          </span>
+        </div>
+
+        {/* Rank row */}
+        <div className="flex items-center justify-between text-[10px]">
+          <span className="text-zinc-400">Rank #{rankTotal}{medal(rankTotal, n)}</span>
+          <span className="text-zinc-400">Rank #{rankAvg}{medal(rankAvg, n)}</span>
         </div>
 
         {/* Cooperation bar */}
@@ -153,6 +153,14 @@ export default function PlayerStats({ particle, allParticles, onDeselect }: Prop
       </div>
     </>
   );
+}
+
+function medal(rank: number, total: number): string {
+  if (rank === 1) return " \u{1F947}"; // gold
+  if (rank === 2) return " \u{1F948}"; // silver
+  if (rank === 3) return " \u{1F949}"; // bronze
+  if (rank === total && total > 3) return " \u{1F944}"; // spoon
+  return "";
 }
 
 function Delta({ value }: { value: number }) {

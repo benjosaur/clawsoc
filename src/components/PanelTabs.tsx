@@ -15,18 +15,18 @@ interface Props {
 
 export default function PanelTabs({ avgPanel, totalPanel, logPanel, playerPanel }: Props) {
   const tabs: TabDef[] = [
-    { id: "avg", label: "Avg" },
     { id: "total", label: "Total" },
+    { id: "avg", label: "Avg" },
     { id: "log", label: "Log" },
   ];
   if (playerPanel) tabs.push({ id: "player", label: "Player" });
 
-  const [active, setActive] = useState<Tab>("avg");
+  const [active, setActive] = useState<Tab>("total");
 
   // Auto-switch to player tab when a player is selected
   useEffect(() => {
     if (playerPanel) setActive("player");
-    else if (active === "player") setActive("avg");
+    else if (active === "player") setActive("total");
   }, [playerPanel != null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

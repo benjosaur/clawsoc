@@ -125,6 +125,7 @@ export default function Home() {
               </span>
             )}
             <div className="ml-auto flex items-center gap-3 text-[11px] font-mono">
+              <span className="text-zinc-400">{state.particles.length} players</span>
               <span className="text-emerald-600">
                 {state.totalCooperations}C
               </span>
@@ -144,9 +145,9 @@ export default function Home() {
         >
           {selectedId != null ? (
             <>
-              <div className="flex-[2] min-h-0 flex flex-col">{avgPanel}</div>
+              <div className="flex-[2] min-h-0 flex flex-col">{totalPanel}</div>
               <div className="flex-[2] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
-                {totalPanel}
+                {avgPanel}
               </div>
               <div className="flex-[3] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
                 {playerStatsPanel}
@@ -157,9 +158,9 @@ export default function Home() {
             </>
           ) : (
             <>
-              <div className="flex-1 min-h-0 flex flex-col">{avgPanel}</div>
+              <div className="flex-1 min-h-0 flex flex-col">{totalPanel}</div>
               <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
-                {totalPanel}
+                {avgPanel}
               </div>
               <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
                 {logPanel}
