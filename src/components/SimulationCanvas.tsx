@@ -141,16 +141,19 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
         ctx.restore();
 
         // Average score inside circle — scale font inversely so it stays readable
+        const isSmall = (container?.clientWidth ?? 640) < 640;
         const fontScale = Math.max(1, 1 / scale);
+        const scoreFontSize = (p.radius > 12 ? 10 : 8) * fontScale * (isSmall ? 0.7 : 1);
         ctx.fillStyle = "#fff";
-        ctx.font = `bold ${(p.radius > 12 ? 10 : 8) * fontScale}px Inter, system-ui, sans-serif`;
+        ctx.font = `bold ${scoreFontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(Math.round(p.avgScore).toString(), x, y + 0.5);
 
         // Name label above
+        const labelFontSize = 8 * fontScale * (isSmall ? 0.7 : 1);
         ctx.fillStyle = "#71717a";
-        ctx.font = `${8 * fontScale}px Inter, system-ui, sans-serif`;
+        ctx.font = `${labelFontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(p.label, x, y - p.radius - 4);
       }
