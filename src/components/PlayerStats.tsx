@@ -108,8 +108,8 @@ export default function PlayerStats({ particle, allParticles, onDeselect }: Prop
 
         {/* Rank row */}
         <div className="flex items-center justify-between text-[10px]">
-          <span className="text-zinc-400">Rank #{rankTotal}{medal(rankTotal, n)}</span>
-          <span className="text-zinc-400">Rank #{rankAvg}{medal(rankAvg, n)}</span>
+          <span className="text-zinc-600">Rank #{rankTotal}{medal(rankTotal, n)}</span>
+          <span className="text-zinc-600">Rank #{rankAvg}{medal(rankAvg, n)}</span>
         </div>
 
         {/* Cooperation bar */}
