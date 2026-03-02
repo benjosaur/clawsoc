@@ -41,6 +41,14 @@ const TEMPLATES: Record<StrategyType, string[]> = {
     "Don't give me a reason to change, {opponent}.",
     "I forgive nothing, {opponent}.",
   ],
+  external: [
+    "I'm watching you, {opponent}.",
+    "Let's see what you've got, {opponent}.",
+    "An interesting matchup, {opponent}.",
+    "I've been waiting for this, {opponent}.",
+    "May the best strategy win, {opponent}.",
+    "Calculating my next move, {opponent}.",
+  ],
 };
 
 const BETRAYAL_RESPONSES: Record<StrategyType, string[]> = {
@@ -63,6 +71,10 @@ const BETRAYAL_RESPONSES: Record<StrategyType, string[]> = {
   grudger: [
     "You betrayed me, {opponent}. Never again.",
     "I trusted you once, {opponent}. Never again.",
+  ],
+  external: [
+    "Interesting choice last time, {opponent}.",
+    "I've adapted since we last met, {opponent}.",
   ],
 };
 

@@ -1,7 +1,7 @@
-import { CollisionPhase, GameLogEntry, MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG, FloatingPopup } from "./types";
+import { CollisionPhase, Decision, GameLogEntry, MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG, FloatingPopup } from "./types";
 import { areColliding, resolveElasticCollision, separateParticles, bounceOffWalls, vecAdd } from "./physics";
 import { createParticles } from "./Particle";
-import { playMatch, resetMatchCounter } from "./game";
+import { playMatchWithOverrides, resetMatchCounter } from "./game";
 import { generateMessage } from "./messages";
 
 const PHASE_DURATIONS: Record<CollisionPhase, number> = {
@@ -30,12 +30,23 @@ interface FrozenPair {
   messageB: string | null;
   matchRecord: MatchRecord | null;
   waitingForLLM: boolean;
+  waitingForExternal: boolean;
+  externalDecisionA: Decision | null;
+  externalDecisionB: Decision | null;
 }
 
 export type LLMRequestCallback = (
   side: "a" | "b",
   self: Particle,
   opponent: Particle,
+) => void;
+
+export type ExternalRequestCallback = (
+  side: "a" | "b",
+  self: Particle,
+  opponent: Particle,
+  aId: number,
+  bId: number,
 ) => void;
 
 export class SimulationEngine {
@@ -48,10 +59,13 @@ export class SimulationEngine {
   totalCooperations: number = 0;
   totalDefections: number = 0;
   onRequestLLMMessage: LLMRequestCallback | null = null;
+  onRequestExternalDecision: ExternalRequestCallback | null = null;
+  private nextId: number;
 
   constructor(config: SimulationConfig = DEFAULT_CONFIG) {
     this.config = config;
     this.particles = createParticles(config);
+    this.nextId = this.particles.length;
   }
 
   private isFrozen(particleId: number): boolean {
@@ -61,8 +75,8 @@ export class SimulationEngine {
   private advanceConversations(): void {
     for (const fp of this.frozenPairs) {
 
-      // If waiting for LLM response, freeze phase advancement
-      if (fp.waitingForLLM) continue;
+      // If waiting for LLM or external response, freeze phase advancement
+      if (fp.waitingForLLM || fp.waitingForExternal) continue;
 
       const elapsed = this.tick - fp.phaseStartTick;
       const phaseDuration = PHASE_DURATIONS[fp.phase];
@@ -83,7 +97,10 @@ export class SimulationEngine {
 
       switch (nextPhase) {
         case "messaging_a": {
-          if (this.onRequestLLMMessage && a.useLLM) {
+          if (this.onRequestExternalDecision && a.isExternal) {
+            fp.waitingForExternal = true;
+            this.onRequestExternalDecision("a", a, b, fp.aId, fp.bId);
+          } else if (this.onRequestLLMMessage && a.useLLM) {
             fp.waitingForLLM = true;
             this.onRequestLLMMessage("a", a, b);
           } else {
@@ -92,7 +109,10 @@ export class SimulationEngine {
           break;
         }
         case "messaging_b": {
-          if (this.onRequestLLMMessage && b.useLLM) {
+          if (this.onRequestExternalDecision && b.isExternal) {
+            fp.waitingForExternal = true;
+            this.onRequestExternalDecision("b", b, a, fp.aId, fp.bId);
+          } else if (this.onRequestLLMMessage && b.useLLM) {
             fp.waitingForLLM = true;
             this.onRequestLLMMessage("b", b, a);
           } else {
@@ -101,8 +121,8 @@ export class SimulationEngine {
           break;
         }
         case "deciding": {
-          // Play the match now
-          const record = playMatch(a, b, this.tick);
+          // Play the match now, using any external overrides
+          const record = playMatchWithOverrides(a, b, this.tick, fp.externalDecisionA, fp.externalDecisionB);
           if (fp.messageA) record.messageA = fp.messageA;
           if (fp.messageB) record.messageB = fp.messageB;
           fp.matchRecord = record;
@@ -219,6 +239,9 @@ export class SimulationEngine {
           messageB: null,
           matchRecord: null,
           waitingForLLM: false,
+          waitingForExternal: false,
+          externalDecisionA: null,
+          externalDecisionB: null,
         });
       }
     }
@@ -273,6 +296,52 @@ export class SimulationEngine {
     if (this.gameLog.length > 200) this.gameLog.splice(0, this.gameLog.length - 200);
   }
 
+  resolveExternalDecision(
+    aId: number,
+    bId: number,
+    side: "a" | "b",
+    message: string,
+    decision: Decision,
+  ): void {
+    const fp = this.frozenPairs.find((f) => f.aId === aId && f.bId === bId);
+    if (!fp) return;
+
+    if (side === "a") {
+      fp.messageA = message;
+      fp.externalDecisionA = decision;
+    } else {
+      fp.messageB = message;
+      fp.externalDecisionB = decision;
+    }
+
+    fp.waitingForExternal = false;
+    fp.phaseStartTick = this.tick;
+  }
+
+  allocateId(): number {
+    return this.nextId++;
+  }
+
+  addParticle(p: Particle): void {
+    this.particles.push(p);
+  }
+
+  removeParticle(id: number): void {
+    // Abort any frozen pairs involving this particle
+    const pairsToAbort = this.frozenPairs.filter(
+      (fp) => fp.aId === id || fp.bId === id,
+    );
+    for (const fp of pairsToAbort) {
+      this.abortPair(fp.aId, fp.bId);
+    }
+    const idx = this.particles.findIndex((p) => p.id === id);
+    if (idx !== -1) this.particles.splice(idx, 1);
+  }
+
+  getParticleCount(): number {
+    return this.particles.length;
+  }
+
   reset(): void {
     this.tick = 0;
     this.gameLog = [];
@@ -282,5 +351,6 @@ export class SimulationEngine {
     this.totalDefections = 0;
     resetMatchCounter();
     this.particles = createParticles(this.config);
+    this.nextId = this.particles.length;
   }
 }
