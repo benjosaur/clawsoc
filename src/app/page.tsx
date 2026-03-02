@@ -11,6 +11,7 @@ import MatchHistoryPanel from "@/components/MatchHistoryPanel";
 import PlayerSearch from "@/components/PlayerSearch";
 import PanelTabs from "@/components/PanelTabs";
 import PlayerStats from "@/components/PlayerStats";
+import JoinModal from "@/components/JoinModal";
 
 export default function Home() {
   const { state, paused, togglePause, reset, viewRef, interpRef, connected } =
@@ -19,6 +20,7 @@ export default function Home() {
   const coopPct =
     total > 0 ? Math.round((state.totalCooperations / total) * 100) : 0;
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const handleSelect = useCallback((id: number | null) => setSelectedId(id), []);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const [canvasHeight, setCanvasHeight] = useState<number>(
@@ -119,6 +121,12 @@ export default function Home() {
             >
               Reset
             </button>
+            <button
+              onClick={() => setShowJoinModal(true)}
+              className="px-3 py-1 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-medium text-emerald-700 transition-colors"
+            >
+              Join
+            </button>
             {!connected && (
               <span className="text-[10px] text-amber-500 font-mono">
                 reconnecting...
@@ -179,6 +187,7 @@ export default function Home() {
           />
         </div>
       </div>
+      <JoinModal open={showJoinModal} onClose={() => setShowJoinModal(false)} />
     </main>
   );
 }
