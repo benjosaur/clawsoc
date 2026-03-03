@@ -7,7 +7,7 @@ import { SimulationEngine } from "./src/simulation/engine";
 import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
 import type { StrategyType } from "./src/simulation/types";
 import { generateMessage } from "./src/simulation/messages";
-import type { FastFrame, SlowFrame, ClientMessage } from "./src/simulation/protocol";
+import type { InitFrame, EventFrame, SlowFrame, SimEvent, ClientMessage } from "./src/simulation/protocol";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -109,17 +109,31 @@ Opponent: ${opponent.label} (defects ${oppDefectPct}% overall). ${vsRecord}`;
 
 // --- Frame builders ---
 
-function buildFastFrame(): string {
-  const positions: FastFrame["p"] = engine.particles.map((p) => [
-    p.id,
-    Math.round(p.position.x * 10) / 10,
-    Math.round(p.position.y * 10) / 10,
-    p.state === "colliding" ? 1 : 0,
-  ]);
+function buildInitFrame(): string {
+  const frame: InitFrame = {
+    type: "init",
+    tick: engine.tick,
+    config: { canvasWidth: engine.config.canvasWidth, canvasHeight: engine.config.canvasHeight },
+    particles: engine.particles.map((p) => ({
+      id: p.id,
+      x: p.position.x,
+      y: p.position.y,
+      vx: p.velocity.x,
+      vy: p.velocity.y,
+      radius: p.radius,
+      state: p.state === "colliding" ? 1 : 0,
+    })),
+  };
+  return JSON.stringify(frame);
+}
 
-  // Send all active popups — client deduplicates by position
+let lastPopupBroadcastTick = 0;
+
+function buildEventFrame(events: SimEvent[]): string | null {
+  // Only send popups spawned since the last broadcast (client manages expiry)
   const pops: [number, number, string, string][] = [];
   for (const popup of engine.popups) {
+    if (popup.spawnTick <= lastPopupBroadcastTick) continue;
     const age = engine.tick - popup.spawnTick;
     if (age < popup.delayTicks) continue;
     pops.push([
@@ -129,8 +143,11 @@ function buildFastFrame(): string {
       popup.color,
     ]);
   }
+  if (pops.length > 0) lastPopupBroadcastTick = engine.tick;
 
-  const frame: FastFrame = { type: "f", t: engine.tick, p: positions };
+  if (events.length === 0 && pops.length === 0) return null;
+
+  const frame: EventFrame = { type: "e", tick: engine.tick, events };
   if (pops.length > 0) frame.pop = pops;
   return JSON.stringify(frame);
 }
@@ -168,6 +185,7 @@ function buildSlowFrame(): string {
 
   const frame: SlowFrame = {
     type: "s",
+    tick: engine.tick,
     particles,
     gameLog: engine.gameLog.slice(-50),
     totalC: engine.totalCooperations,
@@ -204,9 +222,9 @@ async function main() {
 
   wss.on("connection", (ws) => {
     clients.add(ws);
-    // Send immediate slow frame so client gets metadata right away
+    // Send init frame (positions + velocities) and slow frame (metadata) on connect
+    ws.send(buildInitFrame());
     ws.send(buildSlowFrame());
-    ws.send(buildFastFrame());
 
     ws.on("message", (data) => {
       try {
@@ -221,6 +239,8 @@ async function main() {
           case "reset":
             engine.reset();
             paused = false;
+            // Broadcast new init frame to all clients
+            broadcastToAll(buildInitFrame());
             break;
         }
       } catch {
@@ -233,14 +253,22 @@ async function main() {
     });
   });
 
-  // Simulation loop: 100ms interval (10fps broadcast), 6 engine steps per interval
+  function broadcastToAll(msg: string) {
+    for (const ws of clients) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    }
+  }
+
+  // Simulation loop: 100ms interval, 6 engine steps per interval
   let intervalCount = 0;
   setInterval(() => {
     if (!paused) {
       for (let i = 0; i < 6; i++) engine.step();
     }
 
-    const fast = buildFastFrame();
+    // Drain events accumulated during this interval's steps
+    const events = engine.drainEvents();
+    const eventMsg = buildEventFrame(events);
 
     // Every 10th interval (~1/sec): also broadcast slow frame
     intervalCount++;
@@ -248,7 +276,7 @@ async function main() {
 
     for (const ws of clients) {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(fast);
+        if (eventMsg) ws.send(eventMsg);
         if (slow) ws.send(slow);
       }
     }

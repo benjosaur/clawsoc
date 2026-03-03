@@ -3,6 +3,7 @@ import { areColliding, resolveElasticCollision, separateParticles, bounceOffWall
 import { createParticles } from "./Particle";
 import { playMatch, resetMatchCounter } from "./game";
 import { generateMessage } from "./messages";
+import type { SimEvent } from "./protocol";
 
 const PHASE_DURATIONS: Record<CollisionPhase, number> = {
   greeting: 15,
@@ -47,6 +48,7 @@ export class SimulationEngine {
   popups: FloatingPopup[] = [];
   totalCooperations: number = 0;
   totalDefections: number = 0;
+  pendingEvents: SimEvent[] = [];
   onRequestLLMMessage: LLMRequestCallback | null = null;
 
   constructor(config: SimulationConfig = DEFAULT_CONFIG) {
@@ -187,6 +189,12 @@ export class SimulationEngine {
       if (!bStillFrozen) b.velocity = vb;
 
       separateParticles(a, b);
+
+      this.pendingEvents.push({
+        e: "unfreeze", a: a.id, b: b.id,
+        ax: a.position.x, ay: a.position.y, avx: a.velocity.x, avy: a.velocity.y,
+        bx: b.position.x, by: b.position.y, bvx: b.velocity.x, bvy: b.velocity.y,
+      });
     }
 
     // 3. Move "moving" particles
@@ -207,6 +215,8 @@ export class SimulationEngine {
 
         a.state = "colliding";
         b.state = "colliding";
+
+        this.pendingEvents.push({ e: "freeze", a: a.id, b: b.id });
 
         // Create frozen pair in greeting phase — match resolved later
         this.frozenPairs.push({
@@ -260,6 +270,12 @@ export class SimulationEngine {
     if (!this.isFrozen(b.id)) b.velocity = vb;
     separateParticles(a, b);
 
+    this.pendingEvents.push({
+      e: "abort", a: a.id, b: b.id,
+      ax: a.position.x, ay: a.position.y, avx: a.velocity.x, avy: a.velocity.y,
+      bx: b.position.x, by: b.position.y, bvx: b.velocity.x, bvy: b.velocity.y,
+    });
+
     this.timeoutCounter++;
     this.gameLog.push({
       type: "timeout",
@@ -273,11 +289,18 @@ export class SimulationEngine {
     if (this.gameLog.length > 200) this.gameLog.splice(0, this.gameLog.length - 200);
   }
 
+  drainEvents(): SimEvent[] {
+    const events = this.pendingEvents;
+    this.pendingEvents = [];
+    return events;
+  }
+
   reset(): void {
     this.tick = 0;
     this.gameLog = [];
     this.frozenPairs = [];
     this.popups = [];
+    this.pendingEvents = [];
     this.totalCooperations = 0;
     this.totalDefections = 0;
     resetMatchCounter();

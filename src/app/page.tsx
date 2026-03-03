@@ -13,7 +13,7 @@ import PanelTabs from "@/components/PanelTabs";
 import PlayerStats from "@/components/PlayerStats";
 
 export default function Home() {
-  const { state, paused, togglePause, reset, viewRef, interpRef, connected } =
+  const { state, paused, togglePause, reset, simRef, metaRef, popupsRef, pausedRef, connected } =
     useServerSimulation();
   const total = state.totalCooperations + state.totalDefections;
   const coopPct =
@@ -98,9 +98,10 @@ export default function Home() {
         >
           <div ref={canvasContainerRef} className="w-full">
             <SimulationCanvas
-              viewRef={viewRef}
-              interpRef={interpRef}
-              config={DEFAULT_CONFIG}
+              simRef={simRef}
+              metaRef={metaRef}
+              popupsRef={popupsRef}
+              pausedRef={pausedRef}
               containerRef={canvasContainerRef}
               selectedId={selectedId}
             />

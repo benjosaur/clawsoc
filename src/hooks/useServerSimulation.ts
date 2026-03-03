@@ -2,10 +2,10 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import type { GameLogEntry, StrategyType } from "@/simulation/types";
-import type { CanvasView, FastFrame, SlowFrame, ServerFrame } from "@/simulation/protocol";
+import type { InitFrame, EventFrame, SlowFrame, ServerFrame } from "@/simulation/protocol";
 
 /** Particle metadata from slow frames, keyed by id. */
-interface ParticleMeta {
+export interface ParticleMeta {
   id: number;
   label: string;
   color: string;
@@ -27,29 +27,45 @@ export interface ServerSimulationState {
   totalDefections: number;
 }
 
-/** Previous + current positions for client-side interpolation. */
-export interface InterpState {
-  prev: CanvasView | null;
-  curr: CanvasView | null;
-  frameTime: number; // performance.now() when curr arrived
+/** Client-side particle with position + velocity for deterministic movement. */
+export interface ClientParticle {
+  id: number;
+  x: number; y: number;
+  vx: number; vy: number;
+  radius: number;
+  state: number; // 0=moving, 1=colliding
 }
 
-const POPUP_DURATION_MS = 670; // ~40 ticks at 60 ticks/sec
-let popupIdCounter = 0;
+/** Simulation state maintained by the hook, advanced by the canvas rAF. */
+export interface SimState {
+  particles: ClientParticle[];
+  config: { canvasWidth: number; canvasHeight: number };
+  localTick: number;
+  lastAdvanceTime: number;
+}
 
-interface ClientPopup {
+export interface ClientPopup {
   key: number;
   x: number; y: number; text: string; color: string; spawnTime: number;
 }
 
+const POPUP_DURATION_MS = 670;
+
 export function useServerSimulation() {
-  const viewRef = useRef<CanvasView | null>(null);
-  const interpRef = useRef<InterpState>({ prev: null, curr: null, frameTime: 0 });
+  const simRef = useRef<SimState>({
+    particles: [],
+    config: { canvasWidth: 800, canvasHeight: 600 },
+    localTick: 0,
+    lastAdvanceTime: 0,
+  });
+  const particleMapRef = useRef<Map<number, ClientParticle>>(new Map());
   const metaRef = useRef<Map<number, ParticleMeta>>(new Map());
   const popupsRef = useRef<ClientPopup[]>([]);
+  const popupIdRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const retryCount = useRef(0);
+  const pausedRef = useRef(false);
 
   const [connected, setConnected] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -61,53 +77,61 @@ export function useServerSimulation() {
     totalDefections: 0,
   });
 
-  const handleFastFrame = useCallback((frame: FastFrame) => {
+  const handleInit = useCallback((frame: InitFrame) => {
+    const particles = frame.particles.map((p) => ({
+      id: p.id, x: p.x, y: p.y,
+      vx: p.vx, vy: p.vy,
+      radius: p.radius, state: p.state,
+    }));
+    simRef.current = {
+      particles,
+      config: frame.config,
+      localTick: frame.tick,
+      lastAdvanceTime: performance.now(),
+    };
+    particleMapRef.current = new Map(particles.map((p) => [p.id, p]));
+  }, []);
+
+  const handleEvent = useCallback((frame: EventFrame) => {
+    const sim = simRef.current;
+    const map = particleMapRef.current;
+
+    for (const ev of frame.events) {
+      if (ev.e === "freeze") {
+        const a = map.get(ev.a);
+        const b = map.get(ev.b);
+        if (a) a.state = 1;
+        if (b) b.state = 1;
+      } else {
+        // "unfreeze" or "abort" — both carry new positions + velocities
+        const a = map.get(ev.a);
+        const b = map.get(ev.b);
+        if (a) { a.x = ev.ax; a.y = ev.ay; a.vx = ev.avx; a.vy = ev.avy; a.state = 0; }
+        if (b) { b.x = ev.bx; b.y = ev.by; b.vx = ev.bvx; b.vy = ev.bvy; b.state = 0; }
+      }
+    }
+
+    // Sync tick — only reset the clock when server is meaningfully ahead
+    const wasAhead = frame.tick > sim.localTick;
+    sim.localTick = frame.tick;
+    if (wasAhead) sim.lastAdvanceTime = performance.now();
+
+    // Add popups (dedup by position+text against live popups)
     const now = performance.now();
-    const meta = metaRef.current;
-    const particles = frame.p.map(([id, x, y, st]) => {
-      const m = meta.get(id);
-      return {
-        id,
-        x,
-        y,
-        state: st,
-        color: m?.color ?? "#888",
-        radius: m?.radius ?? 10,
-        label: m?.label ?? "",
-        avgScore: m?.avgScore ?? 0,
-      };
-    });
-
-    // Expire old popups
-    popupsRef.current = popupsRef.current.filter(
-      (p) => now - p.spawnTime < POPUP_DURATION_MS,
-    );
-
-    // Add popups from server, dedup by position+text against live popups
     if (frame.pop) {
+      // Expire old popups first so dedup doesn't match stale entries
+      popupsRef.current = popupsRef.current.filter(
+        (p) => now - p.spawnTime < POPUP_DURATION_MS,
+      );
       for (const [x, y, text, color] of frame.pop) {
         const exists = popupsRef.current.some(
           (p) => p.x === x && p.y === y && p.text === text,
         );
         if (!exists) {
-          popupsRef.current.push({ key: ++popupIdCounter, x, y, text, color, spawnTime: now });
+          popupsRef.current.push({ key: ++popupIdRef.current, x, y, text, color, spawnTime: now });
         }
       }
     }
-
-    const newView: CanvasView = {
-      particles,
-      popups: popupsRef.current.map((p) => ({ ...p })),
-      tick: frame.t,
-    };
-
-    // Rotate for interpolation
-    const interp = interpRef.current;
-    interp.prev = interp.curr;
-    interp.curr = newView;
-    interp.frameTime = now;
-
-    viewRef.current = newView;
   }, []);
 
   const handleSlowFrame = useCallback((frame: SlowFrame) => {
@@ -117,10 +141,17 @@ export function useServerSimulation() {
     }
     metaRef.current = newMeta;
 
+    // Drift correction: if local tick drifted >30 ticks from server, snap
+    const drift = Math.abs(simRef.current.localTick - frame.tick);
+    if (drift > 30) {
+      simRef.current.localTick = frame.tick;
+      simRef.current.lastAdvanceTime = performance.now();
+    }
+
     setState({
       particles: frame.particles,
       gameLog: frame.gameLog,
-      tick: viewRef.current?.tick ?? 0,
+      tick: frame.tick,
       totalCooperations: frame.totalC,
       totalDefections: frame.totalD,
     });
@@ -139,8 +170,10 @@ export function useServerSimulation() {
 
     ws.onmessage = (ev) => {
       const frame: ServerFrame = JSON.parse(ev.data);
-      if (frame.type === "f") {
-        handleFastFrame(frame);
+      if (frame.type === "init") {
+        handleInit(frame);
+      } else if (frame.type === "e") {
+        handleEvent(frame);
       } else if (frame.type === "s") {
         handleSlowFrame(frame);
       }
@@ -149,7 +182,6 @@ export function useServerSimulation() {
     ws.onclose = () => {
       setConnected(false);
       wsRef.current = null;
-      // Exponential backoff: 500ms, 1s, 2s, 4s, capped at 8s
       const delay = Math.min(500 * 2 ** retryCount.current, 8000);
       retryCount.current++;
       reconnectTimer.current = setTimeout(connect, delay);
@@ -158,7 +190,7 @@ export function useServerSimulation() {
     ws.onerror = () => {
       ws.close();
     };
-  }, [handleFastFrame, handleSlowFrame]);
+  }, [handleInit, handleEvent, handleSlowFrame]);
 
   useEffect(() => {
     connect();
@@ -176,15 +208,22 @@ export function useServerSimulation() {
 
   const togglePause = useCallback(() => {
     setPaused((prev) => {
-      send({ type: prev ? "resume" : "pause" });
-      return !prev;
+      const next = !prev;
+      pausedRef.current = next;
+      send({ type: next ? "pause" : "resume" });
+      // On resume, reset advance time so we don't fast-forward
+      if (!next) {
+        simRef.current.lastAdvanceTime = performance.now();
+      }
+      return next;
     });
   }, [send]);
 
   const reset = useCallback(() => {
     send({ type: "reset" });
     setPaused(false);
+    pausedRef.current = false;
   }, [send]);
 
-  return { state, paused, togglePause, reset, viewRef, interpRef, connected };
+  return { state, paused, togglePause, reset, simRef, metaRef, popupsRef, pausedRef, connected };
 }

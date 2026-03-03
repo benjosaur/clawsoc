@@ -76,22 +76,23 @@ export function separateParticles(a: Particle, b: Particle): void {
 
 // --- Wall bounce ---
 
+/** Data-oriented wall bounce — shared between server engine and client simulation. */
+export function bounceOffWallsXY(
+  x: number, y: number, vx: number, vy: number,
+  radius: number, canvasWidth: number, canvasHeight: number,
+): { x: number; y: number; vx: number; vy: number } {
+  if (x - radius < 0)              { x = radius;               vx =  Math.abs(vx); }
+  else if (x + radius > canvasWidth)  { x = canvasWidth - radius;  vx = -Math.abs(vx); }
+  if (y - radius < 0)              { y = radius;               vy =  Math.abs(vy); }
+  else if (y + radius > canvasHeight) { y = canvasHeight - radius; vy = -Math.abs(vy); }
+  return { x, y, vx, vy };
+}
+
 export function bounceOffWalls(p: Particle, config: SimulationConfig): void {
-  const { canvasWidth, canvasHeight } = config;
-
-  if (p.position.x - p.radius < 0) {
-    p.position.x = p.radius;
-    p.velocity.x = Math.abs(p.velocity.x);
-  } else if (p.position.x + p.radius > canvasWidth) {
-    p.position.x = canvasWidth - p.radius;
-    p.velocity.x = -Math.abs(p.velocity.x);
-  }
-
-  if (p.position.y - p.radius < 0) {
-    p.position.y = p.radius;
-    p.velocity.y = Math.abs(p.velocity.y);
-  } else if (p.position.y + p.radius > canvasHeight) {
-    p.position.y = canvasHeight - p.radius;
-    p.velocity.y = -Math.abs(p.velocity.y);
-  }
+  const r = bounceOffWallsXY(
+    p.position.x, p.position.y, p.velocity.x, p.velocity.y,
+    p.radius, config.canvasWidth, config.canvasHeight,
+  );
+  p.position.x = r.x;  p.position.y = r.y;
+  p.velocity.x = r.vx; p.velocity.y = r.vy;
 }
