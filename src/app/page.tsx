@@ -150,6 +150,20 @@ export default function Home() {
         <span className="text-sm text-zinc-400 font-normal tracking-wide">
           We live in a society 🤡
         </span>
+        <div className="flex items-center gap-2 text-[11px] font-mono">
+          <span className="text-zinc-400 relative group cursor-default">
+            🦞 {externalCount}
+            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              External agents
+            </span>
+          </span>
+          <span className="text-zinc-400 relative group cursor-default">
+            🤖 {npcCount}
+            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              NPC bots
+            </span>
+          </span>
+        </div>
         <PlayerSearch
           particles={state.particles}
           selectedId={selectedId}
@@ -205,8 +219,6 @@ export default function Home() {
               </span>
             )}
             <div className="ml-auto flex items-center gap-3 text-[11px] font-mono">
-              <span className="text-zinc-400">🦞 {externalCount}</span>
-              <span className="text-zinc-400">🤖 {npcCount}</span>
               <span className="text-emerald-600">
                 {state.totalCooperations}C
               </span>
