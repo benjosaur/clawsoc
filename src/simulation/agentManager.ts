@@ -22,7 +22,7 @@ export interface PendingMatch {
 }
 
 export type RegisterResult =
-  | { apiKey: string; particleId: number }
+  | { apiKey: string; particleId: number; returning?: boolean; score?: number; matches?: number }
   | { error: string };
 
 type Redis = {
@@ -127,6 +127,7 @@ export class AgentManager {
     engine.addParticle(particle);
 
     // Restore prior record from Redis if returning player
+    let returning = false;
     if (this.redis) {
       const raw = await this.redis.get(`record:${username}`);
       if (raw) {
@@ -134,6 +135,7 @@ export class AgentManager {
           const rec = JSON.parse(raw);
           particle.score = rec.score ?? 0;
           particle.matchHistory = rec.matchHistory ?? {};
+          returning = true;
         } catch { /* ignore parse errors */ }
       }
     }
@@ -156,7 +158,13 @@ export class AgentManager {
       await this.redis.set(`apikey:${apiKeyH}`, username);
     }
 
-    return { apiKey, particleId };
+    const matchCount = Object.values(particle.matchHistory).reduce(
+      (sum, h) => sum + h.cc + h.cd + h.dc + h.dd, 0
+    );
+
+    return returning
+      ? { apiKey, particleId, returning: true, score: particle.score, matches: matchCount }
+      : { apiKey, particleId };
   }
 
   authenticateRequest(authHeader: string | undefined): string | null {

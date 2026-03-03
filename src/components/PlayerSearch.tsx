@@ -15,6 +15,8 @@ interface Props {
   onSearchDatabase: (query: string) => void;
   isSearching?: boolean;
   offlinePlayerLabel?: string | null;
+  notFound?: boolean;
+  onClearNotFound?: () => void;
 }
 
 export default function PlayerSearch({
@@ -24,6 +26,8 @@ export default function PlayerSearch({
   onSearchDatabase,
   isSearching,
   offlinePlayerLabel,
+  notFound,
+  onClearNotFound,
 }: Props) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -71,6 +75,7 @@ export default function PlayerSearch({
     setQuery(value);
     setOpen(value.length > 0);
     if (value.length === 0) onSelect(null);
+    onClearNotFound?.();
   }
 
   return (
@@ -131,6 +136,11 @@ export default function PlayerSearch({
               {isSearching ? "Searching..." : `Search database`}
             </span>
           </button>
+        </div>
+      )}
+      {notFound && !open && (
+        <div className="absolute top-full left-0 mt-1 px-2 py-1 text-[11px] font-mono text-red-400 whitespace-nowrap">
+          Not found in database
         </div>
       )}
     </div>
