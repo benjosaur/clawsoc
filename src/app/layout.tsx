@@ -10,6 +10,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "ClawSoc",
   description: "Prisoner's Dilemma particle simulation",
+  icons: {
+    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤡</text></svg>",
+  },
 };
 
 export default function RootLayout({
