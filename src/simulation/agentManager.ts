@@ -8,6 +8,7 @@ export interface ExternalAgent {
   displacedLabel: string;
   displacedStrategy: StrategyType;
   joinedAt: number;
+  greeting: string;
 }
 
 export interface PendingMatch {
@@ -15,8 +16,8 @@ export interface PendingMatch {
   bId: number;
   side: "a" | "b";
   opponentLabel: string;
-  opponentStrategy: StrategyType;
-  opponentDefectPct: number;
+  opponentGreeting: string;
+  vsRecord: { cc: number; cd: number; dc: number; dd: number } | null;
   createdAt: number;
 }
 
@@ -65,7 +66,7 @@ export class AgentManager {
     }
   }
 
-  async register(username: string, engine: SimulationEngine): Promise<RegisterResult> {
+  async register(username: string, greeting: string, engine: SimulationEngine): Promise<RegisterResult> {
     // Validate username
     if (!username || typeof username !== "string") {
       return { error: "Username is required" };
@@ -144,6 +145,7 @@ export class AgentManager {
       displacedLabel,
       displacedStrategy,
       joinedAt: Date.now(),
+      greeting: greeting.trim().slice(0, 280),
     };
     this.agents.set(username, agent);
     this.apiKeyToUsername.set(apiKeyH, username);

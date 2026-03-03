@@ -116,13 +116,18 @@ engine.onRequestExternalDecision = (side, self, opponent, aId, bId) => {
   const username = self.externalOwner;
   if (!username) return;
 
-  // Compute opponent defect %
-  const oppMatches = totalMatches(opponent.matchHistory);
-  let oppDefectPct = 0;
-  if (oppMatches > 0) {
-    let oppDefections = 0;
-    for (const r of Object.values(opponent.matchHistory)) oppDefections += r.dc + r.dd;
-    oppDefectPct = Math.round((oppDefections / oppMatches) * 100);
+  // Per-pair match history from the external agent's perspective
+  const rec = self.matchHistory[opponent.id];
+  const vsRecord = rec
+    ? { cc: rec.cc, cd: rec.cd, dc: rec.dc, dd: rec.dd }
+    : null;
+
+  // Opponent greeting: stored greeting for externals, generated template for bots
+  let opponentGreeting: string;
+  if (opponent.isExternal && opponent.externalOwner) {
+    opponentGreeting = agentManager.getAgentByUsername(opponent.externalOwner)?.greeting ?? "";
+  } else {
+    opponentGreeting = generateMessage(opponent, self);
   }
 
   agentManager.setPendingMatch(username, {
@@ -130,8 +135,8 @@ engine.onRequestExternalDecision = (side, self, opponent, aId, bId) => {
     bId,
     side,
     opponentLabel: opponent.label,
-    opponentStrategy: opponent.strategy,
-    opponentDefectPct: oppDefectPct,
+    opponentGreeting,
+    vsRecord,
     createdAt: Date.now(),
   });
 };
@@ -168,13 +173,13 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
   // POST /api/agent/register
   if (pathname === "/api/agent/register" && method === "POST") {
     const raw = await readBody(req);
-    let body: { username?: string };
+    let body: { username?: string; greeting?: string };
     try {
       body = JSON.parse(raw);
     } catch {
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
-    const result = await agentManager.register(body.username ?? "", engine);
+    const result = await agentManager.register(body.username ?? "", body.greeting ?? "", engine);
     if ("error" in result) {
       const status = result.error === "arena_full" ? 503 : 400;
       return jsonResponse(res, status, result);
@@ -204,8 +209,8 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       pendingMatch: pending
         ? {
             opponentLabel: pending.opponentLabel,
-            opponentStrategy: pending.opponentStrategy,
-            opponentDefectPct: pending.opponentDefectPct,
+            opponentGreeting: pending.opponentGreeting,
+            vsRecord: pending.vsRecord,
           }
         : null,
     });
