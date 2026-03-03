@@ -1,22 +1,38 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { SimulationConfig } from "@/simulation/types";
-import { CanvasView } from "@/simulation/protocol";
-import type { InterpState } from "@/hooks/useServerSimulation";
+import type { SimState, ClientPopup, ParticleMeta } from "@/hooks/useServerSimulation";
+import { bounceOffWallsXY } from "@/simulation/physics";
 
-const FRAME_INTERVAL = 100;   // ms between server fast frames
-const POPUP_DURATION_MS = 670; // must match hook constant
+const TICKS_PER_SEC = 60;
+const MS_PER_TICK = 1000 / TICKS_PER_SEC;
+const MAX_CATCHUP_TICKS = 12; // cap per frame to prevent death spiral
+const POPUP_DURATION_MS = 670;
 
 interface Props {
-  viewRef: React.RefObject<CanvasView | null>;
-  interpRef: React.RefObject<InterpState>;
-  config: SimulationConfig;
+  simRef: React.RefObject<SimState>;
+  metaRef: React.RefObject<Map<number, ParticleMeta>>;
+  popupsRef: React.RefObject<ClientPopup[]>;
+  pausedRef: React.RefObject<boolean>;
   containerRef: React.RefObject<HTMLDivElement | null>;
   selectedId?: number | null;
 }
 
-export default function SimulationCanvas({ viewRef, interpRef, config, containerRef, selectedId }: Props) {
+/** Advance one tick of client-side physics (movement + wall bounce).
+ *  Uses the same bounceOffWallsXY as the server to guarantee parity. */
+function stepParticles(sim: SimState): void {
+  const { canvasWidth, canvasHeight } = sim.config;
+  for (const p of sim.particles) {
+    if (p.state !== 0) continue;
+    p.x += p.vx;
+    p.y += p.vy;
+    const b = bounceOffWallsXY(p.x, p.y, p.vx, p.vy, p.radius, canvasWidth, canvasHeight);
+    p.x = b.x; p.y = b.y; p.vx = b.vx; p.vy = b.vy;
+  }
+  sim.localTick++;
+}
+
+export default function SimulationCanvas({ simRef, metaRef, popupsRef, pausedRef, containerRef, selectedId }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
@@ -29,14 +45,15 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const worldW = config.canvasWidth;
-    const worldH = config.canvasHeight;
     let scale = 1;
     let dpr = window.devicePixelRatio || 1;
 
     function resize() {
       if (!canvas || !ctx || !container) return;
       dpr = window.devicePixelRatio || 1;
+      const sim = simRef.current;
+      const worldW = sim.config.canvasWidth;
+      const worldH = sim.config.canvasHeight;
       const cw = container.clientWidth;
       scale = cw / worldW;
       const ch = Math.round(cw * (worldH / worldW));
@@ -57,25 +74,49 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
     function draw() {
       if (!ctx || !canvas) return;
 
-      const { prev, curr, frameTime } = interpRef.current;
+      const sim = simRef.current;
+      const worldW = sim.config.canvasWidth;
+      const worldH = sim.config.canvasHeight;
+      const now = performance.now();
 
-      if (!curr) {
+      // Advance physics ticks
+      if (!pausedRef.current && sim.particles.length > 0) {
+        const elapsed = now - sim.lastAdvanceTime;
+        const rawTicks = Math.floor(elapsed / MS_PER_TICK);
+        if (rawTicks >= MAX_CATCHUP_TICKS) {
+          // Too far behind (e.g. tab was backgrounded) — snap to now
+          for (let i = 0; i < MAX_CATCHUP_TICKS; i++) stepParticles(sim);
+          sim.lastAdvanceTime = now;
+        } else if (rawTicks > 0) {
+          for (let i = 0; i < rawTicks; i++) stepParticles(sim);
+          sim.lastAdvanceTime += rawTicks * MS_PER_TICK;
+        }
+      }
+
+      if (sim.particles.length === 0) {
         raf = requestAnimationFrame(draw);
         return;
       }
 
-      // Interpolation factor: 0 at frame arrival → 1 at next expected frame
-      const t = prev
-        ? Math.min(1, (performance.now() - frameTime) / FRAME_INTERVAL)
-        : 1;
+      // Sub-tick fraction for smooth rendering
+      const fraction = pausedRef.current ? 0 : (now - sim.lastAdvanceTime) / MS_PER_TICK;
 
-      // Build prev position lookup for lerp
-      const prevMap = new Map<number, { x: number; y: number }>();
-      if (prev) {
-        for (const p of prev.particles) {
-          prevMap.set(p.id, { x: p.x, y: p.y });
-        }
-      }
+      // Build display positions (sub-tick interpolated)
+      const meta = metaRef.current;
+      const displayParticles = sim.particles.map((p) => {
+        const m = meta.get(p.id);
+        const isMoving = p.state === 0;
+        return {
+          id: p.id,
+          x: isMoving ? p.x + p.vx * fraction : p.x,
+          y: isMoving ? p.y + p.vy * fraction : p.y,
+          state: p.state,
+          color: m?.color ?? "#888",
+          radius: p.radius,
+          label: m?.label ?? "",
+          avgScore: m?.avgScore ?? 0,
+        };
+      });
 
       // Zoom: 2x centered on selected particle
       const sel = selectedIdRef.current;
@@ -83,54 +124,44 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
       let camX = 0;
       let camY = 0;
 
-      if (sel != null && curr) {
-        const sp = curr.particles.find((p) => p.id === sel);
+      if (sel != null) {
+        const sp = displayParticles.find((p) => p.id === sel);
         if (sp) {
-          const pp = prevMap.get(sp.id);
-          const sx = pp ? pp.x + (sp.x - pp.x) * t : sp.x;
-          const sy = pp ? pp.y + (sp.y - pp.y) * t : sp.y;
           zoom = 2;
           const s = dpr * scale * zoom;
-          camX = canvas.width / 2 - sx * s;
-          camY = canvas.height / 2 - sy * s;
+          camX = canvas.width / 2 - sp.x * s;
+          camY = canvas.height / 2 - sp.y * s;
         }
       }
 
       const s = dpr * scale * zoom;
       ctx.setTransform(s, 0, 0, s, camX, camY);
 
-      // Background — fill generously to cover zoomed viewport
+      // Background
       ctx.fillStyle = "#fafafa";
       ctx.fillRect(-worldW, -worldH, worldW * 3, worldH * 3);
 
       // Subtle dot grid
       ctx.fillStyle = "#e2e2e2";
-      for (let x = 20; x < worldW; x += 20) {
-        for (let y = 20; y < worldH; y += 20) {
+      for (let gx = 20; gx < worldW; gx += 20) {
+        for (let gy = 20; gy < worldH; gy += 20) {
           ctx.beginPath();
-          ctx.arc(x, y, 0.5, 0, Math.PI * 2);
+          ctx.arc(gx, gy, 0.5, 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
-      // Draw particles with interpolated positions
-      const now = performance.now();
-      for (const p of curr.particles) {
-        const pp = prevMap.get(p.id);
-        const x = pp ? pp.x + (p.x - pp.x) * t : p.x;
-        const y = pp ? pp.y + (p.y - pp.y) * t : p.y;
-
+      // Draw particles
+      for (const p of displayParticles) {
         ctx.save();
 
-        // Glow for colliding particles
         if (p.state === 1) {
           ctx.shadowColor = p.color;
           ctx.shadowBlur = 24;
         }
 
-        // Circle
         ctx.beginPath();
-        ctx.arc(x, y, p.radius, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
         ctx.fillStyle = p.color;
         ctx.fill();
 
@@ -140,7 +171,7 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
 
         ctx.restore();
 
-        // Average score inside circle — scale font inversely so it stays readable
+        // Average score inside circle
         const isSmall = (container?.clientWidth ?? 640) < 640;
         const fontScale = Math.max(1, 1 / scale);
         const scoreFontSize = (p.radius > 12 ? 10 : 8) * fontScale * (isSmall ? 0.7 : 1);
@@ -148,19 +179,20 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
         ctx.font = `bold ${scoreFontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(Math.round(p.avgScore).toString(), x, y + 0.5);
+        ctx.fillText(Math.round(p.avgScore).toString(), p.x, p.y + 0.5);
 
         // Name label above
         const labelFontSize = 8 * fontScale * (isSmall ? 0.7 : 1);
         ctx.fillStyle = "#71717a";
         ctx.font = `${labelFontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
-        ctx.fillText(p.label, x, y - p.radius - 4);
+        ctx.fillText(p.label, p.x, p.y - p.radius - 4);
       }
 
-      // Draw floating popups (fully client-side animation from spawnTime)
+      // Draw floating popups
+      const popups = popupsRef.current;
       const popupFontScale = Math.max(1, 1 / scale);
-      for (const popup of curr.popups) {
+      for (const popup of popups) {
         const progress = Math.min(1, (now - popup.spawnTime) / POPUP_DURATION_MS);
         if (progress >= 1) continue;
         const alpha = 1 - progress;
@@ -184,7 +216,7 @@ export default function SimulationCanvas({ viewRef, interpRef, config, container
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [viewRef, interpRef, config, containerRef]);
+  }, [simRef, metaRef, popupsRef, pausedRef, containerRef]);
 
   return (
     <canvas

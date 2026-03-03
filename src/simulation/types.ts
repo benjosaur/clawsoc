@@ -10,7 +10,8 @@ export type StrategyType =
   | "always_defect"
   | "tit_for_tat"
   | "random"
-  | "grudger";
+  | "grudger"
+  | "external";
 
 export interface OpponentRecord {
   lastTheirDecision: Decision;
@@ -41,6 +42,8 @@ export interface Particle {
   strategy: StrategyType;
   useLLM: boolean;
   matchHistory: Record<number, OpponentRecord>;
+  isExternal: boolean;
+  externalOwner?: string;
 }
 
 export interface AgentClassConfig {
@@ -108,11 +111,11 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   canvasWidth: 800,
   canvasHeight: 600,
   agentClasses: [
-    { strategy: "always_cooperate", count: 100, useLLM: false },
-    { strategy: "always_defect", count: 100, useLLM: false },
-    { strategy: "tit_for_tat", count: 100, useLLM: false },
-    { strategy: "random", count: 100, useLLM: false },
-    { strategy: "grudger", count: 100, useLLM: false },
+    { strategy: "always_cooperate", count: 20, useLLM: false },
+    { strategy: "always_defect", count: 20, useLLM: false },
+    { strategy: "tit_for_tat", count: 20, useLLM: false },
+    { strategy: "random", count: 20, useLLM: false },
+    { strategy: "grudger", count: 20, useLLM: false },
   ],
   particleRadius: 4,
   minSpeed: 0.05,

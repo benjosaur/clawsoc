@@ -13,10 +13,13 @@ export function resetMatchCounter(): void {
   matchCounter = 0;
 }
 
-export function playMatch(a: Particle, b: Particle, tick: number): MatchRecord {
-  const decisionA = decide(a, b);
-  const decisionB = decide(b, a);
-
+function executeMatch(
+  a: Particle,
+  b: Particle,
+  tick: number,
+  decisionA: Decision,
+  decisionB: Decision,
+): MatchRecord {
   const scoreA = PAYOFF[decisionA][decisionB];
   const scoreB = PAYOFF[decisionB][decisionA];
 
@@ -46,4 +49,20 @@ export function playMatch(a: Particle, b: Particle, tick: number): MatchRecord {
     scoreB,
     timestamp: Date.now(),
   };
+}
+
+export function playMatch(a: Particle, b: Particle, tick: number): MatchRecord {
+  return executeMatch(a, b, tick, decide(a, b), decide(b, a));
+}
+
+export function playMatchWithOverrides(
+  a: Particle,
+  b: Particle,
+  tick: number,
+  overrideA?: Decision | null,
+  overrideB?: Decision | null,
+): MatchRecord {
+  const decisionA = overrideA ?? decide(a, b);
+  const decisionB = overrideB ?? decide(b, a);
+  return executeMatch(a, b, tick, decisionA, decisionB);
 }

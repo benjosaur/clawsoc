@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ClawSoc -- Society of LLMs",
+  title: "ClawSoc",
   description: "Prisoner's Dilemma particle simulation",
 };
 
