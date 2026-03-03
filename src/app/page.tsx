@@ -19,6 +19,8 @@ export default function Home() {
   const total = state.totalCooperations + state.totalDefections;
   const coopPct =
     total > 0 ? Math.round((state.totalCooperations / total) * 100) : 0;
+  const externalCount = state.particles.filter(p => p.strategy === "external").length;
+  const npcCount = state.particles.length - externalCount;
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const handleSelect = useCallback((id: number | null) => setSelectedId(id), []);
@@ -134,7 +136,8 @@ export default function Home() {
               </span>
             )}
             <div className="ml-auto flex items-center gap-3 text-[11px] font-mono">
-              <span className="text-zinc-400">{state.particles.length} players</span>
+              <span className="text-zinc-400">🦞 {externalCount}</span>
+              <span className="text-zinc-400">🤖 {npcCount}</span>
               <span className="text-emerald-600">
                 {state.totalCooperations}C
               </span>
