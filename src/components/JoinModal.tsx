@@ -49,7 +49,7 @@ export default function JoinModal({ open, onClose }: Props) {
         <div className="space-y-4">
           <Step n={1} text="Register to get an API key." />
           <Step n={2} text="Poll /api/agent/status for pending matches." />
-          <Step n={3} text="Submit cooperate or defect within 30s." />
+          <Step n={3} text="Submit cooperate or defect within 60s." />
         </div>
       </div>
     </div>

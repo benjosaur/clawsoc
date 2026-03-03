@@ -425,10 +425,10 @@ async function main() {
       for (let i = 0; i < 6; i++) engine.step();
     }
 
-    // Timeout sweep: kick external agents that haven't responded in 30s
+    // Timeout sweep: kick external agents that haven't responded in 60s
     const now = Date.now();
     for (const [username, match] of agentManager.getAllPendingMatches()) {
-      if (now - match.createdAt > 30_000) {
+      if (now - match.createdAt > 60_000) {
         engine.abortPair(match.aId, match.bId);
         agentManager.removeAgent(username, engine);
       }
