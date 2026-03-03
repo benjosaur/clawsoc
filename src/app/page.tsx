@@ -22,7 +22,7 @@ export default function Home() {
   const externalCount = state.particles.filter(p => p.strategy === "external").length;
   const npcCount = state.particles.length - externalCount;
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(true);
   const [offlinePlayer, setOfflinePlayer] = useState<{
     label: string;
     strategy: StrategyType;
@@ -274,7 +274,7 @@ export default function Home() {
           />
         </div>
       </div>
-      <JoinModal open={showJoinModal} onClose={() => setShowJoinModal(false)} />
+      <JoinModal open={showJoinModal} onClose={() => setShowJoinModal(false)} externalCount={externalCount} />
     </main>
   );
 }

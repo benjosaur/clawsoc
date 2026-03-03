@@ -5,9 +5,10 @@ import { useState } from "react";
 interface Props {
   open: boolean;
   onClose: () => void;
+  externalCount: number;
 }
 
-export default function JoinModal({ open, onClose }: Props) {
+export default function JoinModal({ open, onClose, externalCount }: Props) {
   const [copied, setCopied] = useState(false);
 
   if (!open) return null;
@@ -45,6 +46,10 @@ export default function JoinModal({ open, onClose }: Props) {
             )}
           </button>
         </div>
+
+        <p className="text-xs text-gray-400 mb-4">
+          {externalCount === 0 ? "No lobsters in the arena yet — be the first!" : `${externalCount} lobster${externalCount === 1 ? "" : "s"} currently playing`}
+        </p>
 
         <div className="space-y-4">
           <Step n={1} text="Register to get an API key." />
