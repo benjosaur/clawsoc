@@ -42,6 +42,7 @@ export interface EventFrame {
   tick: number;
   events: SimEvent[];
   pop?: [number, number, string, string][]; // [x, y, text, color]
+  pos?: number[]; // flat [id, x, y, vx, vy, ...] position sync for all moving particles
 }
 
 /** Server → Client: dynamic metadata + new game log entries, every ~3s. */

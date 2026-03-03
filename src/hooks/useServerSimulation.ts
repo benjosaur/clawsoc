@@ -123,10 +123,22 @@ export function useServerSimulation() {
       }
     }
 
-    // Sync tick — only reset the clock when server is meaningfully ahead
-    const wasAhead = frame.tick > sim.localTick;
+    // Sync tick — always reset clock to prevent double-advancing positions
     sim.localTick = frame.tick;
-    if (wasAhead) sim.lastAdvanceTime = performance.now();
+    sim.lastAdvanceTime = performance.now();
+
+    // Apply position sync if present
+    if (frame.pos) {
+      for (let i = 0; i < frame.pos.length; i += 5) {
+        const p = map.get(frame.pos[i]);
+        if (p) {
+          p.x = frame.pos[i + 1];
+          p.y = frame.pos[i + 2];
+          p.vx = frame.pos[i + 3];
+          p.vy = frame.pos[i + 4];
+        }
+      }
+    }
 
     // Add popups (dedup by position+text against live popups)
     const now = performance.now();

@@ -277,7 +277,7 @@ function buildInitFrame(): string {
 
 let lastPopupBroadcastTick = 0;
 
-function buildEventFrame(events: SimEvent[]): string | null {
+function buildEventFrame(events: SimEvent[], syncPos = false): string | null {
   // Only send popups spawned since the last broadcast (client manages expiry)
   const pops: [number, number, string, string][] = [];
   for (const popup of engine.popups) {
@@ -293,10 +293,27 @@ function buildEventFrame(events: SimEvent[]): string | null {
   }
   if (pops.length > 0) lastPopupBroadcastTick = engine.tick;
 
-  if (events.length === 0 && pops.length === 0) return null;
+  // Position sync: compact flat array [id, x, y, vx, vy, ...] for moving particles
+  let pos: number[] | undefined;
+  if (syncPos) {
+    pos = [];
+    for (const p of engine.particles) {
+      if (p.state !== "moving") continue;
+      pos.push(
+        p.id,
+        Math.round(p.position.x * 10) / 10,
+        Math.round(p.position.y * 10) / 10,
+        Math.round(p.velocity.x * 1000) / 1000,
+        Math.round(p.velocity.y * 1000) / 1000,
+      );
+    }
+  }
+
+  if (events.length === 0 && pops.length === 0 && !pos) return null;
 
   const frame: EventFrame = { type: "e", tick: engine.tick, events };
   if (pops.length > 0) frame.pop = pops;
+  if (pos) frame.pos = pos;
   return JSON.stringify(frame);
 }
 
@@ -445,10 +462,11 @@ async function main() {
 
     // Drain events accumulated during this interval's steps
     const events = engine.drainEvents();
-    const eventMsg = buildEventFrame(events);
+    intervalCount++;
+    const syncPos = intervalCount % 10 === 0; // position sync every ~1s
+    const eventMsg = buildEventFrame(events, syncPos);
 
     // Every 30th interval (~3s): broadcast slow frame + persist scores
-    intervalCount++;
     const slow = intervalCount % 30 === 0 ? buildSlowFrame() : null;
     if (intervalCount % 30 === 0) agentManager.snapshotAllRecords(engine);
 
