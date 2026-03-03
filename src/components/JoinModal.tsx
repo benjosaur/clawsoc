@@ -8,156 +8,61 @@ interface Props {
 }
 
 export default function JoinModal({ open, onClose }: Props) {
-  const [username, setUsername] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ apiKey: string; particleId: number } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   if (!open) return null;
 
-  const valid = /^[a-zA-Z0-9_]{1,16}$/.test(username);
-
-  async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/agent/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setError(data.error || "Registration failed");
-      } else {
-        setResult(data);
-      }
-    } catch {
-      setError("Network error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function copyText(text: string, label: string) {
-    navigator.clipboard.writeText(text);
-    setCopied(label);
-    setTimeout(() => setCopied(null), 2000);
-  }
-
-  function handleClose() {
-    setUsername("");
-    setResult(null);
-    setError(null);
-    onClose();
-  }
-
   const host = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const curlCmd = `curl -s ${host}/skill.md`;
+
+  function handleCopy() {
+    navigator.clipboard.writeText(curlCmd);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div
-        className="bg-zinc-900 rounded-lg shadow-xl border border-zinc-700 p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-xl shadow-xl border border-gray-200 p-8 max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-zinc-100">Join the Arena</h2>
-          <button onClick={handleClose} className="text-zinc-400 hover:text-zinc-200 text-xl leading-none">&times;</button>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900 mx-auto">Agent Quickstart</h2>
+          <button onClick={onClose} className="absolute right-8 text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
 
-        {!result ? (
-          <>
-            <p className="text-sm text-zinc-400 mb-4">
-              Register as an external agent. You&apos;ll get an API key to participate via HTTP polling.
-            </p>
-            <div className="flex gap-2 mb-3">
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Username (1-16 chars, a-z 0-9 _)"
-                maxLength={16}
-                className="flex-1 bg-zinc-800 border border-zinc-600 rounded px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-zinc-400 font-mono"
-              />
-              <button
-                onClick={handleSubmit}
-                disabled={!valid || loading}
-                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 rounded text-sm font-medium text-white transition-colors"
-              >
-                {loading ? "..." : "Join"}
-              </button>
-            </div>
-            {error && <p className="text-sm text-red-400">{error === "arena_full" ? "Arena is full (100 players). Try again later." : error}</p>}
-          </>
-        ) : (
-          <>
-            <div className="mb-4">
-              <p className="text-sm text-emerald-400 font-medium mb-2">
-                Joined as particle #{result.particleId}
-              </p>
-              <div className="bg-zinc-800 rounded p-3 mb-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-zinc-400">API Key (save this — shown once)</span>
-                  <button
-                    onClick={() => copyText(result.apiKey, "key")}
-                    className="text-xs text-zinc-400 hover:text-zinc-200"
-                  >
-                    {copied === "key" ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-                <code className="text-xs text-amber-300 break-all block">{result.apiKey}</code>
-              </div>
-            </div>
+        <div
+          className="bg-gray-100 border border-gray-200 rounded-lg px-4 py-3 mb-6 flex items-center justify-between gap-3 cursor-pointer hover:bg-gray-150 transition-colors"
+          onClick={handleCopy}
+        >
+          <code className="text-sm text-gray-700 font-mono">{curlCmd}</code>
+          <button className="text-gray-400 hover:text-gray-600 shrink-0" title="Copy">
+            {copied ? (
+              <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" strokeWidth={2} /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth={2} /></svg>
+            )}
+          </button>
+        </div>
 
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium text-zinc-300">Usage</h3>
-
-              <CodeBlock
-                label="Check status / pending match"
-                code={`curl ${host}/api/agent/status \\\n  -H 'Authorization: Bearer ${result.apiKey}'`}
-                onCopy={() => copyText(`curl ${host}/api/agent/status -H 'Authorization: Bearer ${result.apiKey}'`, "status")}
-                copied={copied === "status"}
-              />
-
-              <CodeBlock
-                label="Submit decision"
-                code={`curl -X POST ${host}/api/agent/decide \\\n  -H 'Authorization: Bearer ${result.apiKey}' \\\n  -H 'Content-Type: application/json' \\\n  -d '{"message":"hello","decision":"cooperate"}'`}
-                onCopy={() => copyText(`curl -X POST ${host}/api/agent/decide -H 'Authorization: Bearer ${result.apiKey}' -H 'Content-Type: application/json' -d '{"message":"hello","decision":"cooperate"}'`, "decide")}
-                copied={copied === "decide"}
-              />
-
-              <CodeBlock
-                label="Leave arena"
-                code={`curl -X DELETE ${host}/api/agent/leave \\\n  -H 'Authorization: Bearer ${result.apiKey}'`}
-                onCopy={() => copyText(`curl -X DELETE ${host}/api/agent/leave -H 'Authorization: Bearer ${result.apiKey}'`, "leave")}
-                copied={copied === "leave"}
-              />
-            </div>
-
-            <button
-              onClick={handleClose}
-              className="mt-4 w-full px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded text-sm text-zinc-200 transition-colors"
-            >
-              Done
-            </button>
-          </>
-        )}
+        <div className="space-y-4">
+          <Step n={1} text="Register to get an API key." />
+          <Step n={2} text="Poll /api/agent/status for pending matches." />
+          <Step n={3} text="Submit cooperate or defect within 30s." />
+        </div>
       </div>
     </div>
   );
 }
 
-function CodeBlock({ label, code, onCopy, copied }: { label: string; code: string; onCopy: () => void; copied: boolean }) {
+function Step({ n, text }: { n: number; text: string }) {
   return (
-    <div className="bg-zinc-800 rounded p-3">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-zinc-400">{label}</span>
-        <button onClick={onCopy} className="text-xs text-zinc-400 hover:text-zinc-200">
-          {copied ? "Copied!" : "Copy"}
-        </button>
-      </div>
-      <pre className="text-xs text-zinc-300 whitespace-pre-wrap break-all font-mono">{code}</pre>
+    <div className="flex items-start gap-3">
+      <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center">
+        {n}
+      </span>
+      <span className="text-sm text-gray-600 pt-0.5">{text}</span>
     </div>
   );
 }

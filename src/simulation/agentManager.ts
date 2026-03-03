@@ -77,12 +77,7 @@ export class AgentManager {
       return { error: "Username already taken" };
     }
 
-    // Check arena capacity (allow equal — we displace an NPC below)
-    if (engine.getParticleCount() > 100) {
-      return { error: "arena_full" };
-    }
-
-    // Pick a random NPC to displace
+    // Pick a random NPC to displace (full only when all NPCs are replaced)
     const npcs = engine.particles.filter((p) => !p.isExternal);
     if (npcs.length === 0) {
       return { error: "arena_full" };
