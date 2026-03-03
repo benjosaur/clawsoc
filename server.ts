@@ -447,9 +447,10 @@ async function main() {
     const events = engine.drainEvents();
     const eventMsg = buildEventFrame(events);
 
-    // Every 30th interval (~3s): broadcast slow frame
+    // Every 30th interval (~3s): broadcast slow frame + persist scores
     intervalCount++;
     const slow = intervalCount % 30 === 0 ? buildSlowFrame() : null;
+    if (intervalCount % 30 === 0) agentManager.snapshotAllRecords(engine);
 
     for (const ws of clients) {
       if (ws.readyState === WebSocket.OPEN) {

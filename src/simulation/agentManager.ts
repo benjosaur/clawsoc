@@ -125,6 +125,18 @@ export class AgentManager {
 
     engine.addParticle(particle);
 
+    // Restore prior record from Redis if returning player
+    if (this.redis) {
+      const raw = await this.redis.get(`record:${username}`);
+      if (raw) {
+        try {
+          const rec = JSON.parse(raw);
+          particle.score = rec.score ?? 0;
+          particle.matchHistory = rec.matchHistory ?? {};
+        } catch { /* ignore parse errors */ }
+      }
+    }
+
     // Store agent record
     const agent: ExternalAgent = {
       apiKeyHash: apiKeyH,
