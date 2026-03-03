@@ -59,7 +59,9 @@ export function useServerSimulation() {
     lastAdvanceTime: 0,
   });
   const particleMapRef = useRef<Map<number, ClientParticle>>(new Map());
+  const staticMetaRef = useRef<Map<number, { id: number; label: string; radius: number; strategy: StrategyType }>>(new Map());
   const metaRef = useRef<Map<number, ParticleMeta>>(new Map());
+  const gameLogRef = useRef<GameLogEntry[]>([]);
   const popupsRef = useRef<ClientPopup[]>([]);
   const popupIdRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
@@ -90,6 +92,8 @@ export function useServerSimulation() {
       lastAdvanceTime: performance.now(),
     };
     particleMapRef.current = new Map(particles.map((p) => [p.id, p]));
+    staticMetaRef.current = new Map(frame.meta.map((m) => [m.id, m]));
+    gameLogRef.current = [];
   }, []);
 
   const handleEvent = useCallback((frame: EventFrame) => {
@@ -111,9 +115,11 @@ export function useServerSimulation() {
         const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius: ev.radius, state: 0 };
         sim.particles.push(cp);
         map.set(ev.id, cp);
+        staticMetaRef.current.set(ev.id, { id: ev.id, label: ev.label, radius: ev.radius, strategy: ev.strategy });
       } else if (ev.e === "remove") {
         sim.particles = sim.particles.filter((p) => p.id !== ev.id);
         map.delete(ev.id);
+        staticMetaRef.current.delete(ev.id);
       }
     }
 
@@ -142,10 +148,32 @@ export function useServerSimulation() {
 
   const handleSlowFrame = useCallback((frame: SlowFrame) => {
     const newMeta = new Map<number, ParticleMeta>();
+    const merged: ParticleMeta[] = [];
     for (const p of frame.particles) {
-      newMeta.set(p.id, p);
+      const s = staticMetaRef.current.get(p.id);
+      const full: ParticleMeta = {
+        id: p.id,
+        label: s?.label ?? `#${p.id}`,
+        radius: s?.radius ?? 5,
+        strategy: s?.strategy ?? "random",
+        color: p.color,
+        score: p.score,
+        avgScore: p.avgScore,
+        cc: p.cc, cd: p.cd, dc: p.dc, dd: p.dd,
+      };
+      newMeta.set(p.id, full);
+      merged.push(full);
     }
     metaRef.current = newMeta;
+
+    // Accumulate incremental game log entries, dedup by id, keep last 50
+    if (frame.gameLog.length > 0) {
+      const seen = new Set(gameLogRef.current.map((e) => e.id));
+      const fresh = frame.gameLog.filter((e) => !seen.has(e.id));
+      if (fresh.length > 0) {
+        gameLogRef.current = [...gameLogRef.current, ...fresh].slice(-50);
+      }
+    }
 
     // Drift correction: if local tick drifted >30 ticks from server, snap
     const drift = Math.abs(simRef.current.localTick - frame.tick);
@@ -155,8 +183,8 @@ export function useServerSimulation() {
     }
 
     setState({
-      particles: frame.particles,
-      gameLog: frame.gameLog,
+      particles: merged,
+      gameLog: gameLogRef.current,
       tick: frame.tick,
       totalCooperations: frame.totalC,
       totalDefections: frame.totalD,

@@ -350,7 +350,7 @@ export class SimulationEngine {
       e: "add", id: p.id,
       x: p.position.x, y: p.position.y,
       vx: p.velocity.x, vy: p.velocity.y,
-      radius: p.radius,
+      radius: p.radius, label: p.label, strategy: p.strategy,
     });
   }
 

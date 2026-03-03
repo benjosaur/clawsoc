@@ -268,6 +268,9 @@ function buildInitFrame(): string {
       radius: p.radius,
       state: p.state === "colliding" ? 1 : 0,
     })),
+    meta: engine.particles.map((p) => ({
+      id: p.id, label: p.label, radius: p.radius, strategy: p.strategy,
+    })),
   };
   return JSON.stringify(frame);
 }
@@ -309,7 +312,9 @@ function coopColor(particle: typeof engine.particles[number]): string {
   return `hsl(${Math.round(hue)},70%,42%)`;
 }
 
-function buildSlowFrame(): string {
+let lastSlowLogIndex = 0;
+
+function buildSlowFrame(full = false): string {
   const particles = engine.particles.map((p) => {
     const matches = totalMatches(p.matchHistory);
     let cc = 0, cd = 0, dc = 0, dd = 0;
@@ -318,21 +323,24 @@ function buildSlowFrame(): string {
     }
     return {
       id: p.id,
-      label: p.label,
       color: coopColor(p),
-      radius: p.radius,
       score: p.score,
       avgScore: matches > 0 ? Math.round((p.score / matches) * 10) / 10 : 0,
-      strategy: p.strategy,
       cc, cd, dc, dd,
     };
   });
+
+  // On connect: send recent log. On broadcast: send only new entries.
+  const logEntries = full
+    ? engine.gameLog.slice(-50)
+    : engine.gameLog.slice(lastSlowLogIndex);
+  if (!full) lastSlowLogIndex = engine.gameLog.length;
 
   const frame: SlowFrame = {
     type: "s",
     tick: engine.tick,
     particles,
-    gameLog: engine.gameLog.slice(-50),
+    gameLog: logEntries,
     totalC: engine.totalCooperations,
     totalD: engine.totalDefections,
   };
@@ -380,9 +388,9 @@ async function main() {
 
   wss.on("connection", (ws) => {
     clients.add(ws);
-    // Send init frame (positions + velocities) and slow frame (metadata) on connect
+    // Send init frame (positions + velocities + static meta) and slow frame (dynamic data) on connect
     ws.send(buildInitFrame());
-    ws.send(buildSlowFrame());
+    ws.send(buildSlowFrame(true));
 
     ws.on("message", (data) => {
       try {
@@ -398,6 +406,7 @@ async function main() {
             engine.reset();
             agentManager.reRegisterAfterReset(engine);
             paused = false;
+            lastSlowLogIndex = 0;
             // Broadcast new init frame to all clients
             broadcastToAll(buildInitFrame());
             break;
@@ -438,9 +447,9 @@ async function main() {
     const events = engine.drainEvents();
     const eventMsg = buildEventFrame(events);
 
-    // Every 10th interval (~1/sec): also broadcast slow frame
+    // Every 30th interval (~3s): broadcast slow frame
     intervalCount++;
-    const slow = intervalCount % 10 === 0 ? buildSlowFrame() : null;
+    const slow = intervalCount % 30 === 0 ? buildSlowFrame() : null;
 
     for (const ws of clients) {
       if (ws.readyState === WebSocket.OPEN) {

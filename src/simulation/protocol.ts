@@ -16,7 +16,7 @@ export type SimEvent =
       ax: number; ay: number; avx: number; avy: number;
       bx: number; by: number; bvx: number; bvy: number;
     }
-  | { e: "add"; id: number; x: number; y: number; vx: number; vy: number; radius: number }
+  | { e: "add"; id: number; x: number; y: number; vx: number; vy: number; radius: number; label: string; strategy: StrategyType }
   | { e: "remove"; id: number };
 
 // --- Server → Client frames ---
@@ -33,6 +33,7 @@ export interface InitFrame {
     radius: number;
     state: number; // 0=moving, 1=colliding
   }[];
+  meta: { id: number; label: string; radius: number; strategy: StrategyType }[];
 }
 
 /** Sent when simulation events occur (collisions, unfreezes). */
@@ -43,18 +44,15 @@ export interface EventFrame {
   pop?: [number, number, string, string][]; // [x, y, text, color]
 }
 
-/** Server → Client: metadata + game log at 1fps. */
+/** Server → Client: dynamic metadata + new game log entries, every ~3s. */
 export interface SlowFrame {
   type: "s";
   tick: number;
   particles: {
     id: number;
-    label: string;
     color: string;
-    radius: number;
     score: number;
     avgScore: number;
-    strategy: StrategyType;
     cc: number;
     cd: number;
     dc: number;
