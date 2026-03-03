@@ -28,9 +28,10 @@ interface Props {
   particle: ParticleData | undefined;
   allParticles: ParticleData[];
   onDeselect?: () => void;
+  offline?: boolean;
 }
 
-export default function PlayerStats({ particle, allParticles, onDeselect }: Props) {
+export default function PlayerStats({ particle, allParticles, onDeselect, offline }: Props) {
   if (!particle) {
     return (
       <>
@@ -51,18 +52,19 @@ export default function PlayerStats({ particle, allParticles, onDeselect }: Prop
   const total = cc + cd + dc + dd;
   const coopPct = total > 0 ? (cc + cd) / total * 100 : 0;
 
-  // Rankings
-  const byTotal = [...allParticles].sort((a, b) => b.score - a.score);
-  const byAvg = [...allParticles].sort((a, b) => b.avgScore - a.avgScore);
-  const rankTotal = byTotal.findIndex((p) => p.id === particle.id) + 1;
-  const rankAvg = byAvg.findIndex((p) => p.id === particle.id) + 1;
+  // Rankings & lobby averages (skip for offline players)
   const n = allParticles.length || 1;
-
-  // Lobby averages
-  const lobbyAvgTotal = allParticles.reduce((s, p) => s + p.score, 0) / n;
-  const lobbyAvgAvg = allParticles.reduce((s, p) => s + p.avgScore, 0) / n;
-  const deltaTotal = particle.score - lobbyAvgTotal;
-  const deltaAvg = particle.avgScore - lobbyAvgAvg;
+  let rankTotal = 0, rankAvg = 0, deltaTotal = 0, deltaAvg = 0;
+  if (!offline) {
+    const byTotal = [...allParticles].sort((a, b) => b.score - a.score);
+    const byAvg = [...allParticles].sort((a, b) => b.avgScore - a.avgScore);
+    rankTotal = byTotal.findIndex((p) => p.id === particle.id) + 1;
+    rankAvg = byAvg.findIndex((p) => p.id === particle.id) + 1;
+    const lobbyAvgTotal = allParticles.reduce((s, p) => s + p.score, 0) / n;
+    const lobbyAvgAvg = allParticles.reduce((s, p) => s + p.avgScore, 0) / n;
+    deltaTotal = particle.score - lobbyAvgTotal;
+    deltaAvg = particle.avgScore - lobbyAvgAvg;
+  }
 
   return (
     <>
@@ -85,12 +87,17 @@ export default function PlayerStats({ particle, allParticles, onDeselect }: Prop
         <div className="flex items-center gap-1.5">
           <span
             className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-            style={{ backgroundColor: particle.color }}
+            style={{ backgroundColor: offline ? "#9CA3AF" : particle.color }}
           />
           <span className="text-zinc-800 font-semibold truncate">{particle.label}</span>
           <span className="text-zinc-300 text-[9px] tracking-wide">
             {STRATEGY_SHORT[particle.strategy]}
           </span>
+          {offline && (
+            <span className="ml-auto text-[8px] font-semibold tracking-wider text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded">
+              OFFLINE
+            </span>
+          )}
         </div>
 
         {/* Score row */}
@@ -98,33 +105,35 @@ export default function PlayerStats({ particle, allParticles, onDeselect }: Prop
           <span className="flex items-center gap-1">
             <span className="text-zinc-400">Total</span>
             <span className="text-zinc-800 font-semibold">{particle.score}</span>
-            <Delta value={deltaTotal} />
+            {!offline && <Delta value={deltaTotal} />}
           </span>
           <span className="flex items-center gap-1">
             <span className="text-zinc-400">Avg</span>
             <span className="text-zinc-800 font-semibold">{particle.avgScore.toFixed(1)}</span>
-            <Delta value={deltaAvg} />
+            {!offline && <Delta value={deltaAvg} />}
           </span>
         </div>
 
         {/* Rank row */}
-        <div className="flex items-center justify-between text-[10px]">
-          <span className="text-zinc-600">Rank #{rankTotal}{medal(rankTotal, n)}</span>
-          <span className="text-zinc-600">Rank #{rankAvg}{medal(rankAvg, n)}</span>
-        </div>
+        {!offline && (
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="text-zinc-600">Rank #{rankTotal}{medal(rankTotal, n)}</span>
+            <span className="text-zinc-600">Rank #{rankAvg}{medal(rankAvg, n)}</span>
+          </div>
+        )}
 
         {/* Cooperation bar */}
         <div className="mt-2 space-y-0.5">
           <div className="flex items-center justify-between text-[10px]">
             <span className="text-zinc-400">{total} games</span>
-            <span className="font-semibold" style={{ color: particle.color }}>
+            <span className="font-semibold" style={{ color: offline ? "#9CA3AF" : particle.color }}>
               {coopPct.toFixed(0)}% coop
             </span>
           </div>
           <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all"
-              style={{ width: `${coopPct}%`, backgroundColor: particle.color }}
+              style={{ width: `${coopPct}%`, backgroundColor: offline ? "#9CA3AF" : particle.color }}
             />
           </div>
         </div>

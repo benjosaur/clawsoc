@@ -283,6 +283,23 @@ export class AgentManager {
     return this.agents.size;
   }
 
+  async lookupRecord(label: string): Promise<{
+    strategy: StrategyType;
+    score: number;
+    matchHistory: Record<number, { cc: number; cd: number; dc: number; dd: number }>;
+    isExternal: boolean;
+    externalOwner?: string;
+  } | null> {
+    if (!this.redis) return null;
+    const raw = await this.redis.get(`record:${label}`);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
   /** Re-register all active external agents after engine.reset(). */
   async reRegisterAfterReset(engine: SimulationEngine): Promise<void> {
     for (const [username, agent] of this.agents) {

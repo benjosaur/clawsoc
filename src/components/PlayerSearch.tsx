@@ -12,9 +12,19 @@ interface Props {
   particles: ParticleInfo[];
   selectedId: number | null;
   onSelect: (id: number | null) => void;
+  onSearchDatabase: (query: string) => void;
+  isSearching?: boolean;
+  offlinePlayerLabel?: string | null;
 }
 
-export default function PlayerSearch({ particles, selectedId, onSelect }: Props) {
+export default function PlayerSearch({
+  particles,
+  selectedId,
+  onSelect,
+  onSearchDatabase,
+  isSearching,
+  offlinePlayerLabel,
+}: Props) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -25,6 +35,13 @@ export default function PlayerSearch({ particles, selectedId, onSelect }: Props)
           p.label.toLowerCase().includes(query.toLowerCase()),
         )
       : [];
+
+  // Sync input when offline player is loaded externally
+  useEffect(() => {
+    if (offlinePlayerLabel && selectedId == null) {
+      setQuery(offlinePlayerLabel);
+    }
+  }, [offlinePlayerLabel, selectedId]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -82,7 +99,7 @@ export default function PlayerSearch({ particles, selectedId, onSelect }: Props)
         placeholder="Find player…"
         className="w-28 pl-5 pr-2 py-1 border border-zinc-200 rounded text-xs font-mono text-zinc-700 placeholder:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-amber-300 focus:border-amber-300"
       />
-      {open && matches.length > 0 && (
+      {open && query.length > 0 && (
         <div className="absolute top-full left-0 mt-1 w-48 max-h-48 overflow-y-auto bg-white border border-zinc-200 rounded shadow-lg z-50">
           {matches.map((p) => (
             <button
@@ -99,6 +116,21 @@ export default function PlayerSearch({ particles, selectedId, onSelect }: Props)
               <span className="truncate">{p.label}</span>
             </button>
           ))}
+          <button
+            onClick={() => {
+              onSearchDatabase(query);
+              setOpen(false);
+            }}
+            disabled={isSearching}
+            className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-mono text-left text-zinc-400 hover:bg-zinc-50 transition-colors border-t border-zinc-100"
+          >
+            <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v2a.5.5 0 01-.5.5h-15a.5.5 0 01-.5-.5v-2zM2 9a1 1 0 011-1h14a1 1 0 011 1v1.5a.5.5 0 01-.5.5h-15a.5.5 0 01-.5-.5V9zM3 13a1 1 0 00-1 1v2.5A2.5 2.5 0 004.5 19h11a2.5 2.5 0 002.5-2.5V14a1 1 0 00-1-1H3z" />
+            </svg>
+            <span className="truncate">
+              {isSearching ? "Searching..." : `Search database`}
+            </span>
+          </button>
         </div>
       )}
     </div>

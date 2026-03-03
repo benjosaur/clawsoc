@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import { DEFAULT_CONFIG } from "@/simulation/types";
-import type { GameLogEntry } from "@/simulation/types";
+import type { GameLogEntry, StrategyType } from "@/simulation/types";
 import { useServerSimulation } from "@/hooks/useServerSimulation";
 import SimulationCanvas from "@/components/SimulationCanvas";
 import ScoreBoard from "@/components/ScoreBoard";
@@ -23,7 +23,45 @@ export default function Home() {
   const npcCount = state.particles.length - externalCount;
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showJoinModal, setShowJoinModal] = useState(false);
-  const handleSelect = useCallback((id: number | null) => setSelectedId(id), []);
+  const [offlinePlayer, setOfflinePlayer] = useState<{
+    label: string;
+    strategy: StrategyType;
+    score: number;
+    avgScore: number;
+    cc: number; cd: number; dc: number; dd: number;
+  } | null>(null);
+  const [searching, setSearching] = useState(false);
+
+  const handleSelect = useCallback((id: number | null) => {
+    setSelectedId(id);
+    if (id !== null) setOfflinePlayer(null);
+  }, []);
+
+  const searchDatabase = useCallback(async (query: string) => {
+    setSearching(true);
+    setOfflinePlayer(null);
+    setSelectedId(null);
+    try {
+      const res = await fetch(`/api/player/lookup?name=${encodeURIComponent(query)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.status === "live") {
+        setSelectedId(data.particleId);
+      } else if (data.status === "offline") {
+        setOfflinePlayer({
+          label: data.label,
+          strategy: data.strategy,
+          score: data.score,
+          avgScore: data.avgScore,
+          cc: data.cc, cd: data.cd, dc: data.dc, dd: data.dd,
+        });
+      }
+    } catch (err) {
+      console.error("Player lookup failed:", err);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const [canvasHeight, setCanvasHeight] = useState<number>(
     DEFAULT_CONFIG.canvasHeight,
@@ -74,7 +112,27 @@ export default function Home() {
   const selectedParticle = selectedId != null
     ? state.particles.find((p) => p.id === selectedId)
     : undefined;
-  const playerStatsPanel = <PlayerStats particle={selectedParticle} allParticles={state.particles} onDeselect={() => setSelectedId(null)} />;
+  const isOffline = offlinePlayer != null && selectedId == null;
+  const displayParticle = isOffline
+    ? {
+        id: -1,
+        label: offlinePlayer.label,
+        color: "#9CA3AF",
+        score: offlinePlayer.score,
+        avgScore: offlinePlayer.avgScore,
+        strategy: offlinePlayer.strategy,
+        cc: offlinePlayer.cc, cd: offlinePlayer.cd,
+        dc: offlinePlayer.dc, dd: offlinePlayer.dd,
+      }
+    : selectedParticle;
+  const playerStatsPanel = (
+    <PlayerStats
+      particle={displayParticle}
+      allParticles={state.particles}
+      onDeselect={() => { setSelectedId(null); setOfflinePlayer(null); }}
+      offline={isOffline}
+    />
+  );
   const playerLogPanel = <MatchHistoryPanel entries={playerLog} label="Match Log" />;
 
   return (
@@ -90,6 +148,9 @@ export default function Home() {
           particles={state.particles}
           selectedId={selectedId}
           onSelect={handleSelect}
+          onSearchDatabase={searchDatabase}
+          isSearching={searching}
+          offlinePlayerLabel={offlinePlayer?.label ?? null}
         />
       </div>
 
@@ -155,7 +216,7 @@ export default function Home() {
           className="hidden md:flex w-64 lg:w-72 xl:w-80 shrink-0 flex-col gap-1"
           style={{ height: canvasHeight }}
         >
-          {selectedId != null ? (
+          {selectedId != null || isOffline ? (
             <>
               <div className="flex-[2] min-h-0 flex flex-col">{totalPanel}</div>
               <div className="flex-[2] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
@@ -164,9 +225,11 @@ export default function Home() {
               <div className="flex-[3] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
                 {playerStatsPanel}
               </div>
-              <div className="flex-[3] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
-                {playerLogPanel}
-              </div>
+              {!isOffline && (
+                <div className="flex-[3] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
+                  {playerLogPanel}
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -187,7 +250,7 @@ export default function Home() {
             avgPanel={avgPanel}
             totalPanel={totalPanel}
             logPanel={logPanel}
-            playerPanel={selectedId != null ? playerStatsPanel : undefined}
+            playerPanel={selectedId != null || isOffline ? playerStatsPanel : undefined}
           />
         </div>
       </div>

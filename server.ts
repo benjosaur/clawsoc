@@ -375,7 +375,8 @@ async function main() {
   await agentManager.restoreRecords(engine);
 
   const server = createServer(async (req, res) => {
-    const { pathname } = parse(req.url || "/", true);
+    const parsed = parse(req.url || "/", true);
+    const pathname = parsed.pathname;
     if (pathname?.startsWith("/api/agent/")) {
       try {
         await handleAgentAPI(req, res, pathname);
@@ -385,7 +386,52 @@ async function main() {
       }
       return;
     }
-    handle(req, res, parse(req.url || "/", true));
+
+    // Player lookup endpoint (public, no auth)
+    if (pathname === "/api/player/lookup" && req.method === "GET") {
+      try {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        const name = typeof parsed.query.name === "string" ? parsed.query.name.trim() : "";
+        if (!name) {
+          jsonResponse(res, 400, { error: "name query parameter required" });
+          return;
+        }
+        // Check if player is currently live
+        const liveParticle = engine.particles.find(
+          (p) => p.label.toLowerCase() === name.toLowerCase(),
+        );
+        if (liveParticle) {
+          jsonResponse(res, 200, { status: "live", particleId: liveParticle.id });
+          return;
+        }
+        // Look up in Redis
+        const record = await agentManager.lookupRecord(name);
+        if (!record) {
+          jsonResponse(res, 404, { error: "Player not found" });
+          return;
+        }
+        let cc = 0, cd = 0, dc = 0, dd = 0;
+        for (const r of Object.values(record.matchHistory ?? {})) {
+          cc += (r.cc ?? 0); cd += (r.cd ?? 0); dc += (r.dc ?? 0); dd += (r.dd ?? 0);
+        }
+        const totalGames = cc + cd + dc + dd;
+        const avgScore = totalGames > 0 ? Math.round(((record.score ?? 0) / totalGames) * 10) / 10 : 0;
+        jsonResponse(res, 200, {
+          status: "offline",
+          label: name,
+          strategy: record.strategy ?? "external",
+          score: record.score ?? 0,
+          avgScore,
+          cc, cd, dc, dd,
+        });
+      } catch (err) {
+        console.error("Player lookup error:", err);
+        jsonResponse(res, 500, { error: "Internal server error" });
+      }
+      return;
+    }
+
+    handle(req, res, parsed);
   });
 
   const wss = new WebSocketServer({ noServer: true });
