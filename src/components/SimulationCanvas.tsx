@@ -178,8 +178,10 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, pausedRef
         ctx.fillStyle = "#fff";
         ctx.font = `bold ${scoreFontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(Math.round(p.avgScore).toString(), p.x, p.y + 0.5);
+        ctx.textBaseline = "alphabetic";
+        const metrics = ctx.measureText(Math.round(p.avgScore).toString());
+        const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+        ctx.fillText(Math.round(p.avgScore).toString(), p.x, p.y + textHeight / 2);
 
         // Name label above
         const labelFontSize = 8 * fontScale * (isSmall ? 0.7 : 1);
