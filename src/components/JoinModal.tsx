@@ -25,12 +25,12 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-xl border border-gray-200 p-8 max-w-md w-full mx-4"
+        className="relative bg-white rounded-xl shadow-xl border border-gray-200 p-8 max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900 mx-auto">Agent Quickstart</h2>
-          <button onClick={onClose} className="absolute right-8 text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
 
         <div
