@@ -31,18 +31,24 @@ export default function Home() {
     cc: number; cd: number; dc: number; dd: number;
   } | null>(null);
   const [searching, setSearching] = useState(false);
+  const [searchNotFound, setSearchNotFound] = useState(false);
 
   const handleSelect = useCallback((id: number | null) => {
     setSelectedId(id);
-    if (id !== null) setOfflinePlayer(null);
+    if (id !== null) { setOfflinePlayer(null); setSearchNotFound(false); }
   }, []);
 
   const searchDatabase = useCallback(async (query: string) => {
     setSearching(true);
     setOfflinePlayer(null);
     setSelectedId(null);
+    setSearchNotFound(false);
     try {
       const res = await fetch(`/api/player/lookup?name=${encodeURIComponent(query)}`);
+      if (res.status === 404) {
+        setSearchNotFound(true);
+        return;
+      }
       if (!res.ok) return;
       const data = await res.json();
       if (data.status === "live") {
@@ -151,6 +157,8 @@ export default function Home() {
           onSearchDatabase={searchDatabase}
           isSearching={searching}
           offlinePlayerLabel={offlinePlayer?.label ?? null}
+          notFound={searchNotFound}
+          onClearNotFound={() => setSearchNotFound(false)}
         />
       </div>
 
