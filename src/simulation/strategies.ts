@@ -24,6 +24,10 @@ export function decide(self: Particle, opponent: Particle): Decision {
       return everBetrayed ? "defect" : "cooperate";
     }
 
+    case "external":
+      // Fallback only — real decisions come via API
+      return "cooperate";
+
     default:
       return "cooperate";
   }

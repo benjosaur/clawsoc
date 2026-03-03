@@ -1,12 +1,13 @@
-import { createServer } from "http";
+import { createServer, IncomingMessage, ServerResponse } from "http";
 import next from "next";
 import { parse } from "url";
 import { WebSocketServer, WebSocket } from "ws";
 import OpenAI from "openai";
 import { SimulationEngine } from "./src/simulation/engine";
 import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
-import type { StrategyType } from "./src/simulation/types";
+import type { Decision, StrategyType } from "./src/simulation/types";
 import { generateMessage } from "./src/simulation/messages";
+import { AgentManager } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent, ClientMessage } from "./src/simulation/protocol";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -20,6 +21,7 @@ const STRATEGY_PERSONA: Record<StrategyType, string> = {
   tit_for_tat: "You mirror your opponent's last move.",
   random: "You are unpredictable.",
   grudger: "You cooperate until betrayed, then always defect.",
+  external: "You are an external agent controlled by an API.",
 };
 
 let openai: OpenAI | null = null;
@@ -33,6 +35,7 @@ function getOpenAI(): OpenAI | null {
 // --- Simulation engine ---
 
 const engine = new SimulationEngine(DEFAULT_CONFIG);
+const agentManager = new AgentManager(process.env.REDIS_URL);
 let paused = false;
 
 engine.onRequestLLMMessage = (side, self, opponent) => {
@@ -106,6 +109,148 @@ Opponent: ${opponent.label} (defects ${oppDefectPct}% overall). ${vsRecord}`;
       }
     });
 };
+
+// --- External agent decision callback ---
+
+engine.onRequestExternalDecision = (side, self, opponent, aId, bId) => {
+  const username = self.externalOwner;
+  if (!username) return;
+
+  // Compute opponent defect %
+  const oppMatches = totalMatches(opponent.matchHistory);
+  let oppDefectPct = 0;
+  if (oppMatches > 0) {
+    let oppDefections = 0;
+    for (const r of Object.values(opponent.matchHistory)) oppDefections += r.dc + r.dd;
+    oppDefectPct = Math.round((oppDefections / oppMatches) * 100);
+  }
+
+  agentManager.setPendingMatch(username, {
+    aId,
+    bId,
+    side,
+    opponentLabel: opponent.label,
+    opponentStrategy: opponent.strategy,
+    opponentDefectPct: oppDefectPct,
+    createdAt: Date.now(),
+  });
+};
+
+// --- Agent HTTP API ---
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString()));
+    req.on("error", reject);
+  });
+}
+
+function jsonResponse(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(body));
+}
+
+async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
+  const method = req.method ?? "GET";
+
+  // CORS headers for browser-based clients
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  // POST /api/agent/register
+  if (pathname === "/api/agent/register" && method === "POST") {
+    const raw = await readBody(req);
+    let body: { username?: string };
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return jsonResponse(res, 400, { error: "Invalid JSON" });
+    }
+    const result = await agentManager.register(body.username ?? "", engine);
+    if ("error" in result) {
+      const status = result.error === "arena_full" ? 503 : 400;
+      return jsonResponse(res, status, result);
+    }
+    return jsonResponse(res, 200, result);
+  }
+
+  // All other routes require auth
+  const username = agentManager.authenticateRequest(req.headers.authorization);
+  if (!username) {
+    return jsonResponse(res, 401, { error: "Unauthorized. Provide Authorization: Bearer <api_key>" });
+  }
+
+  // GET /api/agent/status
+  if (pathname === "/api/agent/status" && method === "GET") {
+    const agent = agentManager.getAgentByUsername(username);
+    if (!agent) return jsonResponse(res, 404, { error: "Agent not found" });
+
+    const particle = engine.particles.find((p) => p.id === agent.particleId);
+    const pending = agentManager.getPendingMatch(username);
+
+    return jsonResponse(res, 200, {
+      username,
+      particleId: agent.particleId,
+      score: particle?.score ?? 0,
+      matches: particle ? totalMatches(particle.matchHistory) : 0,
+      pendingMatch: pending
+        ? {
+            opponentLabel: pending.opponentLabel,
+            opponentStrategy: pending.opponentStrategy,
+            opponentDefectPct: pending.opponentDefectPct,
+          }
+        : null,
+    });
+  }
+
+  // POST /api/agent/decide
+  if (pathname === "/api/agent/decide" && method === "POST") {
+    const raw = await readBody(req);
+    let body: { message?: string; decision?: string };
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return jsonResponse(res, 400, { error: "Invalid JSON" });
+    }
+
+    const { message, decision } = body;
+    if (!decision || (decision !== "cooperate" && decision !== "defect")) {
+      return jsonResponse(res, 400, { error: "decision must be 'cooperate' or 'defect'" });
+    }
+
+    const pending = agentManager.getPendingMatch(username);
+    if (!pending) {
+      return jsonResponse(res, 409, { error: "No pending match" });
+    }
+
+    engine.resolveExternalDecision(
+      pending.aId,
+      pending.bId,
+      pending.side,
+      message || "",
+      decision as Decision,
+    );
+    agentManager.clearPendingMatch(username);
+
+    return jsonResponse(res, 200, { ok: true });
+  }
+
+  // DELETE /api/agent/leave
+  if (pathname === "/api/agent/leave" && method === "DELETE") {
+    await agentManager.removeAgent(username, engine);
+    return jsonResponse(res, 200, { ok: true });
+  }
+
+  return jsonResponse(res, 404, { error: "Not found" });
+}
 
 // --- Frame builders ---
 
@@ -201,7 +346,20 @@ async function main() {
   const handle = app.getRequestHandler();
   await app.prepare();
 
-  const server = createServer((req, res) => {
+  // Restore particle records from Redis on startup
+  await agentManager.restoreRecords(engine);
+
+  const server = createServer(async (req, res) => {
+    const { pathname } = parse(req.url || "/", true);
+    if (pathname?.startsWith("/api/agent/")) {
+      try {
+        await handleAgentAPI(req, res, pathname);
+      } catch (err) {
+        console.error("Agent API error:", err);
+        jsonResponse(res, 500, { error: "Internal server error" });
+      }
+      return;
+    }
     handle(req, res, parse(req.url || "/", true));
   });
 
@@ -238,6 +396,7 @@ async function main() {
             break;
           case "reset":
             engine.reset();
+            agentManager.reRegisterAfterReset(engine);
             paused = false;
             // Broadcast new init frame to all clients
             broadcastToAll(buildInitFrame());
@@ -264,6 +423,15 @@ async function main() {
   setInterval(() => {
     if (!paused) {
       for (let i = 0; i < 6; i++) engine.step();
+    }
+
+    // Timeout sweep: kick external agents that haven't responded in 30s
+    const now = Date.now();
+    for (const [username, match] of agentManager.getAllPendingMatches()) {
+      if (now - match.createdAt > 30_000) {
+        engine.abortPair(match.aId, match.bId);
+        agentManager.removeAgent(username, engine);
+      }
     }
 
     // Drain events accumulated during this interval's steps

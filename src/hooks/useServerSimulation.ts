@@ -102,12 +102,18 @@ export function useServerSimulation() {
         const b = map.get(ev.b);
         if (a) a.state = 1;
         if (b) b.state = 1;
-      } else {
-        // "unfreeze" or "abort" — both carry new positions + velocities
+      } else if (ev.e === "unfreeze" || ev.e === "abort") {
         const a = map.get(ev.a);
         const b = map.get(ev.b);
         if (a) { a.x = ev.ax; a.y = ev.ay; a.vx = ev.avx; a.vy = ev.avy; a.state = 0; }
         if (b) { b.x = ev.bx; b.y = ev.by; b.vx = ev.bvx; b.vy = ev.bvy; b.state = 0; }
+      } else if (ev.e === "add") {
+        const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius: ev.radius, state: 0 };
+        sim.particles.push(cp);
+        map.set(ev.id, cp);
+      } else if (ev.e === "remove") {
+        sim.particles = sim.particles.filter((p) => p.id !== ev.id);
+        map.delete(ev.id);
       }
     }
 

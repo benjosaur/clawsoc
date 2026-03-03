@@ -50,6 +50,7 @@ export function createParticles(config: SimulationConfig): Particle[] {
         strategy: agentClass.strategy,
         useLLM: agentClass.useLLM,
         matchHistory: {},
+        isExternal: false,
       });
       i++;
     }

@@ -15,7 +15,9 @@ export type SimEvent =
       a: number; b: number;
       ax: number; ay: number; avx: number; avy: number;
       bx: number; by: number; bvx: number; bvy: number;
-    };
+    }
+  | { e: "add"; id: number; x: number; y: number; vx: number; vy: number; radius: number }
+  | { e: "remove"; id: number };
 
 // --- Server → Client frames ---
 
