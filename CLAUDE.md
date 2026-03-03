@@ -13,6 +13,7 @@ npm run dev      # Development server (tsx server.ts)
 npm run build    # Production build (next build)
 npm start        # Production server (node server.js)
 npm run lint     # ESLint
+bun tsc --noEmit # Type-check (use bun, not npx)
 ```
 
 No test framework is configured. The Dockerfile also bundles `server.ts` with esbuild for production.

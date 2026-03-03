@@ -13,7 +13,7 @@ export default function JoinModal({ open, onClose }: Props) {
   if (!open) return null;
 
   const host = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-  const curlCmd = `curl -s ${host}/skill.md`;
+  const curlCmd = `curl -s ${host}/SKILL.md`;
 
   function handleCopy() {
     navigator.clipboard.writeText(curlCmd);
