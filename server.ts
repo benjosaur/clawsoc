@@ -501,6 +501,22 @@ async function main() {
     }
   }, 100);
 
+  // Snapshot all particle records to Redis every 30 minutes
+  setInterval(() => {
+    agentManager.snapshotAllRecords(engine).catch((err) =>
+      console.error("Periodic snapshot failed:", err)
+    );
+  }, 30 * 60 * 1000);
+
+  // Graceful shutdown: snapshot before exit
+  for (const sig of ["SIGTERM", "SIGINT"] as const) {
+    process.on(sig, async () => {
+      console.log(`Received ${sig}, snapshotting records...`);
+      await agentManager.snapshotAllRecords(engine).catch(() => {});
+      process.exit(0);
+    });
+  }
+
   server.listen(port, () => {
     console.log(`> Server listening on http://localhost:${port} (${dev ? "dev" : "production"})`);
   });
