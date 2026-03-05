@@ -8,7 +8,7 @@ import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
 import type { Decision, StrategyType } from "./src/simulation/types";
 import { generateMessage } from "./src/simulation/messages";
 import { AgentManager } from "./src/simulation/agentManager";
-import type { InitFrame, EventFrame, SlowFrame, SimEvent, ClientMessage } from "./src/simulation/protocol";
+import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulation/protocol";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -36,7 +36,6 @@ function getOpenAI(): OpenAI | null {
 
 const engine = new SimulationEngine(DEFAULT_CONFIG);
 const agentManager = new AgentManager(process.env.REDIS_URL);
-let paused = false;
 
 engine.onRequestLLMMessage = (side, self, opponent) => {
   const client = getOpenAI();
@@ -460,30 +459,6 @@ async function main() {
     ws.send(buildInitFrame());
     ws.send(buildSlowFrame(true));
 
-    ws.on("message", (data) => {
-      try {
-        const msg: ClientMessage = JSON.parse(data.toString());
-        switch (msg.type) {
-          case "pause":
-            paused = true;
-            break;
-          case "resume":
-            paused = false;
-            break;
-          case "reset":
-            engine.reset();
-            agentManager.reRegisterAfterReset(engine);
-            paused = false;
-            lastSlowLogIndex = 0;
-            // Broadcast new init frame to all clients
-            broadcastToAll(buildInitFrame());
-            break;
-        }
-      } catch {
-        // ignore malformed messages
-      }
-    });
-
     ws.on("close", () => {
       clients.delete(ws);
     });
@@ -498,9 +473,7 @@ async function main() {
   // Simulation loop: 100ms interval, 6 engine steps per interval
   let intervalCount = 0;
   setInterval(() => {
-    if (!paused) {
-      for (let i = 0; i < 6; i++) engine.step();
-    }
+    for (let i = 0; i < 6; i++) engine.step();
 
     // Timeout sweep: kick external agents that haven't responded in 60s
     const now = Date.now();

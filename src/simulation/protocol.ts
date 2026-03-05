@@ -65,9 +65,3 @@ export interface SlowFrame {
 }
 
 export type ServerFrame = InitFrame | EventFrame | SlowFrame;
-
-/** Client → Server: control commands. */
-export type ClientMessage =
-  | { type: "pause" }
-  | { type: "resume" }
-  | { type: "reset" };

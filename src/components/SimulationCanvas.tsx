@@ -13,7 +13,6 @@ interface Props {
   simRef: React.RefObject<SimState>;
   metaRef: React.RefObject<Map<number, ParticleMeta>>;
   popupsRef: React.RefObject<ClientPopup[]>;
-  pausedRef: React.RefObject<boolean>;
   containerRef: React.RefObject<HTMLDivElement | null>;
   selectedId?: number | null;
 }
@@ -32,7 +31,7 @@ function stepParticles(sim: SimState): void {
   sim.localTick++;
 }
 
-export default function SimulationCanvas({ simRef, metaRef, popupsRef, pausedRef, containerRef, selectedId }: Props) {
+export default function SimulationCanvas({ simRef, metaRef, popupsRef, containerRef, selectedId }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
@@ -80,7 +79,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, pausedRef
       const now = performance.now();
 
       // Advance physics ticks
-      if (!pausedRef.current && sim.particles.length > 0) {
+      if (sim.particles.length > 0) {
         const elapsed = now - sim.lastAdvanceTime;
         const rawTicks = Math.floor(elapsed / MS_PER_TICK);
         if (rawTicks >= MAX_CATCHUP_TICKS) {
@@ -99,7 +98,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, pausedRef
       }
 
       // Sub-tick fraction for smooth rendering
-      const fraction = pausedRef.current ? 0 : (now - sim.lastAdvanceTime) / MS_PER_TICK;
+      const fraction = (now - sim.lastAdvanceTime) / MS_PER_TICK;
 
       // Build display positions (sub-tick interpolated)
       const meta = metaRef.current;
@@ -218,7 +217,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, pausedRef
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [simRef, metaRef, popupsRef, pausedRef, containerRef]);
+  }, [simRef, metaRef, popupsRef, containerRef]);
 
   return (
     <canvas
