@@ -67,10 +67,7 @@ export function useServerSimulation() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const retryCount = useRef(0);
-  const pausedRef = useRef(false);
-
   const [connected, setConnected] = useState(false);
-  const [paused, setPaused] = useState(false);
   const [state, setState] = useState<ServerSimulationState>({
     particles: [],
     gameLog: [],
@@ -246,30 +243,5 @@ export function useServerSimulation() {
     };
   }, [connect]);
 
-  const send = useCallback((msg: object) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(msg));
-    }
-  }, []);
-
-  const togglePause = useCallback(() => {
-    setPaused((prev) => {
-      const next = !prev;
-      pausedRef.current = next;
-      send({ type: next ? "pause" : "resume" });
-      // On resume, reset advance time so we don't fast-forward
-      if (!next) {
-        simRef.current.lastAdvanceTime = performance.now();
-      }
-      return next;
-    });
-  }, [send]);
-
-  const reset = useCallback(() => {
-    send({ type: "reset" });
-    setPaused(false);
-    pausedRef.current = false;
-  }, [send]);
-
-  return { state, paused, togglePause, reset, simRef, metaRef, popupsRef, pausedRef, connected };
+  return { state, simRef, metaRef, popupsRef, connected };
 }

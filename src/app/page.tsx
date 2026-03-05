@@ -14,7 +14,7 @@ import PlayerStats from "@/components/PlayerStats";
 import JoinModal from "@/components/JoinModal";
 
 export default function Home() {
-  const { state, paused, togglePause, reset, simRef, metaRef, popupsRef, pausedRef, connected } =
+  const { state, simRef, metaRef, popupsRef, connected } =
     useServerSimulation();
   const total = state.totalCooperations + state.totalDefections;
   const coopPct =
@@ -188,25 +188,12 @@ export default function Home() {
               simRef={simRef}
               metaRef={metaRef}
               popupsRef={popupsRef}
-              pausedRef={pausedRef}
               containerRef={canvasContainerRef}
               selectedId={selectedId}
             />
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={togglePause}
-              className="px-3 py-1 border border-zinc-200 hover:bg-zinc-50 rounded text-xs font-medium text-zinc-700 transition-colors"
-            >
-              {paused ? "Resume" : "Pause"}
-            </button>
-            <button
-              onClick={reset}
-              className="px-3 py-1 border border-zinc-200 hover:bg-zinc-50 rounded text-xs font-medium text-zinc-700 transition-colors"
-            >
-              Reset
-            </button>
             <button
               onClick={() => setShowJoinModal(true)}
               className="px-3 py-1 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-medium text-emerald-700 transition-colors"

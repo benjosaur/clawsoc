@@ -1,7 +1,7 @@
 import { CollisionPhase, Decision, GameLogEntry, MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG, FloatingPopup } from "./types";
 import { areColliding, resolveElasticCollision, separateParticles, bounceOffWalls, vecAdd } from "./physics";
 import { createParticles } from "./Particle";
-import { playMatchWithOverrides, resetMatchCounter } from "./game";
+import { playMatchWithOverrides } from "./game";
 import { generateMessage } from "./messages";
 import type { SimEvent } from "./protocol";
 
@@ -371,16 +371,4 @@ export class SimulationEngine {
     return this.particles.length;
   }
 
-  reset(): void {
-    this.tick = 0;
-    this.gameLog = [];
-    this.frozenPairs = [];
-    this.popups = [];
-    this.pendingEvents = [];
-    this.totalCooperations = 0;
-    this.totalDefections = 0;
-    resetMatchCounter();
-    this.particles = createParticles(this.config);
-    this.nextId = this.particles.length;
-  }
 }

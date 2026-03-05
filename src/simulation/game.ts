@@ -9,9 +9,6 @@ const PAYOFF: Record<Decision, Record<Decision, number>> = {
 
 let matchCounter = 0;
 
-export function resetMatchCounter(): void {
-  matchCounter = 0;
-}
 
 function executeMatch(
   a: Particle,
