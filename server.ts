@@ -519,7 +519,6 @@ async function main() {
 
     // Every 30th interval (~3s): broadcast slow frame + persist scores
     const slow = intervalCount % 30 === 0 ? buildSlowFrame() : null;
-    if (intervalCount % 30 === 0) agentManager.snapshotAllRecords(engine);
 
     for (const ws of clients) {
       if (ws.readyState === WebSocket.OPEN) {
