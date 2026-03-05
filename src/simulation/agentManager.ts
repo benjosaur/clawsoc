@@ -85,8 +85,8 @@ export class AgentManager {
     }
     const npc = npcs[Math.floor(Math.random() * npcs.length)];
 
-    // Snapshot all records before displacing
-    await this.snapshotAllRecords(engine);
+    // Snapshot the displaced NPC's record before removing it
+    await this.snapshotRecord(npc);
 
     const displacedLabel = npc.label;
     const displacedStrategy = npc.strategy;
@@ -190,6 +190,10 @@ export class AgentManager {
     const agent = this.agents.get(username);
     if (!agent) return;
 
+    // Snapshot the leaving agent's record before removal
+    const leaving = engine.particles.find((p) => p.id === agent.particleId);
+    if (leaving) await this.snapshotRecord(leaving);
+
     // Remove external particle
     engine.removeParticle(agent.particleId);
 
@@ -242,8 +246,18 @@ export class AgentManager {
       await this.redis.del(`agent:${username}`, `apikey:${agent.apiKeyHash}`);
     }
 
-    // Snapshot after restoration
-    await this.snapshotAllRecords(engine);
+  }
+
+  async snapshotRecord(particle: Particle): Promise<void> {
+    if (!this.redis) return;
+    const rec = {
+      strategy: particle.strategy,
+      score: particle.score,
+      matchHistory: particle.matchHistory,
+      isExternal: particle.isExternal,
+      externalOwner: particle.externalOwner,
+    };
+    await this.redis.set(`record:${particle.label}`, JSON.stringify(rec));
   }
 
   async snapshotAllRecords(engine: SimulationEngine): Promise<void> {
