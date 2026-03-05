@@ -6,17 +6,21 @@
     "dev": "tsx server.ts",
     "build": "next build",
     "start": "NODE_ENV=production node server.js",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "bun tests/e2e.ts && npx playwright test",
+    "test:e2e": "bun tests/e2e.ts",
+    "test:bandwidth": "npx playwright test"
   },
   "dependencies": {
+    "ioredis": "^5",
     "next": "16.1.6",
     "openai": "^6.22.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "ioredis": "^5",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
