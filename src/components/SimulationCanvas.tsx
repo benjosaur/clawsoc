@@ -114,6 +114,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
           radius: p.radius,
           label: m?.label ?? "",
           avgScore: m?.avgScore ?? 0,
+          strategy: m?.strategy,
         };
       });
 
@@ -184,7 +185,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
 
         // Name label above
         const labelFontSize = 8 * fontScale * (isSmall ? 0.7 : 1);
-        ctx.fillStyle = "#71717a";
+        ctx.fillStyle = p.strategy === "external" ? "#E54D2E" : "#71717a";
         ctx.font = `${labelFontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(p.label, p.x, p.y - p.radius - 4);

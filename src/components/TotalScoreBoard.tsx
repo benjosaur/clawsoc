@@ -9,7 +9,7 @@ const STRATEGY_SHORT: Record<StrategyType, string> = {
   tit_for_tat: "TFT",
   random: "RAND",
   grudger: "GRDG",
-  external: "EXT",
+  external: "🦞",
 };
 
 interface ParticleData {
@@ -56,7 +56,7 @@ export default function TotalScoreBoard({ particles, selectedId }: Props) {
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ backgroundColor: p.color }}
               />
-              <span className="text-zinc-600 flex-1 truncate">{p.label}</span>
+              <span className={`flex-1 truncate ${p.strategy === "external" ? "" : "text-zinc-600"}`} style={p.strategy === "external" ? { color: "#E54D2E" } : undefined}>{p.label}</span>
               <span className="text-zinc-300 text-[9px] tracking-wide">
                 {STRATEGY_SHORT[p.strategy]}
               </span>
