@@ -66,7 +66,7 @@ export class AgentManager {
     }
   }
 
-  async register(username: string, greeting: string, engine: SimulationEngine): Promise<RegisterResult> {
+  async register(username: string, greeting: string, engine: SimulationEngine, oldApiKey?: string): Promise<RegisterResult> {
     // Validate username
     if (!username || typeof username !== "string") {
       return { error: "Username is required" };
@@ -76,6 +76,19 @@ export class AgentManager {
     }
     if (this.agents.has(username)) {
       return { error: "Username already taken" };
+    }
+
+    // Ownership check: if this username has been claimed, require the previous API key
+    if (this.redis) {
+      const ownerHash = await this.redis.get(`owner:${username}`);
+      if (ownerHash) {
+        if (!oldApiKey) {
+          return { error: "Username is claimed. Provide your previous API key as 'apiKey' to reclaim it." };
+        }
+        if (hashKey(oldApiKey) !== ownerHash) {
+          return { error: "Invalid API key for this username" };
+        }
+      }
     }
 
     // Pick a random NPC to displace (full only when all NPCs are replaced)
@@ -156,6 +169,7 @@ export class AgentManager {
     if (this.redis) {
       await this.redis.set(`agent:${username}`, JSON.stringify(agent));
       await this.redis.set(`apikey:${apiKeyH}`, username);
+      await this.redis.set(`owner:${username}`, apiKeyH);
     }
 
     const matchCount = Object.values(particle.matchHistory).reduce(
