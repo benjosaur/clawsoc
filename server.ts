@@ -506,7 +506,7 @@ async function main() {
     // Drain events accumulated during this interval's steps
     const events = engine.drainEvents();
     intervalCount++;
-    const syncPos = intervalCount % 60 === 0; // position sync every ~6s
+    const syncPos = intervalCount % 120 === 0; // position sync every ~12s
     const eventMsg = buildEventFrame(events, syncPos);
 
     // Every 30th interval (~3s): broadcast slow frame + persist scores

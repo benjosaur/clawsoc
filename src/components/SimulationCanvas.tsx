@@ -19,8 +19,8 @@ interface Props {
 
 /** Advance one tick of client-side physics (movement + wall bounce).
  *  Uses the same bounceOffWallsXY as the server to guarantee parity. */
-// Spread correction over ~3s (180 ticks at 60fps). 1 - (1-α)^180 ≈ 0.99
-const SYNC_LERP = 0.025;
+// Spread correction over ~6s (360 ticks at 60fps). 1 - (1-α)^360 ≈ 0.99
+const SYNC_LERP = 0.013;
 
 function stepParticles(sim: SimState): void {
   const { canvasWidth, canvasHeight } = sim.config;
