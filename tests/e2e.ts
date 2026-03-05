@@ -307,7 +307,80 @@ async function testAgentDecision() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. Player Lookup
+// 6. Gameplay Loop — wait for a real match
+// ---------------------------------------------------------------------------
+async function testGameplayLoop() {
+  console.log("\n\x1b[1mGameplay Loop\x1b[0m");
+
+  if (!apiKey) {
+    skip("wait for pending match", "registration failed, no apiKey");
+    skip("pendingMatch has expected shape", "skipping group");
+    skip("submit decision", "skipping group");
+    skip("match cleared after decision", "skipping group");
+    return;
+  }
+
+  let matchBody: any = null;
+
+  await test("wait for pending match (up to 45s)", async () => {
+    const deadline = Date.now() + 45_000;
+    while (Date.now() < deadline) {
+      const res = await fetch(`${BASE}/api/agent/status`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      expect(res.ok, `status poll failed: ${res.status}`);
+      const body = await res.json();
+      if (body.pendingMatch) {
+        matchBody = body;
+        return;
+      }
+      await sleep(1000);
+    }
+    throw new Error("no collision within 45s");
+  });
+
+  await test("pendingMatch has expected shape", async () => {
+    const pm = matchBody.pendingMatch;
+    expect(pm, "pendingMatch is null");
+    expect(typeof pm.opponentLabel === "string", "missing opponentLabel");
+    expect(typeof pm.opponentGreeting === "string", "missing opponentGreeting");
+    expect(pm.opponentGreeting.length > 0, "opponentGreeting is empty");
+    // vsRecord is null on first encounter, object otherwise
+    expect(
+      pm.vsRecord === null || typeof pm.vsRecord === "object",
+      `unexpected vsRecord type: ${typeof pm.vsRecord}`
+    );
+  });
+
+  await test("submit cooperate decision", async () => {
+    const res = await fetch(`${BASE}/api/agent/decide`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ decision: "cooperate", message: "e2e test" }),
+    });
+    expect(res.ok, `decide failed: ${res.status}`);
+    const body = await res.json();
+    expect(body.ok === true, `expected ok: true, got ${JSON.stringify(body)}`);
+  });
+
+  await test("match cleared and score updated", async () => {
+    // Give the engine a moment to resolve the match
+    await sleep(2000);
+    const res = await fetch(`${BASE}/api/agent/status`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    expect(res.ok, `status ${res.status}`);
+    const body = await res.json();
+    expect(body.pendingMatch === null, "pendingMatch not cleared");
+    expect(body.matches >= 1, `expected matches >= 1, got ${body.matches}`);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 7. Player Lookup
 // ---------------------------------------------------------------------------
 async function testPlayerLookup() {
   console.log("\n\x1b[1mPlayer Lookup\x1b[0m");
@@ -339,7 +412,7 @@ async function testPlayerLookup() {
 }
 
 // ---------------------------------------------------------------------------
-// 7. Agent Leave + Cleanup
+// 8. Agent Leave + Cleanup
 // ---------------------------------------------------------------------------
 async function testAgentLeave() {
   console.log("\n\x1b[1mAgent Leave\x1b[0m");
@@ -358,11 +431,71 @@ async function testAgentLeave() {
     expect(res.ok, `status ${res.status}`);
   });
 
-  await test("status after leave returns 404", async () => {
-    const res = await fetch(`${BASE}/api/agent/status`, {
+  await test("agent no longer live after leave", async () => {
+    const res = await fetch(
+      `${BASE}/api/player/lookup?name=${TEST_USER}`
+    );
+    expect(res.ok, `status ${res.status}`);
+    const body = await res.json();
+    expect(body.status !== "live", `expected not live, got ${body.status}`);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 9. Ownership — re-registration requires previous API key
+// ---------------------------------------------------------------------------
+async function testOwnership() {
+  console.log("\n\x1b[1mOwnership\x1b[0m");
+
+  if (!apiKey) {
+    skip("re-register without key rejected", "registration failed, no apiKey");
+    skip("re-register with correct key succeeds", "skipping group");
+    skip("cleanup: leave re-registered agent", "skipping group");
+    return;
+  }
+
+  // At this point the agent has left (testAgentLeave ran).
+  // apiKey still holds the last key issued before leave.
+  const savedKey = apiKey;
+
+  await test("re-register without key rejected", async () => {
+    const res = await fetch(`${BASE}/api/agent/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: TEST_USER, greeting: "no key" }),
+    });
+    expect(res.status === 400, `expected 400, got ${res.status}`);
+    const body = await res.json();
+    expect(
+      body.error?.includes("claimed"),
+      `unexpected error: ${body.error}`
+    );
+  });
+
+  await test("re-register with correct key succeeds", async () => {
+    const res = await fetch(`${BASE}/api/agent/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: TEST_USER,
+        greeting: "I'm back",
+        apiKey: savedKey,
+      }),
+    });
+    const body = await res.json();
+    expect(res.ok, `status ${res.status}: ${JSON.stringify(body)}`);
+    expect(body.apiKey, "missing new apiKey");
+    expect(body.apiKey !== savedKey, "key should have rotated");
+    // Update for cleanup
+    apiKey = body.apiKey;
+  });
+
+  await test("cleanup: leave re-registered agent", async () => {
+    const res = await fetch(`${BASE}/api/agent/leave`, {
+      method: "DELETE",
       headers: { Authorization: `Bearer ${apiKey}` },
     });
-    expect(res.status === 404, `expected 404, got ${res.status}`);
+    expect(res.ok, `status ${res.status}`);
   });
 }
 
@@ -378,8 +511,10 @@ async function main() {
   await testAgentRegistration();
   await testAgentStatus();
   await testAgentDecision();
+  await testGameplayLoop();
   await testPlayerLookup();
   await testAgentLeave();
+  await testOwnership();
 
   const total = passed + failed + skipped;
   let summary = `\n\x1b[1m${total} tests: \x1b[32m${passed} passed\x1b[0m`;

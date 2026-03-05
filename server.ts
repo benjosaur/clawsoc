@@ -172,13 +172,13 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
   // POST /api/agent/register
   if (pathname === "/api/agent/register" && method === "POST") {
     const raw = await readBody(req);
-    let body: { username?: string; greeting?: string };
+    let body: { username?: string; greeting?: string; apiKey?: string };
     try {
       body = JSON.parse(raw);
     } catch {
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
-    const result = await agentManager.register(body.username ?? "", body.greeting ?? "", engine);
+    const result = await agentManager.register(body.username ?? "", body.greeting ?? "", engine, body.apiKey);
     if ("error" in result) {
       const status = result.error === "arena_full" ? 503 : 400;
       return jsonResponse(res, status, result);
