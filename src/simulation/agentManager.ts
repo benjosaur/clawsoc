@@ -286,10 +286,29 @@ export class AgentManager {
       };
       await this.redis.set(`record:${p.label}`, JSON.stringify(rec));
     }
+    await this.redis.set("global:stats", JSON.stringify({
+      tick: engine.tick,
+      totalCooperations: engine.totalCooperations,
+      totalDefections: engine.totalDefections,
+    }));
   }
 
   async restoreRecords(engine: SimulationEngine): Promise<void> {
     if (!this.redis) return;
+
+    // Restore global stats
+    const statsRaw = await this.redis.get("global:stats");
+    if (statsRaw) {
+      try {
+        const stats = JSON.parse(statsRaw);
+        engine.tick = stats.tick ?? 0;
+        engine.totalCooperations = stats.totalCooperations ?? 0;
+        engine.totalDefections = stats.totalDefections ?? 0;
+        console.log(`[AgentManager] Restored global stats: tick=${engine.tick}, cooperations=${engine.totalCooperations}, defections=${engine.totalDefections}`);
+      } catch { /* ignore parse errors */ }
+    }
+
+    // Restore particle records
     const keys = await this.redis.keys("record:*");
     for (const key of keys) {
       const label = key.slice("record:".length);
