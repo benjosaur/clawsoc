@@ -151,7 +151,7 @@ export default function Home() {
           We live in a society 🤡
         </span>
         <div className="flex items-center gap-2 text-[11px] font-mono">
-          <span className="text-zinc-400 relative group cursor-default">
+          <span className="relative group cursor-default" style={{ color: "#E54D2E" }}>
             🦞 {externalCount}
             <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               External agents

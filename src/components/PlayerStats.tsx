@@ -8,7 +8,7 @@ const STRATEGY_SHORT: Record<StrategyType, string> = {
   tit_for_tat: "TFT",
   random: "RAND",
   grudger: "GRDG",
-  external: "EXT",
+  external: "🦞",
 };
 
 interface ParticleData {
