@@ -321,41 +321,60 @@ function buildEventFrame(events: SimEvent[], syncPos = false): string | null {
   return JSON.stringify(frame);
 }
 
-function coopColor(particle: typeof engine.particles[number]): string {
+function coopHue(particle: typeof engine.particles[number]): number {
   let coops = 0, total = 0;
   for (const r of Object.values(particle.matchHistory)) {
     coops += r.cc + r.cd;
     total += r.cc + r.cd + r.dc + r.dd;
   }
-  if (total === 0) return "hsl(60,50%,45%)"; // neutral amber before any matches
+  if (total === 0) return -1; // neutral (no matches yet)
   const ratio = coops / total; // 0 = always defect, 1 = always cooperate
-  const hue = ratio * 120;     // 0° red → 120° green
-  return `hsl(${Math.round(hue)},70%,42%)`;
+  return Math.round(ratio * 120); // 0° red → 120° green
 }
 
-let lastSlowLogIndex = 0;
+let lastSlowLogId = ""; // id of last game log entry sent
+const lastSlowState = new Map<number, { hue: number; score: number; cc: number; cd: number; dc: number; dd: number }>();
 
-function buildSlowFrame(full = false): string {
-  const particles = engine.particles.map((p) => {
+function buildSlowFrame(full = false): string | null {
+  const particles: SlowFrame["particles"] = [];
+  for (const p of engine.particles) {
     const matches = totalMatches(p.matchHistory);
     let cc = 0, cd = 0, dc = 0, dd = 0;
     for (const r of Object.values(p.matchHistory)) {
       cc += r.cc; cd += r.cd; dc += r.dc; dd += r.dd;
     }
-    return {
-      id: p.id,
-      color: coopColor(p),
-      score: p.score,
-      avgScore: matches > 0 ? Math.round((p.score / matches) * 10) / 10 : 0,
-      cc, cd, dc, dd,
-    };
-  });
+    const hue = coopHue(p);
+    const score = p.score;
+    const avgScore = matches > 0 ? Math.round((score / matches) * 10) / 10 : 0;
+
+    if (!full) {
+      const prev = lastSlowState.get(p.id);
+      if (prev && prev.hue === hue && prev.score === score &&
+          prev.cc === cc && prev.cd === cd && prev.dc === dc && prev.dd === dd) {
+        continue; // unchanged — skip
+      }
+    }
+
+    lastSlowState.set(p.id, { hue, score, cc, cd, dc, dd });
+    particles.push({ id: p.id, hue, score, avgScore, cc, cd, dc, dd });
+  }
 
   // On connect: send recent log. On broadcast: send only new entries.
-  const logEntries = full
-    ? engine.gameLog.slice(-50)
-    : engine.gameLog.slice(lastSlowLogIndex);
-  if (!full) lastSlowLogIndex = engine.gameLog.length;
+  let logEntries: typeof engine.gameLog;
+  if (full) {
+    logEntries = engine.gameLog.slice(-50);
+  } else {
+    const idx = lastSlowLogId
+      ? engine.gameLog.findIndex((e) => e.id === lastSlowLogId)
+      : -1;
+    logEntries = idx >= 0 ? engine.gameLog.slice(idx + 1) : engine.gameLog;
+  }
+  if (engine.gameLog.length > 0) {
+    lastSlowLogId = engine.gameLog[engine.gameLog.length - 1].id;
+  }
+
+  // Skip if nothing changed (delta mode only)
+  if (!full && particles.length === 0 && logEntries.length === 0) return null;
 
   const frame: SlowFrame = {
     type: "s",
@@ -438,7 +457,7 @@ async function main() {
     handle(req, res, parsed);
   });
 
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: true });
   const clients = new Set<WebSocket>();
   const upgrade = app.getUpgradeHandler();
 
@@ -457,7 +476,7 @@ async function main() {
     clients.add(ws);
     // Send init frame (positions + velocities + static meta) and slow frame (dynamic data) on connect
     ws.send(buildInitFrame());
-    ws.send(buildSlowFrame(true));
+    ws.send(buildSlowFrame(true)!); // full=true always returns non-null
 
     ws.on("close", () => {
       clients.delete(ws);
@@ -487,7 +506,7 @@ async function main() {
     // Drain events accumulated during this interval's steps
     const events = engine.drainEvents();
     intervalCount++;
-    const syncPos = intervalCount % 10 === 0; // position sync every ~1s
+    const syncPos = intervalCount % 60 === 0; // position sync every ~6s
     const eventMsg = buildEventFrame(events, syncPos);
 
     // Every 30th interval (~3s): broadcast slow frame + persist scores

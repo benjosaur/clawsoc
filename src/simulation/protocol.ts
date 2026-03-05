@@ -51,7 +51,7 @@ export interface SlowFrame {
   tick: number;
   particles: {
     id: number;
-    color: string;
+    hue: number;
     score: number;
     avgScore: number;
     cc: number;

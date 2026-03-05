@@ -34,6 +34,8 @@ export interface ClientParticle {
   vx: number; vy: number;
   radius: number;
   state: number; // 0=moving, 1=colliding
+  /** Correction offset from position sync — lerped to zero over several ticks. */
+  cx: number; cy: number;
 }
 
 /** Simulation state maintained by the hook, advanced by the canvas rAF. */
@@ -81,6 +83,7 @@ export function useServerSimulation() {
       id: p.id, x: p.x, y: p.y,
       vx: p.vx, vy: p.vy,
       radius: p.radius, state: p.state,
+      cx: 0, cy: 0,
     }));
     simRef.current = {
       particles,
@@ -109,7 +112,7 @@ export function useServerSimulation() {
         if (a) { a.x = ev.ax; a.y = ev.ay; a.vx = ev.avx; a.vy = ev.avy; a.state = 0; }
         if (b) { b.x = ev.bx; b.y = ev.by; b.vx = ev.bvx; b.vy = ev.bvy; b.state = 0; }
       } else if (ev.e === "add") {
-        const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius: ev.radius, state: 0 };
+        const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius: ev.radius, state: 0, cx: 0, cy: 0 };
         sim.particles.push(cp);
         map.set(ev.id, cp);
         staticMetaRef.current.set(ev.id, { id: ev.id, label: ev.label, radius: ev.radius, strategy: ev.strategy });
@@ -124,16 +127,19 @@ export function useServerSimulation() {
     sim.localTick = frame.tick;
     sim.lastAdvanceTime = performance.now();
 
-    // Apply position sync if present
+    // Apply position sync — set correction offset instead of snapping
     if (frame.pos) {
       for (let i = 0; i < frame.pos.length; i += 5) {
         const p = map.get(frame.pos[i]);
-        if (p) {
-          p.x = frame.pos[i + 1];
-          p.y = frame.pos[i + 2];
-          p.vx = frame.pos[i + 3];
-          p.vy = frame.pos[i + 4];
-        }
+        if (!p) continue;
+        const sx = frame.pos[i + 1];
+        const sy = frame.pos[i + 2];
+        // Correction = where server says minus where client is
+        p.cx = sx - p.x;
+        p.cy = sy - p.y;
+        // Velocity is authoritative — apply immediately
+        p.vx = frame.pos[i + 3];
+        p.vy = frame.pos[i + 4];
       }
     }
 
@@ -156,24 +162,26 @@ export function useServerSimulation() {
   }, []);
 
   const handleSlowFrame = useCallback((frame: SlowFrame) => {
-    const newMeta = new Map<number, ParticleMeta>();
-    const merged: ParticleMeta[] = [];
+    const meta = metaRef.current;
+    // Merge delta: update only particles present in this frame
     for (const p of frame.particles) {
       const s = staticMetaRef.current.get(p.id);
-      const full: ParticleMeta = {
+      const color = p.hue < 0 ? "hsl(60,50%,45%)" : `hsl(${p.hue},70%,42%)`;
+      meta.set(p.id, {
         id: p.id,
         label: s?.label ?? `#${p.id}`,
         radius: s?.radius ?? 5,
         strategy: s?.strategy ?? "random",
-        color: p.color,
+        color,
         score: p.score,
         avgScore: p.avgScore,
         cc: p.cc, cd: p.cd, dc: p.dc, dd: p.dd,
-      };
-      newMeta.set(p.id, full);
-      merged.push(full);
+      });
     }
-    metaRef.current = newMeta;
+    // Remove particles no longer in simulation
+    for (const id of meta.keys()) {
+      if (!particleMapRef.current.has(id)) meta.delete(id);
+    }
 
     // Accumulate incremental game log entries, dedup by id, keep last 50
     if (frame.gameLog.length > 0) {
@@ -192,7 +200,7 @@ export function useServerSimulation() {
     }
 
     setState({
-      particles: merged,
+      particles: Array.from(meta.values()),
       gameLog: gameLogRef.current,
       tick: frame.tick,
       totalCooperations: frame.totalC,
