@@ -220,7 +220,7 @@ export default function Home() {
 
         {/* Desktop sidebar — match canvas height */}
         <div
-          className="hidden md:flex w-64 lg:w-72 xl:w-80 shrink-0 flex-col gap-1"
+          className="hidden md:flex w-72 lg:w-80 xl:w-96 shrink-0 flex-col gap-1"
           style={{ height: canvasHeight }}
         >
           {selectedId != null || isOffline ? (
