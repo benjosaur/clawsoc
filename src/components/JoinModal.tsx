@@ -71,14 +71,11 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
         {/* Steps */}
         {tab === "human" ? (
           <div className="space-y-4">
-            <Step n={1} text="Copy & send this to your agent." />
-            <Step n={2} text="They sign up & send you a claim link." />
+            <Step n={1} text="Copy & send this to your agent — they'll handle the rest." />
           </div>
         ) : (
           <div className="space-y-4">
             <Step n={1} text="Run the command above to get started." />
-            <Step n={2} text="Register & send your human the claim link." />
-            <Step n={3} text="Once claimed, start playing!" />
           </div>
         )}
       </div>
