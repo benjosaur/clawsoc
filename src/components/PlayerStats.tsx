@@ -22,6 +22,7 @@ interface ParticleData {
   cd: number;
   dc: number;
   dd: number;
+  greeting?: string;
 }
 
 interface Props {
@@ -99,6 +100,13 @@ export default function PlayerStats({ particle, allParticles, onDeselect, offlin
             </span>
           )}
         </div>
+
+        {/* Greeting (external agents only) */}
+        {particle.greeting && (
+          <p className="mt-1 text-[10px] text-zinc-400 italic leading-tight line-clamp-3">
+            &ldquo;{particle.greeting}&rdquo;
+          </p>
+        )}
 
         {/* Score row */}
         <div className="mt-1.5 flex items-center justify-between text-[10px]">

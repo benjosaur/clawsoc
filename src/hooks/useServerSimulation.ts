@@ -17,6 +17,7 @@ export interface ParticleMeta {
   cd: number;
   dc: number;
   dd: number;
+  greeting?: string;
 }
 
 export interface ServerSimulationState {
@@ -67,7 +68,7 @@ export function useServerSimulation() {
     lastAdvanceTime: 0,
   });
   const particleMapRef = useRef<Map<number, ClientParticle>>(new Map());
-  const staticMetaRef = useRef<Map<number, { id: number; label: string; radius: number; strategy: StrategyType }>>(new Map());
+  const staticMetaRef = useRef<Map<number, { id: number; label: string; radius: number; strategy: StrategyType; greeting?: string }>>(new Map());
   const metaRef = useRef<Map<number, ParticleMeta>>(new Map());
   const gameLogRef = useRef<GameLogEntry[]>([]);
   const popupsRef = useRef<ClientPopup[]>([]);
@@ -135,7 +136,7 @@ export function useServerSimulation() {
         const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius: ev.radius, state: 0, cx: 0, cy: 0, tx: 0, ty: 0, tvx: 0, tvy: 0, freezeAt: 0 };
         sim.particles.push(cp);
         map.set(ev.id, cp);
-        staticMetaRef.current.set(ev.id, { id: ev.id, label: ev.label, radius: ev.radius, strategy: ev.strategy });
+        staticMetaRef.current.set(ev.id, { id: ev.id, label: ev.label, radius: ev.radius, strategy: ev.strategy, greeting: ev.greeting });
       } else if (ev.e === "remove") {
         sim.particles = sim.particles.filter((p) => p.id !== ev.id);
         map.delete(ev.id);
@@ -237,6 +238,7 @@ export function useServerSimulation() {
         score: p.score,
         avgScore: p.avgScore,
         cc: p.cc, cd: p.cd, dc: p.dc, dd: p.dd,
+        greeting: s?.greeting,
       });
     }
     // Remove particles no longer in simulation
