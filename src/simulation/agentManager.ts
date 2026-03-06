@@ -70,16 +70,17 @@ export class AgentManager {
     }
   }
 
-  private displaceAndSpawn(
+  private async displaceAndSpawn(
     username: string,
     greeting: string,
     apiKeyHash: string,
     engine: SimulationEngine,
-  ): { particle: Particle; agent: ExternalAgent } | { error: string } {
+  ): Promise<{ particle: Particle; agent: ExternalAgent } | { error: string }> {
     const npcs = engine.particles.filter((p) => !p.isExternal);
     if (npcs.length === 0) return { error: "arena_full" };
 
     const npc = npcs[Math.floor(Math.random() * npcs.length)];
+    await this.snapshotRecord(npc);
     engine.removeParticle(npc.id);
 
     const particleId = engine.allocateId();
@@ -144,7 +145,7 @@ export class AgentManager {
     const apiKey = generateApiKey();
     const apiKeyH = hashKey(apiKey);
 
-    const result = this.displaceAndSpawn(username, greeting, apiKeyH, engine);
+    const result = await this.displaceAndSpawn(username, greeting, apiKeyH, engine);
     if ("error" in result) return result;
 
     const { agent } = result;
@@ -179,7 +180,7 @@ export class AgentManager {
       return { error: "Invalid API key for this username" };
     }
 
-    const result = this.displaceAndSpawn(username, greeting, apiKeyH, engine);
+    const result = await this.displaceAndSpawn(username, greeting, apiKeyH, engine);
     if ("error" in result) return result;
 
     const { particle, agent } = result;
@@ -227,6 +228,12 @@ export class AgentManager {
   async removeAgent(username: string, engine: SimulationEngine): Promise<void> {
     const agent = this.agents.get(username);
     if (!agent) return;
+
+    // Snapshot agent record before removal
+    const particle = engine.particles.find(p => p.id === agent.particleId);
+    if (particle) {
+      await this.snapshotRecord(particle);
+    }
 
     // Remove external particle
     engine.removeParticle(agent.particleId);
