@@ -165,7 +165,6 @@ export class AgentManager {
     // Persist to Redis
     if (this.redis) {
       await this.redis.set(`agent:${username}`, JSON.stringify(agent));
-      await this.redis.set(`apikey:${apiKeyH}`, username);
       await this.redis.set(`owner:${username}`, apiKeyH);
     }
 
@@ -250,7 +249,7 @@ export class AgentManager {
     this.agents.delete(username);
 
     if (this.redis) {
-      await this.redis.del(`agent:${username}`, `apikey:${agent.apiKeyHash}`);
+      await this.redis.del(`agent:${username}`);
     }
 
   }
