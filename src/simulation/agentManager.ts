@@ -98,9 +98,6 @@ export class AgentManager {
     }
     const npc = npcs[Math.floor(Math.random() * npcs.length)];
 
-    // Snapshot the displaced NPC's record before removing it
-    await this.snapshotRecord(npc);
-
     const displacedLabel = npc.label;
     const displacedStrategy = npc.strategy;
 
@@ -203,10 +200,6 @@ export class AgentManager {
   async removeAgent(username: string, engine: SimulationEngine): Promise<void> {
     const agent = this.agents.get(username);
     if (!agent) return;
-
-    // Snapshot the leaving agent's record before removal
-    const leaving = engine.particles.find((p) => p.id === agent.particleId);
-    if (leaving) await this.snapshotRecord(leaving);
 
     // Remove external particle
     engine.removeParticle(agent.particleId);
