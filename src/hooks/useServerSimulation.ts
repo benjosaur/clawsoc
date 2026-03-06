@@ -33,9 +33,15 @@ export interface ClientParticle {
   x: number; y: number;
   vx: number; vy: number;
   radius: number;
-  state: number; // 0=moving, 1=colliding
+  state: number; // 0=moving, 1=colliding, 2=approaching
   /** Correction offset from position sync — lerped to zero over several ticks. */
   cx: number; cy: number;
+  /** Approach target (collision point) — used when state=2. */
+  tx: number; ty: number;
+  /** Server entry velocity (approach direction) — used when state=2. */
+  tvx: number; tvy: number;
+  /** Local tick at which approach ends and state transitions to 1. */
+  freezeAt: number;
 }
 
 /** Simulation state maintained by the hook, advanced by the canvas rAF. */
@@ -84,6 +90,7 @@ export function useServerSimulation() {
       vx: p.vx, vy: p.vy,
       radius: p.radius, state: p.state,
       cx: 0, cy: 0,
+      tx: 0, ty: 0, tvx: 0, tvy: 0, freezeAt: 0,
     }));
     simRef.current = {
       particles,
@@ -104,15 +111,28 @@ export function useServerSimulation() {
       if (ev.e === "freeze") {
         const a = map.get(ev.a);
         const b = map.get(ev.b);
-        if (a) a.state = 1;
-        if (b) b.state = 1;
+        const APPROACH_TICKS = 12;
+        if (a) {
+          a.tx = ev.ax; a.ty = ev.ay;
+          a.tvx = ev.avx; a.tvy = ev.avy;
+          a.freezeAt = sim.localTick + APPROACH_TICKS;
+          a.cx = 0; a.cy = 0;
+          a.state = 2;
+        }
+        if (b) {
+          b.tx = ev.bx; b.ty = ev.by;
+          b.tvx = ev.bvx; b.tvy = ev.bvy;
+          b.freezeAt = sim.localTick + APPROACH_TICKS;
+          b.cx = 0; b.cy = 0;
+          b.state = 2;
+        }
       } else if (ev.e === "unfreeze" || ev.e === "abort") {
         const a = map.get(ev.a);
         const b = map.get(ev.b);
         if (a) { a.x = ev.ax; a.y = ev.ay; a.vx = ev.avx; a.vy = ev.avy; a.state = 0; }
         if (b) { b.x = ev.bx; b.y = ev.by; b.vx = ev.bvx; b.vy = ev.bvy; b.state = 0; }
       } else if (ev.e === "add") {
-        const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius: ev.radius, state: 0, cx: 0, cy: 0 };
+        const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius: ev.radius, state: 0, cx: 0, cy: 0, tx: 0, ty: 0, tvx: 0, tvy: 0, freezeAt: 0 };
         sim.particles.push(cp);
         map.set(ev.id, cp);
         staticMetaRef.current.set(ev.id, { id: ev.id, label: ev.label, radius: ev.radius, strategy: ev.strategy });

@@ -233,10 +233,19 @@ export class SimulationEngine {
         if (a.state !== "moving" || b.state !== "moving") continue;
         if (!areColliding(a, b)) continue;
 
+        separateParticles(a, b);
+        // Capture entry velocities before freezing
+        const avx = a.velocity.x, avy = a.velocity.y;
+        const bvx = b.velocity.x, bvy = b.velocity.y;
+
         a.state = "colliding";
         b.state = "colliding";
 
-        this.pendingEvents.push({ e: "freeze", a: a.id, b: b.id });
+        this.pendingEvents.push({
+          e: "freeze", a: a.id, b: b.id,
+          ax: a.position.x, ay: a.position.y, avx, avy,
+          bx: b.position.x, by: b.position.y, bvx, bvy,
+        });
 
         // Create frozen pair in greeting phase — match resolved later
         this.frozenPairs.push({
