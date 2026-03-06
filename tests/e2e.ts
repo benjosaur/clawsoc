@@ -1,15 +1,20 @@
 /**
- * ClawSoc E2E Tests — run with: bun tests/e2e.ts
+ * ClawSoc E2E Tests
  *
- * Tests the deployed app at clawsoc.fly.dev:
+ * Usage:
+ *   bun tests/e2e.ts              # remote (clawsoc.fly.dev)
+ *   bun tests/e2e.ts local        # local  (localhost:3000)
+ *
+ * Tests:
  *   - HTTP health & static assets
  *   - WebSocket init/event/slow frames, pause/resume
- *   - Agent API lifecycle: register → status → decide → leave
+ *   - Agent API lifecycle: register → match → decide → leave
  *   - Player lookup API
  */
 
-const BASE = "https://clawsoc.fly.dev";
-const WS_URL = "wss://clawsoc.fly.dev/ws";
+const local = process.argv.includes("local");
+const BASE = local ? "http://localhost:3000" : "https://clawsoc.fly.dev";
+const WS_URL = local ? "ws://localhost:3000/ws" : "wss://clawsoc.fly.dev/ws";
 
 let passed = 0;
 let failed = 0;
@@ -267,6 +272,11 @@ async function testAgentStatus() {
     const res = await fetch(`${BASE}/api/agent/status`);
     expect(res.status === 401, `expected 401, got ${res.status}`);
   });
+
+  await test("match without auth returns 401", async () => {
+    const res = await fetch(`${BASE}/api/agent/match`);
+    expect(res.status === 401, `expected 401, got ${res.status}`);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -307,52 +317,42 @@ async function testAgentDecision() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. Gameplay Loop — wait for a real match
+// 6. Gameplay Loop — blocking match + decide
 // ---------------------------------------------------------------------------
 async function testGameplayLoop() {
   console.log("\n\x1b[1mGameplay Loop\x1b[0m");
 
   if (!apiKey) {
-    skip("wait for pending match", "registration failed, no apiKey");
-    skip("pendingMatch has expected shape", "skipping group");
-    skip("submit decision", "skipping group");
-    skip("match cleared after decision", "skipping group");
+    skip("wait for match (blocking)", "registration failed, no apiKey");
+    skip("match response has expected shape", "skipping group");
+    skip("submit decision and get result", "skipping group");
+    skip("score updated after match", "skipping group");
     return;
   }
 
-  let matchBody: any = null;
+  let matchData: any = null;
 
-  await test("wait for pending match (up to 45s)", async () => {
-    const deadline = Date.now() + 45_000;
-    while (Date.now() < deadline) {
-      const res = await fetch(`${BASE}/api/agent/status`, {
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-      expect(res.ok, `status poll failed: ${res.status}`);
-      const body = await res.json();
-      if (body.pendingMatch) {
-        matchBody = body;
-        return;
-      }
-      await sleep(1000);
-    }
-    throw new Error("no collision within 45s");
+  await test("wait for match via blocking endpoint (up to 120s)", async () => {
+    const res = await fetch(`${BASE}/api/agent/match`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(120_000),
+    });
+    expect(res.ok, `match failed: ${res.status}`);
+    matchData = await res.json();
   });
 
-  await test("pendingMatch has expected shape", async () => {
-    const pm = matchBody.pendingMatch;
-    expect(pm, "pendingMatch is null");
-    expect(typeof pm.opponentLabel === "string", "missing opponentLabel");
-    expect(typeof pm.opponentGreeting === "string", "missing opponentGreeting");
-    expect(pm.opponentGreeting.length > 0, "opponentGreeting is empty");
-    // vsRecord is null on first encounter, object otherwise
+  await test("match response has expected shape", async () => {
+    expect(matchData, "match response is null");
+    expect(typeof matchData.opponentLabel === "string", "missing opponentLabel");
+    expect(typeof matchData.opponentGreeting === "string", "missing opponentGreeting");
+    expect(matchData.opponentGreeting.length > 0, "opponentGreeting is empty");
     expect(
-      pm.vsRecord === null || typeof pm.vsRecord === "object",
-      `unexpected vsRecord type: ${typeof pm.vsRecord}`
+      matchData.vsRecord === null || typeof matchData.vsRecord === "object",
+      `unexpected vsRecord type: ${typeof matchData.vsRecord}`
     );
   });
 
-  await test("submit cooperate decision", async () => {
+  await test("submit decision and receive result", async () => {
     const res = await fetch(`${BASE}/api/agent/decide`, {
       method: "POST",
       headers: {
@@ -360,21 +360,25 @@ async function testGameplayLoop() {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({ decision: "cooperate", message: "e2e test" }),
+      signal: AbortSignal.timeout(20_000),
     });
     expect(res.ok, `decide failed: ${res.status}`);
     const body = await res.json();
     expect(body.ok === true, `expected ok: true, got ${JSON.stringify(body)}`);
+    expect(body.result, "expected result in response");
+    expect(typeof body.result.yourDecision === "string", "missing yourDecision");
+    expect(typeof body.result.theirDecision === "string", "missing theirDecision");
+    expect(typeof body.result.yourScore === "number", "missing yourScore");
+    expect(typeof body.result.theirScore === "number", "missing theirScore");
+    expect(typeof body.result.opponent === "string", "missing opponent");
   });
 
-  await test("match cleared and score updated", async () => {
-    // Give the engine a moment to resolve the match
-    await sleep(2000);
+  await test("score updated after match", async () => {
     const res = await fetch(`${BASE}/api/agent/status`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     expect(res.ok, `status ${res.status}`);
     const body = await res.json();
-    expect(body.pendingMatch === null, "pendingMatch not cleared");
     expect(body.matches >= 1, `expected matches >= 1, got ${body.matches}`);
   });
 }
@@ -431,33 +435,41 @@ async function testAgentLeave() {
     expect(res.ok, `status ${res.status}`);
   });
 
-  await test("agent no longer live after leave", async () => {
-    const res = await fetch(
-      `${BASE}/api/player/lookup?name=${TEST_USER}`
-    );
-    expect(res.ok, `status ${res.status}`);
-    const body = await res.json();
-    expect(body.status !== "live", `expected not live, got ${body.status}`);
-  });
+  if (local) {
+    skip("agent no longer live after leave", "requires Redis for offline lookup");
+  } else {
+    await test("agent no longer live after leave", async () => {
+      const res = await fetch(
+        `${BASE}/api/player/lookup?name=${TEST_USER}`
+      );
+      expect(res.ok, `status ${res.status}`);
+      const body = await res.json();
+      expect(body.status !== "live", `expected not live, got ${body.status}`);
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
-// 9. Ownership — login requires API key
+// 9. Ownership — re-register rejected, match auto-rejoins
 // ---------------------------------------------------------------------------
 async function testOwnership() {
   console.log("\n\x1b[1mOwnership\x1b[0m");
 
   if (!apiKey) {
     skip("register claimed username rejected", "registration failed, no apiKey");
-    skip("login without key rejected", "skipping group");
-    skip("login with correct key succeeds", "skipping group");
-    skip("cleanup: leave logged-in agent", "skipping group");
+    skip("match endpoint auto-rejoins after leave", "skipping group");
+    skip("cleanup: leave rejoined agent", "skipping group");
     return;
   }
 
   // At this point the agent has left (testAgentLeave ran).
-  // apiKey still holds the permanent key from registration.
-  const savedKey = apiKey;
+  // All ownership tests require Redis — leave deletes auth, rejoin verifies via Redis.
+  if (local) {
+    skip("register claimed username rejected", "requires Redis");
+    skip("match endpoint auto-rejoins after leave", "requires Redis");
+    skip("cleanup: leave rejoined agent", "requires Redis");
+    return;
+  }
 
   await test("register claimed username rejected", async () => {
     const res = await fetch(`${BASE}/api/agent/register`, {
@@ -473,39 +485,38 @@ async function testOwnership() {
     );
   });
 
-  await test("login without key rejected", async () => {
-    const res = await fetch(`${BASE}/api/agent/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: TEST_USER, greeting: "no key" }),
+  await test("match endpoint auto-rejoins after leave", async () => {
+    // The agent left the arena. Calling /api/agent/match should auto-rejoin.
+    // We use a short timeout since we just want to verify it doesn't 404.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await fetch(`${BASE}/api/agent/match`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      // 200 = got a match, 408 = timeout (both mean it rejoined successfully)
+      expect(
+        res.status === 200 || res.status === 408,
+        `expected 200 or 408, got ${res.status}`
+      );
+    } catch (e: any) {
+      clearTimeout(timer);
+      // AbortError means the request was still blocking (agent rejoined, waiting for collision)
+      expect(
+        e.name === "AbortError",
+        `unexpected error: ${e.message}`
+      );
+    }
+    // Verify agent is back in arena via status
+    const statusRes = await fetch(`${BASE}/api/agent/status`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
     });
-    expect(res.status === 400, `expected 400, got ${res.status}`);
-    const body = await res.json();
-    expect(
-      body.error?.includes("apiKey is required"),
-      `unexpected error: ${body.error}`
-    );
+    expect(statusRes.ok, `status after rejoin: ${statusRes.status}`);
   });
 
-  await test("login with correct key succeeds", async () => {
-    const res = await fetch(`${BASE}/api/agent/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: TEST_USER,
-        greeting: "I'm back",
-        apiKey: savedKey,
-      }),
-    });
-    const body = await res.json();
-    expect(res.ok, `status ${res.status}: ${JSON.stringify(body)}`);
-    expect(!body.apiKey, "login should NOT return a new apiKey");
-    expect(body.returning === true, "expected returning: true");
-    expect(typeof body.score === "number", "missing score");
-    expect(typeof body.matches === "number", "missing matches");
-  });
-
-  await test("cleanup: leave logged-in agent", async () => {
+  await test("cleanup: leave rejoined agent", async () => {
     const res = await fetch(`${BASE}/api/agent/leave`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${apiKey}` },

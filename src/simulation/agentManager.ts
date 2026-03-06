@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import type { Decision, Particle, StrategyType } from "./types";
+import type { Decision, MatchRecord, Particle, StrategyType } from "./types";
 import type { SimulationEngine } from "./engine";
 
 export interface ExternalAgent {
@@ -48,6 +48,9 @@ export class AgentManager {
   private agents = new Map<string, ExternalAgent>();
   private apiKeyToUsername = new Map<string, string>();
   private pendingMatches = new Map<string, PendingMatch>();
+  private matchWaiters = new Map<string, { resolve: (match: PendingMatch) => void; reject: (err: Error) => void }>();
+  private resultWaiters = new Map<string, { resolve: (record: MatchRecord | null) => void }>();
+  private activeResultKeys = new Map<string, string>(); // username → "aId-bId"
   private redis: Redis | null = null;
 
   constructor(redisUrl?: string) {
@@ -213,6 +216,11 @@ export class AgentManager {
     return this.apiKeyToUsername.get(h) ?? null;
   }
 
+  getApiKeyHash(authHeader: string | undefined): string | null {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+    return hashKey(authHeader.slice(7));
+  }
+
   setPendingMatch(username: string, match: PendingMatch): void {
     this.pendingMatches.set(username, match);
   }
@@ -223,6 +231,80 @@ export class AgentManager {
 
   clearPendingMatch(username: string): void {
     this.pendingMatches.delete(username);
+  }
+
+  waitForMatch(username: string): Promise<PendingMatch> {
+    // If there's already a pending match (collision happened before agent started waiting), return immediately
+    const existing = this.pendingMatches.get(username);
+    if (existing) return Promise.resolve(existing);
+
+    return new Promise((resolve, reject) => {
+      this.matchWaiters.set(username, { resolve, reject });
+    });
+  }
+
+  resolveMatchWaiter(username: string, match: PendingMatch): void {
+    const waiter = this.matchWaiters.get(username);
+    if (waiter) {
+      this.matchWaiters.delete(username);
+      waiter.resolve(match);
+    }
+  }
+
+  waitForResult(username: string, aId: number, bId: number): Promise<MatchRecord | null> {
+    const key = `${aId}|${bId}`;
+    this.activeResultKeys.set(username, key);
+    return new Promise((resolve) => {
+      this.resultWaiters.set(key, { resolve });
+    });
+  }
+
+  resolveResultWaiter(aId: number, bId: number, record: MatchRecord | null): void {
+    const key = `${aId}|${bId}`;
+    const waiter = this.resultWaiters.get(key);
+    if (waiter) {
+      this.resultWaiters.delete(key);
+      waiter.resolve(record);
+    }
+  }
+
+  async ensureInArena(username: string, apiKeyHash: string, engine: SimulationEngine): Promise<{ error?: string }> {
+    if (this.agents.has(username)) return {};
+
+    if (!this.redis) {
+      return { error: "Not registered. Use POST /api/agent/register first." };
+    }
+
+    const ownerHash = await this.redis.get(`owner:${username}`);
+    if (!ownerHash) return { error: "Not registered. Use POST /api/agent/register first." };
+    if (apiKeyHash !== ownerHash) return { error: "Invalid API key" };
+
+    // Restore greeting from prior agent record
+    let greeting = "";
+    const agentRaw = await this.redis.get(`agent:${username}`);
+    if (agentRaw) {
+      try { greeting = JSON.parse(agentRaw).greeting ?? ""; } catch { /* ignore */ }
+    }
+
+    const result = await this.displaceAndSpawn(username, greeting, apiKeyHash, engine);
+    if ("error" in result) return result;
+
+    const { particle, agent } = result;
+    this.agents.set(username, agent);
+    this.apiKeyToUsername.set(apiKeyHash, username);
+
+    // Restore prior record from Redis
+    const raw = await this.redis.get(`record:${username}`);
+    if (raw) {
+      try {
+        const rec = JSON.parse(raw);
+        particle.score = rec.score ?? 0;
+        particle.matchHistory = rec.matchHistory ?? {};
+      } catch (err) { console.error(`[AgentManager] Failed to parse record for ${username}:`, err); }
+    }
+
+    await this.redis.set(`agent:${username}`, JSON.stringify(agent));
+    return {};
   }
 
   async removeAgent(username: string, engine: SimulationEngine): Promise<void> {
@@ -278,8 +360,22 @@ export class AgentManager {
 
     engine.addParticle(npc);
 
-    // Clean up agent records
+    // Clean up agent records and waiters
     this.pendingMatches.delete(username);
+    const matchWaiter = this.matchWaiters.get(username);
+    if (matchWaiter) {
+      this.matchWaiters.delete(username);
+      matchWaiter.reject(new Error("agent_left"));
+    }
+    const resultKey = this.activeResultKeys.get(username);
+    if (resultKey) {
+      this.activeResultKeys.delete(username);
+      const rw = this.resultWaiters.get(resultKey);
+      if (rw) {
+        this.resultWaiters.delete(resultKey);
+        rw.resolve(null);
+      }
+    }
     this.apiKeyToUsername.delete(agent.apiKeyHash);
     this.agents.delete(username);
 
@@ -318,6 +414,19 @@ export class AgentManager {
       totalCooperations: engine.totalCooperations,
       totalDefections: engine.totalDefections,
     }));
+  }
+
+  async restoreApiKeys(): Promise<void> {
+    if (!this.redis) return;
+    const keys = await this.redis.keys("owner:*");
+    for (const key of keys) {
+      const apiKeyHash = await this.redis.get(key);
+      if (apiKeyHash) {
+        const username = key.slice("owner:".length);
+        this.apiKeyToUsername.set(apiKeyHash, username);
+      }
+    }
+    if (keys.length > 0) console.log(`[AgentManager] Restored ${keys.length} API key mappings`);
   }
 
   async restoreRecords(engine: SimulationEngine): Promise<void> {

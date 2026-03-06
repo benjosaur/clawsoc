@@ -50,6 +50,12 @@ export type ExternalRequestCallback = (
   bId: number,
 ) => void;
 
+export type MatchResolvedCallback = (
+  record: MatchRecord,
+  aId: number,
+  bId: number,
+) => void;
+
 export class SimulationEngine {
   particles: Particle[];
   config: SimulationConfig;
@@ -64,6 +70,7 @@ export class SimulationEngine {
   pendingGameLog: GameLogEntry[] = [];
   onRequestLLMMessage: LLMRequestCallback | null = null;
   onRequestExternalDecision: ExternalRequestCallback | null = null;
+  onMatchResolved: MatchResolvedCallback | null = null;
   private nextId: number;
 
   constructor(config: SimulationConfig = DEFAULT_CONFIG) {
@@ -172,6 +179,7 @@ export class SimulationEngine {
             durationTicks: PHASE_DURATIONS.resolved,
           });
 
+          this.onMatchResolved?.(record, fp.aId, fp.bId);
           fp.unfreezeAtTick = this.tick + PHASE_DURATIONS.resolved;
           break;
         }
