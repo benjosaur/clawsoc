@@ -118,7 +118,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
     { strategy: "grudger", count: 20, useLLM: false },
   ],
   particleRadius: 4,
-  minSpeed: 0.05,
-  maxSpeed: 0.15,
+  minSpeed: 0.1,
+  maxSpeed: 0.2,
   freezeDurationTicks: 45,
 };
