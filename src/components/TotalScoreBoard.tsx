@@ -60,7 +60,7 @@ export default function TotalScoreBoard({ particles, selectedId }: Props) {
               <span className="text-zinc-300 text-[9px] tracking-wide">
                 {STRATEGY_SHORT[p.strategy]}
               </span>
-              <span className="text-zinc-900 font-semibold w-8 text-right tabular-nums">
+              <span className="text-zinc-900 font-semibold w-12 text-right tabular-nums">
                 {p.score}
               </span>
             </div>
