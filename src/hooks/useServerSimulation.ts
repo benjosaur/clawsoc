@@ -179,6 +179,47 @@ export function useServerSimulation() {
         }
       }
     }
+
+    // Apply inline meta updates (score/color sync with popups)
+    if (frame.pmu) {
+      const meta = metaRef.current;
+      for (const [id, hue, avgScore] of frame.pmu) {
+        const existing = meta.get(id);
+        if (existing) {
+          existing.color = hue < 0 ? "hsl(60,50%,45%)" : `hsl(${hue},70%,42%)`;
+          existing.avgScore = avgScore;
+        }
+      }
+    }
+
+    // Process game log entries + derive outcome matrix client-side
+    if (frame.log && frame.log.length > 0) {
+      const meta = metaRef.current;
+      const seen = new Set(gameLogRef.current.map((e) => e.id));
+      const fresh = frame.log.filter((e) => !seen.has(e.id));
+      if (fresh.length > 0) {
+        gameLogRef.current = [...gameLogRef.current, ...fresh].slice(-50);
+        // Update cc/cd/dc/dd from match results
+        for (const entry of fresh) {
+          if (entry.type !== "match") continue;
+          const metaA = meta.get(entry.particleA.id);
+          if (metaA) {
+            const key = (entry.decisionA === "cooperate" ? "c" : "d") + (entry.decisionB === "cooperate" ? "c" : "d") as "cc" | "cd" | "dc" | "dd";
+            metaA[key]++;
+          }
+          const metaB = meta.get(entry.particleB.id);
+          if (metaB) {
+            const key = (entry.decisionB === "cooperate" ? "c" : "d") + (entry.decisionA === "cooperate" ? "c" : "d") as "cc" | "cd" | "dc" | "dd";
+            metaB[key]++;
+          }
+        }
+        setState((prev) => ({
+          ...prev,
+          particles: Array.from(meta.values()),
+          gameLog: gameLogRef.current,
+        }));
+      }
+    }
   }, []);
 
   const handleSlowFrame = useCallback((frame: SlowFrame) => {
@@ -203,15 +244,6 @@ export function useServerSimulation() {
       if (!particleMapRef.current.has(id)) meta.delete(id);
     }
 
-    // Accumulate incremental game log entries, dedup by id, keep last 50
-    if (frame.gameLog.length > 0) {
-      const seen = new Set(gameLogRef.current.map((e) => e.id));
-      const fresh = frame.gameLog.filter((e) => !seen.has(e.id));
-      if (fresh.length > 0) {
-        gameLogRef.current = [...gameLogRef.current, ...fresh].slice(-50);
-      }
-    }
-
     // Drift correction: if local tick drifted >30 ticks from server, snap
     const drift = Math.abs(simRef.current.localTick - frame.tick);
     if (drift > 30) {
@@ -219,13 +251,13 @@ export function useServerSimulation() {
       simRef.current.lastAdvanceTime = performance.now();
     }
 
-    setState({
+    setState((prev) => ({
+      ...prev,
       particles: Array.from(meta.values()),
-      gameLog: gameLogRef.current,
       tick: frame.tick,
       totalCooperations: frame.totalC,
       totalDefections: frame.totalD,
-    });
+    }));
   }, []);
 
   const connect = useCallback(() => {

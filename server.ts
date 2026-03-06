@@ -5,7 +5,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import OpenAI from "openai";
 import { SimulationEngine } from "./src/simulation/engine";
 import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
-import type { Decision, StrategyType } from "./src/simulation/types";
+import type { Decision, GameLogEntry, StrategyType } from "./src/simulation/types";
 import { generateMessage } from "./src/simulation/messages";
 import { AgentManager } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulation/protocol";
@@ -281,7 +281,7 @@ function buildInitFrame(): string {
 
 let lastPopupBroadcastTick = 0;
 
-function buildEventFrame(events: SimEvent[], syncPos = false): string | null {
+function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: number[] = [], gameLogEntries: GameLogEntry[] = []): string | null {
   // Only send popups spawned since the last broadcast (client manages expiry)
   const pops: [number, number, string, string][] = [];
   for (const popup of engine.popups) {
@@ -313,11 +313,36 @@ function buildEventFrame(events: SimEvent[], syncPos = false): string | null {
     }
   }
 
-  if (events.length === 0 && pops.length === 0 && !pos) return null;
+  // Inline particle meta updates (score/hue) — primary update path
+  let pmu: [number, number, number][] | undefined;
+  if (metaUpdatedIds.length > 0) {
+    pmu = [];
+    const seen = new Set<number>();
+    for (const id of metaUpdatedIds) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const p = engine.particles.find((pp) => pp.id === id);
+      if (!p) continue;
+      const hue = coopHue(p);
+      const matches = totalMatches(p.matchHistory);
+      const avgScore = matches > 0 ? Math.round((p.score / matches) * 10) / 10 : 0;
+      pmu.push([id, hue, avgScore]);
+      // Sync lastSlowState so next delta SlowFrame skips these particles
+      let cc = 0, cd = 0, dc = 0, dd = 0;
+      for (const r of Object.values(p.matchHistory)) {
+        cc += r.cc; cd += r.cd; dc += r.dc; dd += r.dd;
+      }
+      lastSlowState.set(id, { hue, score: p.score, cc, cd, dc, dd });
+    }
+  }
+
+  if (events.length === 0 && pops.length === 0 && !pos && !pmu && gameLogEntries.length === 0) return null;
 
   const frame: EventFrame = { type: "e", tick: engine.tick, events };
   if (pops.length > 0) frame.pop = pops;
   if (pos) frame.pos = pos;
+  if (pmu && pmu.length > 0) frame.pmu = pmu;
+  if (gameLogEntries.length > 0) frame.log = gameLogEntries;
   return JSON.stringify(frame);
 }
 
@@ -332,7 +357,6 @@ function coopHue(particle: typeof engine.particles[number]): number {
   return Math.round(ratio * 120); // 0° red → 120° green
 }
 
-let lastSlowLogId = ""; // id of last game log entry sent
 const lastSlowState = new Map<number, { hue: number; score: number; cc: number; cd: number; dc: number; dd: number }>();
 
 function buildSlowFrame(full = false): string | null {
@@ -359,28 +383,13 @@ function buildSlowFrame(full = false): string | null {
     particles.push({ id: p.id, hue, score, avgScore, cc, cd, dc, dd });
   }
 
-  // On connect: send recent log. On broadcast: send only new entries.
-  let logEntries: typeof engine.gameLog;
-  if (full) {
-    logEntries = engine.gameLog.slice(-50);
-  } else {
-    const idx = lastSlowLogId
-      ? engine.gameLog.findIndex((e) => e.id === lastSlowLogId)
-      : -1;
-    logEntries = idx >= 0 ? engine.gameLog.slice(idx + 1) : engine.gameLog;
-  }
-  if (engine.gameLog.length > 0) {
-    lastSlowLogId = engine.gameLog[engine.gameLog.length - 1].id;
-  }
-
   // Skip if nothing changed (delta mode only)
-  if (!full && particles.length === 0 && logEntries.length === 0) return null;
+  if (!full && particles.length === 0) return null;
 
   const frame: SlowFrame = {
     type: "s",
     tick: engine.tick,
     particles,
-    gameLog: logEntries,
     totalC: engine.totalCooperations,
     totalD: engine.totalDefections,
   };
@@ -505,12 +514,14 @@ async function main() {
 
     // Drain events accumulated during this interval's steps
     const events = engine.drainEvents();
+    const metaUpdatedIds = engine.drainMetaUpdates();
+    const gameLogEntries = engine.drainGameLog();
     intervalCount++;
     const syncPos = intervalCount % 120 === 0; // position sync every ~12s
-    const eventMsg = buildEventFrame(events, syncPos);
+    const eventMsg = buildEventFrame(events, syncPos, metaUpdatedIds, gameLogEntries);
 
-    // Every 30th interval (~3s): broadcast slow frame + persist scores
-    const slow = intervalCount % 30 === 0 ? buildSlowFrame() : null;
+    // Every 300th interval (~30s): broadcast slow frame as safety net / catch-up
+    const slow = intervalCount % 300 === 0 ? buildSlowFrame() : null;
 
     for (const ws of clients) {
       if (ws.readyState === WebSocket.OPEN) {

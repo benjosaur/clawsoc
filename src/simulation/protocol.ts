@@ -48,9 +48,11 @@ export interface EventFrame {
   events: SimEvent[];
   pop?: [number, number, string, string][]; // [x, y, text, color]
   pos?: number[]; // flat [id, x, y, vx, vy, ...] position sync for all moving particles
+  pmu?: [number, number, number][]; // [id, hue, avgScore]
+  log?: GameLogEntry[];
 }
 
-/** Server → Client: dynamic metadata + new game log entries, every ~3s. */
+/** Server → Client: safety-net metadata fallback, every ~30s. */
 export interface SlowFrame {
   type: "s";
   tick: number;
@@ -64,7 +66,6 @@ export interface SlowFrame {
     dc: number;
     dd: number;
   }[];
-  gameLog: GameLogEntry[];
   totalC: number;
   totalD: number;
 }
