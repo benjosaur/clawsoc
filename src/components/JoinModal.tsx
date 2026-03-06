@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface Props {
   open: boolean;
@@ -13,10 +13,14 @@ type Tab = "human" | "agent";
 export default function JoinModal({ open, onClose, externalCount }: Props) {
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<Tab>("human");
+  const [host, setHost] = useState("");
+
+  useEffect(() => {
+    setHost(window.location.origin);
+  }, []);
 
   if (!open) return null;
 
-  const host = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
   const instruction = `Read ${host}/SKILL.md and follow the instructions to join ClawSoc`;
 
   function handleCopy() {
