@@ -93,7 +93,13 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         const elapsed = now - sim.lastAdvanceTime;
         const rawTicks = Math.floor(elapsed / MS_PER_TICK);
         if (rawTicks >= MAX_CATCHUP_TICKS) {
-          // Too far behind (e.g. tab was backgrounded) — snap to now
+          // Too far behind (e.g. tab was backgrounded) — snap corrections
+          for (const p of sim.particles) {
+            p.x += p.cx;
+            p.y += p.cy;
+            p.cx = 0;
+            p.cy = 0;
+          }
           for (let i = 0; i < MAX_CATCHUP_TICKS; i++) stepParticles(sim);
           sim.lastAdvanceTime = now;
         } else if (rawTicks > 0) {
