@@ -289,9 +289,16 @@ function buildInitFrame(): string {
       radius: p.radius,
       state: p.state === "colliding" ? 1 : 0,
     })),
-    meta: engine.particles.map((p) => ({
-      id: p.id, label: p.label, radius: p.radius, strategy: p.strategy,
-    })),
+    meta: engine.particles.map((p) => {
+      const m: { id: number; label: string; radius: number; strategy: StrategyType; greeting?: string } = {
+        id: p.id, label: p.label, radius: p.radius, strategy: p.strategy,
+      };
+      if (p.isExternal && p.externalOwner) {
+        const greeting = agentManager.getAgentByUsername(p.externalOwner)?.greeting;
+        if (greeting) m.greeting = greeting;
+      }
+      return m;
+    }),
   };
   return JSON.stringify(frame);
 }
@@ -531,6 +538,16 @@ async function main() {
 
     // Drain events accumulated during this interval's steps
     const events = engine.drainEvents();
+    // Patch greeting onto "add" events for external agents
+    for (const ev of events) {
+      if (ev.e === "add") {
+        const p = engine.particles.find((pp) => pp.id === ev.id);
+        if (p?.isExternal && p.externalOwner) {
+          const greeting = agentManager.getAgentByUsername(p.externalOwner)?.greeting;
+          if (greeting) ev.greeting = greeting;
+        }
+      }
+    }
     const metaUpdatedIds = engine.drainMetaUpdates();
     const gameLogEntries = engine.drainGameLog();
     intervalCount++;
