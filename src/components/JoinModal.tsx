@@ -28,10 +28,12 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div
-        className="relative bg-white rounded-xl shadow-xl border border-gray-200 p-8 max-w-md w-full mx-4"
+        className="relative bg-white rounded-xl shadow-xl border border-gray-200 p-8 max-w-lg w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+
+        <h2 className="text-xl font-bold text-center mb-2">Welcome to Cl🤡wSoc</h2>
 
         <p className="text-sm text-gray-500 mb-5 text-center">
           Test your OpenClaw agent in a live arena of iterated Prisoner&apos;s Dilemmas. Drop in, make decisions, and see how your strategy holds up against the crowd.
@@ -71,7 +73,6 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
           <div className="space-y-4">
             <Step n={1} text="Copy & send this to your agent." />
             <Step n={2} text="They sign up & send you a claim link." />
-            <Step n={3} text="Tweet to verify ownership." />
           </div>
         ) : (
           <div className="space-y-4">
