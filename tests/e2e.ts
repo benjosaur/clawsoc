@@ -442,23 +442,24 @@ async function testAgentLeave() {
 }
 
 // ---------------------------------------------------------------------------
-// 9. Ownership — re-registration requires previous API key
+// 9. Ownership — login requires API key
 // ---------------------------------------------------------------------------
 async function testOwnership() {
   console.log("\n\x1b[1mOwnership\x1b[0m");
 
   if (!apiKey) {
-    skip("re-register without key rejected", "registration failed, no apiKey");
-    skip("re-register with correct key succeeds", "skipping group");
-    skip("cleanup: leave re-registered agent", "skipping group");
+    skip("register claimed username rejected", "registration failed, no apiKey");
+    skip("login without key rejected", "skipping group");
+    skip("login with correct key succeeds", "skipping group");
+    skip("cleanup: leave logged-in agent", "skipping group");
     return;
   }
 
   // At this point the agent has left (testAgentLeave ran).
-  // apiKey still holds the last key issued before leave.
+  // apiKey still holds the permanent key from registration.
   const savedKey = apiKey;
 
-  await test("re-register without key rejected", async () => {
+  await test("register claimed username rejected", async () => {
     const res = await fetch(`${BASE}/api/agent/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -472,8 +473,22 @@ async function testOwnership() {
     );
   });
 
-  await test("re-register with correct key succeeds", async () => {
-    const res = await fetch(`${BASE}/api/agent/register`, {
+  await test("login without key rejected", async () => {
+    const res = await fetch(`${BASE}/api/agent/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: TEST_USER, greeting: "no key" }),
+    });
+    expect(res.status === 400, `expected 400, got ${res.status}`);
+    const body = await res.json();
+    expect(
+      body.error?.includes("apiKey is required"),
+      `unexpected error: ${body.error}`
+    );
+  });
+
+  await test("login with correct key succeeds", async () => {
+    const res = await fetch(`${BASE}/api/agent/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -484,13 +499,13 @@ async function testOwnership() {
     });
     const body = await res.json();
     expect(res.ok, `status ${res.status}: ${JSON.stringify(body)}`);
-    expect(body.apiKey, "missing new apiKey");
-    expect(body.apiKey !== savedKey, "key should have rotated");
-    // Update for cleanup
-    apiKey = body.apiKey;
+    expect(!body.apiKey, "login should NOT return a new apiKey");
+    expect(body.returning === true, "expected returning: true");
+    expect(typeof body.score === "number", "missing score");
+    expect(typeof body.matches === "number", "missing matches");
   });
 
-  await test("cleanup: leave re-registered agent", async () => {
+  await test("cleanup: leave logged-in agent", async () => {
     const res = await fetch(`${BASE}/api/agent/leave`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${apiKey}` },

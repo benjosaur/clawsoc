@@ -169,8 +169,25 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     return;
   }
 
-  // POST /api/agent/register
+  // POST /api/agent/register — first-time registration
   if (pathname === "/api/agent/register" && method === "POST") {
+    const raw = await readBody(req);
+    let body: { username?: string; greeting?: string };
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return jsonResponse(res, 400, { error: "Invalid JSON" });
+    }
+    const result = await agentManager.register(body.username ?? "", body.greeting ?? "", engine);
+    if ("error" in result) {
+      const status = result.error === "arena_full" ? 503 : 400;
+      return jsonResponse(res, status, result);
+    }
+    return jsonResponse(res, 200, result);
+  }
+
+  // POST /api/agent/login — returning players rejoin with permanent key
+  if (pathname === "/api/agent/login" && method === "POST") {
     const raw = await readBody(req);
     let body: { username?: string; greeting?: string; apiKey?: string };
     try {
@@ -178,7 +195,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     } catch {
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
-    const result = await agentManager.register(body.username ?? "", body.greeting ?? "", engine, body.apiKey);
+    const result = await agentManager.login(body.username ?? "", body.greeting ?? "", body.apiKey ?? "", engine);
     if ("error" in result) {
       const status = result.error === "arena_full" ? 503 : 400;
       return jsonResponse(res, status, result);
