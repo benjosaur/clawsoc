@@ -1,7 +1,7 @@
 import { CollisionPhase, Decision, GameLogEntry, MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG, FloatingPopup } from "./types";
 import { areColliding, resolveElasticCollision, separateParticles, bounceOffWalls, vecAdd } from "./physics";
 import { createParticles } from "./Particle";
-import { playMatchWithOverrides } from "./game";
+import { playMatchWithOverrides, applyMatchResult } from "./game";
 import { generateMessage } from "./messages";
 import type { SimEvent } from "./protocol";
 
@@ -60,6 +60,8 @@ export class SimulationEngine {
   totalCooperations: number = 0;
   totalDefections: number = 0;
   pendingEvents: SimEvent[] = [];
+  pendingMetaUpdates: number[] = [];
+  pendingGameLog: GameLogEntry[] = [];
   onRequestLLMMessage: LLMRequestCallback | null = null;
   onRequestExternalDecision: ExternalRequestCallback | null = null;
   private nextId: number;
@@ -128,18 +130,23 @@ export class SimulationEngine {
           if (fp.messageA) record.messageA = fp.messageA;
           if (fp.messageB) record.messageB = fp.messageB;
           fp.matchRecord = record;
-          this.gameLog.push(record);
-          if (this.gameLog.length > 200) this.gameLog.splice(0, this.gameLog.length - 200);
-
-          this.totalCooperations += (record.decisionA === "cooperate" ? 1 : 0) + (record.decisionB === "cooperate" ? 1 : 0);
-          this.totalDefections += (record.decisionA === "defect" ? 1 : 0) + (record.decisionB === "defect" ? 1 : 0);
           break;
         }
         case "resolved": {
-          // Spawn score popups and set unfreeze time
+          // Apply all deferred mutations at popup time
           const record = fp.matchRecord;
           if (!record) break;
+          applyMatchResult(a, b, record);
+          this.pendingMetaUpdates.push(a.id, b.id);
 
+          this.gameLog.push(record);
+          if (this.gameLog.length > 200) this.gameLog.splice(0, this.gameLog.length - 200);
+          this.pendingGameLog.push(record);
+
+          this.totalCooperations += (record.decisionA === "cooperate" ? 1 : 0) + (record.decisionB === "cooperate" ? 1 : 0);
+          this.totalDefections += (record.decisionA === "defect" ? 1 : 0) + (record.decisionB === "defect" ? 1 : 0);
+
+          // Spawn score popups and set unfreeze time
           const midX = (a.position.x + b.position.x) / 2;
           const midY = (a.position.y + b.position.y) / 2;
           const offset = 14;
@@ -325,6 +332,18 @@ export class SimulationEngine {
     const events = this.pendingEvents;
     this.pendingEvents = [];
     return events;
+  }
+
+  drainMetaUpdates(): number[] {
+    const ids = this.pendingMetaUpdates;
+    this.pendingMetaUpdates = [];
+    return ids;
+  }
+
+  drainGameLog(): GameLogEntry[] {
+    const entries = this.pendingGameLog;
+    this.pendingGameLog = [];
+    return entries;
   }
 
   resolveExternalDecision(

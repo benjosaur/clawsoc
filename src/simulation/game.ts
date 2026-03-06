@@ -20,19 +20,6 @@ function executeMatch(
   const scoreA = PAYOFF[decisionA][decisionB];
   const scoreB = PAYOFF[decisionB][decisionA];
 
-  a.score += scoreA;
-  b.score += scoreB;
-
-  const arec = a.matchHistory[b.id] ??= { lastTheirDecision: decisionB, cc: 0, cd: 0, dc: 0, dd: 0 };
-  const aKey = (decisionA === "cooperate" ? "c" : "d") + (decisionB === "cooperate" ? "c" : "d") as "cc" | "cd" | "dc" | "dd";
-  arec[aKey]++;
-  arec.lastTheirDecision = decisionB;
-
-  const brec = b.matchHistory[a.id] ??= { lastTheirDecision: decisionA, cc: 0, cd: 0, dc: 0, dd: 0 };
-  const bKey = (decisionB === "cooperate" ? "c" : "d") + (decisionA === "cooperate" ? "c" : "d") as "cc" | "cd" | "dc" | "dd";
-  brec[bKey]++;
-  brec.lastTheirDecision = decisionA;
-
   matchCounter++;
   return {
     type: "match",
@@ -62,4 +49,19 @@ export function playMatchWithOverrides(
   const decisionA = overrideA ?? decide(a, b);
   const decisionB = overrideB ?? decide(b, a);
   return executeMatch(a, b, tick, decisionA, decisionB);
+}
+
+export function applyMatchResult(a: Particle, b: Particle, record: MatchRecord): void {
+  a.score += record.scoreA;
+  b.score += record.scoreB;
+
+  const arec = a.matchHistory[b.id] ??= { lastTheirDecision: record.decisionB, cc: 0, cd: 0, dc: 0, dd: 0 };
+  const aKey = (record.decisionA === "cooperate" ? "c" : "d") + (record.decisionB === "cooperate" ? "c" : "d") as "cc" | "cd" | "dc" | "dd";
+  arec[aKey]++;
+  arec.lastTheirDecision = record.decisionB;
+
+  const brec = b.matchHistory[a.id] ??= { lastTheirDecision: record.decisionA, cc: 0, cd: 0, dc: 0, dd: 0 };
+  const bKey = (record.decisionB === "cooperate" ? "c" : "d") + (record.decisionA === "cooperate" ? "c" : "d") as "cc" | "cd" | "dc" | "dd";
+  brec[bKey]++;
+  brec.lastTheirDecision = record.decisionA;
 }
