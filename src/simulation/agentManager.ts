@@ -22,7 +22,11 @@ export interface PendingMatch {
 }
 
 export type RegisterResult =
-  | { apiKey: string; particleId: number; returning?: boolean; score?: number; matches?: number }
+  | { apiKey: string; particleId: number }
+  | { error: string };
+
+export type LoginResult =
+  | { particleId: number; returning: true; score: number; matches: number }
   | { error: string };
 
 type Redis = {
@@ -66,49 +70,19 @@ export class AgentManager {
     }
   }
 
-  async register(username: string, greeting: string, engine: SimulationEngine, oldApiKey?: string): Promise<RegisterResult> {
-    // Validate username
-    if (!username || typeof username !== "string") {
-      return { error: "Username is required" };
-    }
-    if (!/^[a-zA-Z0-9_]{1,16}$/.test(username)) {
-      return { error: "Username must be 1-16 alphanumeric characters or underscores" };
-    }
-    if (this.agents.has(username)) {
-      return { error: "Username already taken" };
-    }
-
-    // Ownership check: if this username has been claimed, require the previous API key
-    if (this.redis) {
-      const ownerHash = await this.redis.get(`owner:${username}`);
-      if (ownerHash) {
-        if (!oldApiKey) {
-          return { error: "Username is claimed. Provide your previous API key as 'apiKey' to reclaim it." };
-        }
-        if (hashKey(oldApiKey) !== ownerHash) {
-          return { error: "Invalid API key for this username" };
-        }
-      }
-    }
-
-    // Pick a random NPC to displace (full only when all NPCs are replaced)
+  private displaceAndSpawn(
+    username: string,
+    greeting: string,
+    apiKeyHash: string,
+    engine: SimulationEngine,
+  ): { particle: Particle; agent: ExternalAgent } | { error: string } {
     const npcs = engine.particles.filter((p) => !p.isExternal);
-    if (npcs.length === 0) {
-      return { error: "arena_full" };
-    }
+    if (npcs.length === 0) return { error: "arena_full" };
+
     const npc = npcs[Math.floor(Math.random() * npcs.length)];
-
-    const displacedLabel = npc.label;
-    const displacedStrategy = npc.strategy;
-
-    // Remove NPC
     engine.removeParticle(npc.id);
 
-    // Create external particle
-    const apiKey = generateApiKey();
-    const apiKeyH = hashKey(apiKey);
     const particleId = engine.allocateId();
-
     const config = engine.config;
     const margin = config.particleRadius * 3;
     const angle = Math.random() * Math.PI * 2;
@@ -136,45 +110,99 @@ export class AgentManager {
 
     engine.addParticle(particle);
 
-    // Restore prior record from Redis if returning player
-    let returning = false;
-    if (this.redis) {
-      const raw = await this.redis.get(`record:${username}`);
-      if (raw) {
-        try {
-          const rec = JSON.parse(raw);
-          particle.score = rec.score ?? 0;
-          particle.matchHistory = rec.matchHistory ?? {};
-          returning = true;
-        } catch { /* ignore parse errors */ }
-      }
-    }
-
-    // Store agent record
     const agent: ExternalAgent = {
-      apiKeyHash: apiKeyH,
+      apiKeyHash,
       particleId,
-      displacedLabel,
-      displacedStrategy,
+      displacedLabel: npc.label,
+      displacedStrategy: npc.strategy,
       joinedAt: Date.now(),
       greeting: greeting.trim().slice(0, 280),
     };
+
+    return { particle, agent };
+  }
+
+  private validateUsername(username: string): string | null {
+    if (!username || typeof username !== "string") return "Username is required";
+    if (!/^[a-zA-Z0-9_]{1,16}$/.test(username)) return "Username must be 1-16 alphanumeric characters or underscores";
+    return null;
+  }
+
+  async register(username: string, greeting: string, engine: SimulationEngine): Promise<RegisterResult> {
+    const invalid = this.validateUsername(username);
+    if (invalid) return { error: invalid };
+    if (this.agents.has(username)) return { error: "Username already taken" };
+
+    // If username is already claimed, direct to login
+    if (this.redis) {
+      const ownerHash = await this.redis.get(`owner:${username}`);
+      if (ownerHash) {
+        return { error: "Username is claimed. Use POST /api/agent/login to rejoin." };
+      }
+    }
+
+    const apiKey = generateApiKey();
+    const apiKeyH = hashKey(apiKey);
+
+    const result = this.displaceAndSpawn(username, greeting, apiKeyH, engine);
+    if ("error" in result) return result;
+
+    const { agent } = result;
     this.agents.set(username, agent);
     this.apiKeyToUsername.set(apiKeyH, username);
 
-    // Persist to Redis
     if (this.redis) {
       await this.redis.set(`agent:${username}`, JSON.stringify(agent));
       await this.redis.set(`owner:${username}`, apiKeyH);
     }
 
+    return { apiKey, particleId: agent.particleId };
+  }
+
+  async login(username: string, greeting: string, apiKey: string, engine: SimulationEngine): Promise<LoginResult> {
+    const invalid = this.validateUsername(username);
+    if (invalid) return { error: invalid };
+    if (this.agents.has(username)) return { error: "Already in the arena" };
+    if (!apiKey) return { error: "apiKey is required" };
+
+    if (!this.redis) {
+      return { error: "No persistence layer — cannot verify ownership" };
+    }
+
+    const ownerHash = await this.redis.get(`owner:${username}`);
+    if (!ownerHash) {
+      return { error: "Username not found. Use POST /api/agent/register to create an account." };
+    }
+
+    const apiKeyH = hashKey(apiKey);
+    if (apiKeyH !== ownerHash) {
+      return { error: "Invalid API key for this username" };
+    }
+
+    const result = this.displaceAndSpawn(username, greeting, apiKeyH, engine);
+    if ("error" in result) return result;
+
+    const { particle, agent } = result;
+    this.agents.set(username, agent);
+    this.apiKeyToUsername.set(apiKeyH, username);
+
+    // Restore prior record from Redis
+    const raw = await this.redis.get(`record:${username}`);
+    if (raw) {
+      try {
+        const rec = JSON.parse(raw);
+        particle.score = rec.score ?? 0;
+        particle.matchHistory = rec.matchHistory ?? {};
+      } catch (err) { console.error(`[AgentManager] Failed to parse record for ${username}:`, err); }
+    }
+
+    await this.redis.set(`agent:${username}`, JSON.stringify(agent));
+
     const matchCount = Object.values(particle.matchHistory).reduce(
       (sum, h) => sum + h.cc + h.cd + h.dc + h.dd, 0
     );
 
-    return returning
-      ? { apiKey, particleId, returning: true, score: particle.score, matches: matchCount }
-      : { apiKey, particleId };
+    return { particleId: agent.particleId, returning: true, score: particle.score, matches: matchCount };
   }
 
   authenticateRequest(authHeader: string | undefined): string | null {

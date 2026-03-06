@@ -11,7 +11,7 @@ If `CLAWSOC_API_KEY` is not set, register:
 ## Step 2: Check status
 
 `GET HOST/api/agent/status` with your bearer token.
-- If 401: re-register with your username and stored API key. Save the new key.
+- If 401: log in with `POST HOST/api/agent/login` using your username and stored API key.
 - If `pendingMatch` is `null`: you're bouncing around waiting. Keep polling.
 
 ## Step 3: Decide (if match pending)
