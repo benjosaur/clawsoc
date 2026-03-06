@@ -8,6 +8,7 @@ import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
 import type { Decision, GameLogEntry, StrategyType } from "./src/simulation/types";
 import { generateMessage } from "./src/simulation/messages";
 import { AgentManager } from "./src/simulation/agentManager";
+import type { PendingMatch } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulation/protocol";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -129,7 +130,7 @@ engine.onRequestExternalDecision = (side, self, opponent, aId, bId) => {
     opponentGreeting = generateMessage(opponent, self);
   }
 
-  agentManager.setPendingMatch(username, {
+  const match: PendingMatch = {
     aId,
     bId,
     side,
@@ -137,7 +138,16 @@ engine.onRequestExternalDecision = (side, self, opponent, aId, bId) => {
     opponentGreeting,
     vsRecord,
     createdAt: Date.now(),
-  });
+  };
+
+  agentManager.setPendingMatch(username, match);
+  agentManager.resolveMatchWaiter(username, match);
+};
+
+// --- Match result callback ---
+
+engine.onMatchResolved = (record, aId, bId) => {
+  agentManager.resolveResultWaiter(aId, bId, record);
 };
 
 // --- Agent HTTP API ---
@@ -186,53 +196,59 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     return jsonResponse(res, 200, result);
   }
 
-  // POST /api/agent/login — returning players rejoin with permanent key
-  if (pathname === "/api/agent/login" && method === "POST") {
-    const raw = await readBody(req);
-    let body: { username?: string; greeting?: string; apiKey?: string };
-    try {
-      body = JSON.parse(raw);
-    } catch {
-      return jsonResponse(res, 400, { error: "Invalid JSON" });
-    }
-    const result = await agentManager.login(body.username ?? "", body.greeting ?? "", body.apiKey ?? "", engine);
-    if ("error" in result) {
-      const status = result.error === "arena_full" ? 503 : 400;
-      return jsonResponse(res, status, result);
-    }
-    return jsonResponse(res, 200, result);
-  }
-
   // All other routes require auth
   const username = agentManager.authenticateRequest(req.headers.authorization);
   if (!username) {
     return jsonResponse(res, 401, { error: "Unauthorized. Provide Authorization: Bearer <api_key>" });
   }
 
-  // GET /api/agent/status
+  const apiKeyHash = agentManager.getApiKeyHash(req.headers.authorization)!;
+
+  // GET /api/agent/match — blocks until a collision happens (auto-rejoins if needed)
+  if (pathname === "/api/agent/match" && method === "GET") {
+    const rejoin = await agentManager.ensureInArena(username, apiKeyHash, engine);
+    if (rejoin.error) {
+      const status = rejoin.error === "arena_full" ? 503 : 400;
+      return jsonResponse(res, status, { error: rejoin.error });
+    }
+
+    try {
+      const match = await Promise.race([
+        agentManager.waitForMatch(username),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 120_000)
+        ),
+      ]);
+
+      return jsonResponse(res, 200, {
+        opponentLabel: match.opponentLabel,
+        opponentGreeting: match.opponentGreeting,
+        vsRecord: match.vsRecord,
+      });
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg === "timeout") return jsonResponse(res, 408, { timeout: true });
+      if (msg === "agent_left") return jsonResponse(res, 410, { error: "Agent removed from arena" });
+      return jsonResponse(res, 500, { error: "Internal error" });
+    }
+  }
+
+  // GET /api/agent/status — non-blocking score/match check
   if (pathname === "/api/agent/status" && method === "GET") {
     const agent = agentManager.getAgentByUsername(username);
-    if (!agent) return jsonResponse(res, 404, { error: "Agent not found" });
+    if (!agent) return jsonResponse(res, 404, { error: "Agent not found in arena" });
 
     const particle = engine.particles.find((p) => p.id === agent.particleId);
-    const pending = agentManager.getPendingMatch(username);
 
     return jsonResponse(res, 200, {
       username,
       particleId: agent.particleId,
       score: particle?.score ?? 0,
       matches: particle ? totalMatches(particle.matchHistory) : 0,
-      pendingMatch: pending
-        ? {
-            opponentLabel: pending.opponentLabel,
-            opponentGreeting: pending.opponentGreeting,
-            vsRecord: pending.vsRecord,
-          }
-        : null,
     });
   }
 
-  // POST /api/agent/decide
+  // POST /api/agent/decide — blocks until match resolves, returns result
   if (pathname === "/api/agent/decide" && method === "POST") {
     const raw = await readBody(req);
     let body: { message?: string; decision?: string };
@@ -252,6 +268,9 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       return jsonResponse(res, 409, { error: "No pending match" });
     }
 
+    // Start waiting for result before submitting decision
+    const resultPromise = agentManager.waitForResult(username, pending.aId, pending.bId);
+
     engine.resolveExternalDecision(
       pending.aId,
       pending.bId,
@@ -261,7 +280,30 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     );
     agentManager.clearPendingMatch(username);
 
-    return jsonResponse(res, 200, { ok: true });
+    try {
+      const record = await Promise.race([
+        resultPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 15_000)),
+      ]);
+
+      if (!record) {
+        return jsonResponse(res, 200, { ok: true, result: null });
+      }
+
+      const isSideA = pending.side === "a";
+      return jsonResponse(res, 200, {
+        ok: true,
+        result: {
+          opponent: isSideA ? record.particleB.label : record.particleA.label,
+          yourDecision: isSideA ? record.decisionA : record.decisionB,
+          theirDecision: isSideA ? record.decisionB : record.decisionA,
+          yourScore: isSideA ? record.scoreA : record.scoreB,
+          theirScore: isSideA ? record.scoreB : record.scoreA,
+        },
+      });
+    } catch {
+      return jsonResponse(res, 200, { ok: true, result: null });
+    }
   }
 
   // DELETE /api/agent/leave
@@ -427,7 +469,8 @@ async function main() {
   const handle = app.getRequestHandler();
   await app.prepare();
 
-  // Restore particle records from Redis on startup
+  // Restore state from Redis on startup
+  await agentManager.restoreApiKeys();
   await agentManager.restoreRecords(engine);
 
   const server = createServer(async (req, res) => {
@@ -532,7 +575,9 @@ async function main() {
     for (const [username, match] of agentManager.getAllPendingMatches()) {
       if (now - match.createdAt > 60_000) {
         engine.abortPair(match.aId, match.bId);
-        agentManager.removeAgent(username, engine);
+        agentManager.removeAgent(username, engine).catch((err) =>
+          console.error(`[server] removeAgent failed for ${username}:`, err)
+        );
       }
     }
 
