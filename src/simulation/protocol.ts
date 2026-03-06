@@ -3,7 +3,12 @@ import type { GameLogEntry, StrategyType } from "./types";
 // --- Simulation events (shared between server emit and client apply) ---
 
 export type SimEvent =
-  | { e: "freeze"; a: number; b: number }
+  | {
+      e: "freeze";
+      a: number; b: number;
+      ax: number; ay: number; avx: number; avy: number;
+      bx: number; by: number; bvx: number; bvy: number;
+    }
   | {
       e: "unfreeze";
       a: number; b: number;

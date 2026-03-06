@@ -21,10 +21,28 @@ interface Props {
  *  Uses the same bounceOffWallsXY as the server to guarantee parity. */
 // Spread correction over ~3s (180 ticks at 60fps). 1 - (1-α)^180 ≈ 0.99
 const SYNC_LERP = 0.026;
+const APPROACH_TICKS = 12;
 
 function stepParticles(sim: SimState): void {
   const { canvasWidth, canvasHeight } = sim.config;
   for (const p of sim.particles) {
+    if (p.state === 2) {
+      // Smooth approach: lerp velocity toward entry direction (decaying to zero)
+      const remaining = Math.max(0, p.freezeAt - sim.localTick);
+      const decay = remaining / APPROACH_TICKS;
+      const VEL_LERP = 0.2;
+      const POS_LERP = 0.15;
+      p.vx += (p.tvx * decay - p.vx) * VEL_LERP;
+      p.vy += (p.tvy * decay - p.vy) * VEL_LERP;
+      p.x += (p.tx - p.x) * POS_LERP;
+      p.y += (p.ty - p.y) * POS_LERP;
+      if (remaining <= 0) {
+        p.x = p.tx; p.y = p.ty;
+        p.vx = 0; p.vy = 0;
+        p.state = 1;
+      }
+      continue;
+    }
     if (p.state !== 0) continue;
     // Apply fraction of correction offset (smooth sync)
     if (p.cx !== 0 || p.cy !== 0) {
@@ -95,6 +113,11 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         if (rawTicks >= MAX_CATCHUP_TICKS) {
           // Too far behind (e.g. tab was backgrounded) — snap corrections
           for (const p of sim.particles) {
+            if (p.state === 2) {
+              p.x = p.tx; p.y = p.ty;
+              p.vx = 0; p.vy = 0;
+              p.state = 1;
+            }
             p.x += p.cx;
             p.y += p.cy;
             p.cx = 0;
@@ -171,7 +194,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       for (const p of displayParticles) {
         ctx.save();
 
-        if (p.state === 1) {
+        if (p.state === 1 || p.state === 2) {
           ctx.shadowColor = p.color;
           ctx.shadowBlur = 24;
         }
@@ -181,7 +204,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         ctx.fillStyle = p.color;
         ctx.fill();
 
-        if (p.state === 1) {
+        if (p.state === 1 || p.state === 2) {
           ctx.shadowBlur = 0;
         }
 
