@@ -8,7 +8,7 @@ const STRATEGY_SHORT: Record<StrategyType, string> = {
   tit_for_tat: "TFT",
   random: "RAND",
   grudger: "GRDG",
-  external: "🦞",
+  external: "\u{1F99E}",
 };
 
 interface ParticleData {
@@ -27,12 +27,18 @@ interface ParticleData {
 
 interface Props {
   particle: ParticleData | undefined;
-  allParticles: ParticleData[];
   onDeselect?: () => void;
   offline?: boolean;
 }
 
-export default function PlayerStats({ particle, allParticles, onDeselect, offline }: Props) {
+function getFaction(coopPct: number) {
+  if (coopPct >= 75) return { label: "True Cooperative", emoji: "\u{1F6E1}\u{FE0F}", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", tooltip: "Cooperates 75-100% of the time" };
+  if (coopPct >= 50) return { label: "Pragmatic Cooperative", emoji: "\u{2696}\u{FE0F}", color: "text-blue-700", bg: "bg-blue-50 border-blue-200", tooltip: "Cooperates 50-75% of the time" };
+  if (coopPct >= 25) return { label: "Pragmatic Defector", emoji: "\u{1F5E1}\u{FE0F}", color: "text-orange-700", bg: "bg-orange-50 border-orange-200", tooltip: "Cooperates 25-50% of the time" };
+  return { label: "True Defector", emoji: "\u{1F480}", color: "text-red-700", bg: "bg-red-50 border-red-200", tooltip: "Cooperates 0-25% of the time" };
+}
+
+export default function PlayerStats({ particle, onDeselect, offline }: Props) {
   if (!particle) {
     return (
       <>
@@ -52,20 +58,7 @@ export default function PlayerStats({ particle, allParticles, onDeselect, offlin
   const dd = particle.dd || 0;
   const total = cc + cd + dc + dd;
   const coopPct = total > 0 ? (cc + cd) / total * 100 : 0;
-
-  // Rankings & lobby averages (skip for offline players)
-  const n = allParticles.length || 1;
-  let rankTotal = 0, rankAvg = 0, deltaTotal = 0, deltaAvg = 0;
-  if (!offline) {
-    const byTotal = [...allParticles].sort((a, b) => b.score - a.score);
-    const byAvg = [...allParticles].sort((a, b) => b.avgScore - a.avgScore);
-    rankTotal = byTotal.findIndex((p) => p.id === particle.id) + 1;
-    rankAvg = byAvg.findIndex((p) => p.id === particle.id) + 1;
-    const lobbyAvgTotal = allParticles.reduce((s, p) => s + p.score, 0) / n;
-    const lobbyAvgAvg = allParticles.reduce((s, p) => s + p.avgScore, 0) / n;
-    deltaTotal = particle.score - lobbyAvgTotal;
-    deltaAvg = particle.avgScore - lobbyAvgAvg;
-  }
+  const faction = getFaction(coopPct);
 
   return (
     <>
@@ -84,7 +77,7 @@ export default function PlayerStats({ particle, allParticles, onDeselect, offlin
         )}
       </div>
       <div className="overflow-y-auto min-h-0 flex-1 text-[11px] font-mono">
-        {/* Name + strategy */}
+        {/* Name + strategy + faction badge */}
         <div className="flex items-center gap-1.5">
           <span
             className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -99,6 +92,11 @@ export default function PlayerStats({ particle, allParticles, onDeselect, offlin
               OFFLINE
             </span>
           )}
+          {!offline && total > 0 && (
+            <span className={`ml-auto text-[8px] font-semibold px-1.5 py-0.5 rounded border cursor-default ${faction.bg} ${faction.color}`} title={faction.tooltip}>
+              {faction.emoji} {faction.label}
+            </span>
+          )}
         </div>
 
         {/* Greeting (external agents only) */}
@@ -106,28 +104,6 @@ export default function PlayerStats({ particle, allParticles, onDeselect, offlin
           <p className="mt-1 text-[10px] text-zinc-400 italic leading-tight line-clamp-3">
             &ldquo;{particle.greeting}&rdquo;
           </p>
-        )}
-
-        {/* Score row */}
-        <div className="mt-1.5 flex items-center justify-between text-[10px]">
-          <span className="flex items-center gap-1">
-            <span className="text-zinc-400">Total</span>
-            <span className="text-zinc-800 font-semibold">{particle.score}</span>
-            {!offline && <Delta value={deltaTotal} />}
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="text-zinc-400">Avg</span>
-            <span className="text-zinc-800 font-semibold">{particle.avgScore.toFixed(1)}</span>
-            {!offline && <Delta value={deltaAvg} />}
-          </span>
-        </div>
-
-        {/* Rank row */}
-        {!offline && (
-          <div className="flex items-center justify-between text-[10px]">
-            <span className="text-zinc-600">Rank #{rankTotal}{medal(rankTotal, n)}</span>
-            <span className="text-zinc-600">Rank #{rankAvg}{medal(rankAvg, n)}</span>
-          </div>
         )}
 
         {/* Cooperation bar */}
@@ -144,6 +120,15 @@ export default function PlayerStats({ particle, allParticles, onDeselect, offlin
               style={{ width: `${coopPct}%`, backgroundColor: offline ? "#9CA3AF" : particle.color }}
             />
           </div>
+        </div>
+
+        {/* Badge row */}
+        <div className="mt-1.5 flex items-center gap-2 text-[10px]">
+          {total >= 100 && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border bg-amber-50 border-amber-200 text-amber-700 font-semibold text-[8px]">
+              {"\u{1F3DB}\u{FE0F}"} Centurion
+            </span>
+          )}
         </div>
 
         {/* Outcome matrix */}
@@ -171,18 +156,4 @@ export default function PlayerStats({ particle, allParticles, onDeselect, offlin
       </div>
     </>
   );
-}
-
-function medal(rank: number, total: number): string {
-  if (rank === 1) return " \u{1F947}"; // gold
-  if (rank === 2) return " \u{1F948}"; // silver
-  if (rank === 3) return " \u{1F949}"; // bronze
-  if (rank === total && total > 3) return " \u{1F944}"; // spoon
-  return "";
-}
-
-function Delta({ value }: { value: number }) {
-  const sign = value >= 0 ? "+" : "";
-  const color = value > 0 ? "text-emerald-600" : value < 0 ? "text-red-500" : "text-zinc-400";
-  return <span className={`${color} text-[10px]`}>{sign}{value.toFixed(1)}</span>;
 }

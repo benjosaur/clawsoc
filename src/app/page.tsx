@@ -112,13 +112,14 @@ export default function Home() {
     return () => ro.disconnect();
   }, []);
 
-  const avgPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} />;
-  const totalPanel = <TotalScoreBoard particles={state.particles} selectedId={selectedId} />;
-  const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} />;
   const selectedParticle = selectedId != null
     ? state.particles.find((p) => p.id === selectedId)
     : undefined;
   const isOffline = offlinePlayer != null && selectedId == null;
+  const hasSelection = selectedId != null || isOffline;
+  const avgPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} />;
+  const totalPanel = <TotalScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} />;
+  const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} />;
   const displayParticle = isOffline
     ? {
         id: -1,
@@ -134,7 +135,7 @@ export default function Home() {
   const playerStatsPanel = (
     <PlayerStats
       particle={displayParticle}
-      allParticles={state.particles}
+
       onDeselect={() => { setSelectedId(null); setOfflinePlayer(null); }}
       offline={isOffline}
     />
@@ -223,10 +224,10 @@ export default function Home() {
           className="hidden md:flex w-72 lg:w-80 xl:w-96 shrink-0 flex-col gap-1"
           style={{ height: canvasHeight }}
         >
-          {selectedId != null || isOffline ? (
+          {hasSelection ? (
             <>
-              <div className="flex-[2] min-h-0 flex flex-col">{totalPanel}</div>
-              <div className="flex-[2] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
+              <div className="flex-shrink-0 flex flex-col">{totalPanel}</div>
+              <div className="flex-shrink-0 flex flex-col border-t border-zinc-100 pt-1">
                 {avgPanel}
               </div>
               <div className="flex-[3] min-h-0 flex flex-col border-t border-zinc-100 pt-1">

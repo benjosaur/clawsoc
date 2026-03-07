@@ -23,9 +23,10 @@ interface ParticleData {
 interface Props {
   particles: ParticleData[];
   selectedId?: number | null;
+  singleRow?: boolean;
 }
 
-export default function ScoreBoard({ particles, selectedId }: Props) {
+export default function ScoreBoard({ particles, selectedId, singleRow }: Props) {
   const sorted = [...particles].sort((a, b) => b.avgScore - a.avgScore);
   const selectedRef = useRef<HTMLDivElement>(null);
 
@@ -35,14 +36,25 @@ export default function ScoreBoard({ particles, selectedId }: Props) {
     }
   }, [selectedId]);
 
+  const showSingle = singleRow && selectedId != null;
+  const lobbyAvg = particles.length > 0
+    ? particles.reduce((s, p) => s + p.avgScore, 0) / particles.length
+    : 0;
+
+  const rows = showSingle
+    ? sorted.filter((p) => p.id === selectedId)
+    : sorted;
+
   return (
     <>
       <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
         Avg Score
       </h2>
       <div className="space-y-0.5 overflow-y-auto min-h-0 flex-1">
-        {sorted.map((p, i) => {
+        {rows.map((p) => {
+          const rank = sorted.indexOf(p) + 1;
           const isSelected = selectedId != null && p.id === selectedId;
+          const delta = p.avgScore - lobbyAvg;
           return (
             <div
               key={p.id}
@@ -51,7 +63,7 @@ export default function ScoreBoard({ particles, selectedId }: Props) {
                 isSelected ? "bg-amber-50 rounded" : ""
               }`}
             >
-              <span className="text-zinc-300 w-3 text-right">{i + 1}</span>
+              <span className="text-zinc-300 w-3 text-right">{rank}</span>
               <span
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ backgroundColor: p.color }}
@@ -63,6 +75,16 @@ export default function ScoreBoard({ particles, selectedId }: Props) {
               <span className="text-zinc-900 font-semibold w-12 text-right tabular-nums">
                 {p.avgScore.toFixed(1)}
               </span>
+              {showSingle && (
+                <span
+                  className={`text-[10px] w-14 text-right tabular-nums cursor-default ${
+                    delta > 0 ? "text-emerald-600" : delta < 0 ? "text-red-500" : "text-zinc-400"
+                  }`}
+                  title="Diff vs room average"
+                >
+                  {delta >= 0 ? "+" : ""}{delta.toFixed(1)}
+                </span>
+              )}
             </div>
           );
         })}
