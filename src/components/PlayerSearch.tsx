@@ -47,6 +47,18 @@ export default function PlayerSearch({
     }
   }, [offlinePlayerLabel, selectedId]);
 
+  // Sync query when selected externally (e.g. canvas click)
+  useEffect(() => {
+    if (selectedId != null) {
+      const p = particles.find((p) => p.id === selectedId);
+      if (p) setQuery(p.label);
+    } else if (!offlinePlayerLabel) {
+      setQuery("");
+    }
+  }, [selectedId, particles, offlinePlayerLabel]);
+
+  const selectedParticle = selectedId != null ? particles.find((p) => p.id === selectedId) : null;
+
   // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -80,30 +92,51 @@ export default function PlayerSearch({
 
   return (
     <div ref={wrapperRef} className="relative">
-      <svg
-        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-300 pointer-events-none"
-        viewBox="0 0 20 20"
-        fill="currentColor"
-      >
-        <path
-          fillRule="evenodd"
-          d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-          clipRule="evenodd"
-        />
-      </svg>
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => handleChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && matches.length > 0) {
-            handleSelect(matches[0].id);
-          }
-        }}
-        onFocus={() => query.length > 0 && setOpen(true)}
-        placeholder="Find player…"
-        className="w-48 pl-5 pr-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-300 focus:border-amber-300"
-      />
+      {selectedParticle ? (
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 w-48">
+          <span
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{ backgroundColor: selectedParticle.color }}
+          />
+          <span className="truncate">{selectedParticle.label}</span>
+          <button
+            onClick={() => { onSelect(null); setQuery(""); }}
+            className="ml-auto flex-shrink-0 text-zinc-400 hover:text-zinc-600 transition-colors"
+            aria-label="Deselect player"
+          >
+            <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+            </svg>
+          </button>
+        </div>
+      ) : (
+        <>
+          <svg
+            className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-300 pointer-events-none"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => handleChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && matches.length > 0) {
+                handleSelect(matches[0].id);
+              }
+            }}
+            onFocus={() => query.length > 0 && setOpen(true)}
+            placeholder="Find player…"
+            className="w-48 pl-5 pr-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-300 focus:border-amber-300"
+          />
+        </>
+      )}
       {open && query.length > 0 && (
         <div className="absolute top-full left-0 mt-1 w-56 max-h-48 overflow-y-auto bg-white border border-zinc-200 rounded shadow-lg z-50">
           {matches.map((p) => (
