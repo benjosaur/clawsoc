@@ -90,9 +90,9 @@ export default function PlayerSearch({
   }
 
   return (
-    <div ref={wrapperRef} className="relative">
+    <div ref={wrapperRef} className="relative flex-1 md:flex-none">
       {selectedParticle ? (
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 w-48">
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 w-full md:w-48">
           <span
             className="w-2 h-2 rounded-full flex-shrink-0"
             style={{ backgroundColor: selectedParticle.color }}
@@ -132,7 +132,7 @@ export default function PlayerSearch({
             }}
             onFocus={() => query.length > 0 && setOpen(true)}
             placeholder="Find player…"
-            className="w-48 pl-5 pr-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-300 focus:border-amber-300"
+            className="w-full md:w-48 pl-5 pr-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-300 focus:border-amber-300"
           />
         </>
       )}
