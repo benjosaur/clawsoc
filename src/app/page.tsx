@@ -201,13 +201,19 @@ export default function Home() {
             />
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono">
+            <div className="flex items-center gap-1.5 text-zinc-400">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[11px] font-bold text-white leading-none" style={{ background: "hsl(60,70%,42%)" }}>3</span>
+              <span>Colour: Cooperation % (Yellow = ~50%)</span>
+              <span className="text-zinc-300 mx-0.5">|</span>
+              <span>Number: Average Score (Rounded)</span>
+            </div>
             {!connected && (
-              <span className="text-[10px] text-amber-500 font-mono">
+              <span className="text-[10px] text-amber-500">
                 reconnecting...
               </span>
             )}
-            <div className="ml-auto flex items-center gap-3 text-[11px] font-mono">
+            <div className="ml-auto flex items-center gap-3">
               <span className="text-emerald-600">
                 {state.totalCooperations}C
               </span>
