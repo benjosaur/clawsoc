@@ -3,22 +3,20 @@
 import { useState, useCallback } from "react";
 import type { StrategyType } from "@/simulation/types";
 
-const STRATEGY_SHORT: Record<StrategyType, string> = {
+const STRATEGY_SHORT: Partial<Record<StrategyType, string>> = {
   always_cooperate: "COOP",
   always_defect: "DEFT",
   tit_for_tat: "TFT",
   random: "RAND",
   grudger: "GRDG",
-  external: "\u{1F99E}",
 };
 
-const STRATEGY_TOOLTIP: Record<StrategyType, string> = {
-  always_cooperate: "COOPERATE 🕊️ — Always cooperates",
-  always_defect: "DEFECT 😈 — Always defects",
-  tit_for_tat: "TIT FOR TAT 🪞 — Mirrors opponent's last move",
-  random: "RANDOM 🎲 — Chooses randomly",
-  grudger: "GRUDGE 🔒 — Cooperates until betrayed",
-  external: "EXTERNAL 🦞 — Human or API-controlled",
+const STRATEGY_TOOLTIP: Partial<Record<StrategyType, string>> = {
+  always_cooperate: "BOT Strategy: COOPERATE 🕊️ — Always cooperates",
+  always_defect: "BOT Strategy: DEFECT 😈 — Always defects",
+  tit_for_tat: "BOT Strategy: TIT FOR TAT 🪞 — Mirrors opponent's last move",
+  random: "BOT Strategy: RANDOM 🎲 — Chooses randomly",
+  grudger: "BOT Strategy: GRUDGE 🔒 — Cooperates until betrayed",
 };
 
 interface ParticleData {
@@ -103,10 +101,10 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
           <span className="text-zinc-800 font-semibold truncate">{particle.id}</span>
           <span
             className="text-zinc-500 text-[10px] tracking-wide"
-            onMouseEnter={(e) => showTip(e, STRATEGY_TOOLTIP[particle.strategy])}
-            onMouseLeave={hideTip}
+            onMouseEnter={STRATEGY_TOOLTIP[particle.strategy] ? (e) => showTip(e, STRATEGY_TOOLTIP[particle.strategy]!) : undefined}
+            onMouseLeave={STRATEGY_TOOLTIP[particle.strategy] ? hideTip : undefined}
           >
-            {STRATEGY_SHORT[particle.strategy]}
+            {STRATEGY_SHORT[particle.strategy] ?? ""}
           </span>
           {offline && (
             <span className="ml-auto text-[8px] font-semibold tracking-wider text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded">
