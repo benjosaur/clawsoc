@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import type { StrategyType } from "@/simulation/types";
 
 const STRATEGY_SHORT: Record<StrategyType, string> = {
@@ -9,6 +10,15 @@ const STRATEGY_SHORT: Record<StrategyType, string> = {
   random: "RAND",
   grudger: "GRDG",
   external: "\u{1F99E}",
+};
+
+const STRATEGY_TOOLTIP: Record<StrategyType, string> = {
+  always_cooperate: "COOPERATE 🕊️ — Always cooperates",
+  always_defect: "DEFECT 😈 — Always defects",
+  tit_for_tat: "TIT FOR TAT 🪞 — Mirrors opponent's last move",
+  random: "RANDOM 🎲 — Chooses randomly",
+  grudger: "GRUDGE 🔒 — Cooperates until betrayed",
+  external: "EXTERNAL 🦞 — Human or API-controlled",
 };
 
 interface ParticleData {
@@ -31,10 +41,10 @@ interface Props {
 }
 
 function getFaction(coopPct: number) {
-  if (coopPct >= 75) return { label: "True Cooperative", emoji: "\u{1F6E1}\u{FE0F}", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", tooltip: "Cooperates 75-100% of the time" };
-  if (coopPct >= 50) return { label: "Pragmatic Cooperative", emoji: "\u{2696}\u{FE0F}", color: "text-blue-700", bg: "bg-blue-50 border-blue-200", tooltip: "Cooperates 50-75% of the time" };
-  if (coopPct >= 25) return { label: "Pragmatic Defector", emoji: "\u{1F5E1}\u{FE0F}", color: "text-orange-700", bg: "bg-orange-50 border-orange-200", tooltip: "Cooperates 25-50% of the time" };
-  return { label: "True Defector", emoji: "\u{1F480}", color: "text-red-700", bg: "bg-red-50 border-red-200", tooltip: "Cooperates 0-25% of the time" };
+  if (coopPct >= 75) return { label: "True Cooperative", emoji: "🕊️", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", tooltip: "Cooperates 75-100% of the time" };
+  if (coopPct >= 50) return { label: "Pragmatic Cooperative", emoji: "⚖️", color: "text-blue-700", bg: "bg-blue-50 border-blue-200", tooltip: "Cooperates 50-75% of the time" };
+  if (coopPct >= 25) return { label: "Pragmatic Defector", emoji: "🗡️", color: "text-orange-700", bg: "bg-orange-50 border-orange-200", tooltip: "Cooperates 25-50% of the time" };
+  return { label: "True Defector", emoji: "😈", color: "text-red-700", bg: "bg-red-50 border-red-200", tooltip: "Cooperates 0-25% of the time" };
 }
 
 export default function PlayerStats({ particle, onDeselect, offline }: Props) {
@@ -50,6 +60,13 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
       </>
     );
   }
+
+  const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const showTip = useCallback((e: React.MouseEvent, text: string) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTip({ text, x: rect.right, y: rect.top - 4 });
+  }, []);
+  const hideTip = useCallback(() => setTip(null), []);
 
   const cc = particle.cc || 0;
   const cd = particle.cd || 0;
@@ -75,15 +92,20 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
           </button>
         )}
       </div>
-      <div className="overflow-y-auto min-h-0 flex-1 text-[11px] font-mono">
+      <div className="overflow-y-auto min-h-0 flex-1 text-xs font-mono">
         {/* Name + strategy + faction badge */}
         <div className="flex items-center gap-1.5">
           <span
             className="w-2.5 h-2.5 rounded-full flex-shrink-0"
             style={{ backgroundColor: offline ? "#9CA3AF" : particle.color }}
           />
+          <span className="text-[10px]">{particle.strategy === "external" ? "🦞" : "🤖"}</span>
           <span className="text-zinc-800 font-semibold truncate">{particle.id}</span>
-          <span className="text-zinc-300 text-[9px] tracking-wide">
+          <span
+            className="text-zinc-500 text-[10px] tracking-wide"
+            onMouseEnter={(e) => showTip(e, STRATEGY_TOOLTIP[particle.strategy])}
+            onMouseLeave={hideTip}
+          >
             {STRATEGY_SHORT[particle.strategy]}
           </span>
           {offline && (
@@ -92,7 +114,11 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
             </span>
           )}
           {!offline && total > 0 && (
-            <span className={`ml-auto text-[8px] font-semibold px-1.5 py-0.5 rounded border cursor-default ${faction.bg} ${faction.color}`} title={faction.tooltip}>
+            <span
+              className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded border cursor-default ${faction.bg} ${faction.color}`}
+              onMouseEnter={(e) => showTip(e, faction.tooltip)}
+              onMouseLeave={hideTip}
+            >
               {faction.emoji} {faction.label}
             </span>
           )}
@@ -107,8 +133,8 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
 
         {/* Cooperation bar */}
         <div className="mt-2 space-y-0.5">
-          <div className="flex items-center justify-between text-[10px]">
-            <span className="text-zinc-400">{total} games</span>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-zinc-500">{total} games</span>
             <span className="font-semibold" style={{ color: offline ? "#9CA3AF" : particle.color }}>
               {coopPct.toFixed(0)}% coop
             </span>
@@ -122,7 +148,7 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
         </div>
 
         {/* Badge row */}
-        <div className="mt-1.5 flex items-center gap-2 text-[10px]">
+        <div className="mt-1.5 flex items-center gap-2 text-xs">
           {total >= 100 && (
             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border bg-amber-50 border-amber-200 text-amber-700 font-semibold text-[8px]">
               {"\u{1F3DB}\u{FE0F}"} Centurion
@@ -131,28 +157,36 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
         </div>
 
         {/* Outcome matrix */}
-        <table className="mt-2 w-full text-[10px] border-collapse">
+        <table className="mt-2 w-full text-xs border-collapse">
           <thead>
             <tr>
               <th />
-              <th className="text-zinc-400 font-normal text-right px-1">Opp C</th>
-              <th className="text-zinc-400 font-normal text-right px-1">Opp D</th>
+              <th className="text-zinc-500 font-normal text-right px-1">Opponents Cooperate</th>
+              <th className="text-zinc-500 font-normal text-right px-1">Opponents Defect</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td className="text-zinc-400 pr-1">You C</td>
+              <td className="text-zinc-500 pr-1">You Cooperate</td>
               <td className="text-right px-1 text-emerald-700 font-medium">{cc}</td>
               <td className="text-right px-1 text-amber-600 font-medium">{cd}</td>
             </tr>
             <tr>
-              <td className="text-zinc-400 pr-1">You D</td>
+              <td className="text-zinc-500 pr-1">You Defect</td>
               <td className="text-right px-1 text-orange-600 font-medium">{dc}</td>
               <td className="text-right px-1 text-red-600 font-medium">{dd}</td>
             </tr>
           </tbody>
         </table>
       </div>
+      {tip && (
+        <div
+          className="fixed px-2.5 py-1.5 bg-white border border-zinc-200 rounded shadow-sm text-[10px] font-mono text-zinc-600 whitespace-nowrap z-50 pointer-events-none"
+          style={{ left: tip.x, top: tip.y, transform: "translate(-100%, -100%)" }}
+        >
+          {tip.text}
+        </div>
+      )}
     </>
   );
 }
