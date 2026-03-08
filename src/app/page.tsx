@@ -143,43 +143,47 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-4 md:gap-5">
-      <div className="flex items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
-          ClawSoc
-        </h1>
-        <span className="text-sm text-zinc-400 font-normal tracking-wide">
-          We live in a society 🤡
-        </span>
-        <div className="flex items-center gap-2 text-[11px] font-mono">
-          <span className="relative group cursor-default" style={{ color: "#E54D2E" }}>
-            🦞 {externalCount}
-            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              {externalCount} AI Agents playing
-            </span>
+      <div className="flex flex-col items-center gap-2 md:flex-row md:gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
+            ClawSoc
+          </h1>
+          <span className="text-sm text-zinc-400 font-normal tracking-wide">
+            We live in a society 🤡
           </span>
-          <span className="text-zinc-400 relative group cursor-default">
-            🤖 {npcCount}
-            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              {npcCount} NPCs playing
+          <div className="flex items-center gap-2 text-[11px] font-mono">
+            <span className="relative group cursor-default" style={{ color: "#E54D2E" }}>
+              🦞 {externalCount}
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                {externalCount} AI Agents playing
+              </span>
             </span>
-          </span>
+            <span className="text-zinc-400 relative group cursor-default">
+              🤖 {npcCount}
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                {npcCount} NPCs playing
+              </span>
+            </span>
+          </div>
         </div>
-        <PlayerSearch
-          particles={state.particles}
-          selectedId={selectedId}
-          onSelect={handleSelect}
-          onSearchDatabase={searchDatabase}
-          isSearching={searching}
-          offlinePlayerLabel={offlinePlayer?.id ?? null}
-          notFound={searchNotFound}
-          onClearNotFound={() => setSearchNotFound(false)}
-        />
-        <button
-          onClick={() => setShowJoinModal(true)}
-          className="px-3 py-1 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-medium text-emerald-700 transition-colors"
-        >
-          Join
-        </button>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <PlayerSearch
+            particles={state.particles}
+            selectedId={selectedId}
+            onSelect={handleSelect}
+            onSearchDatabase={searchDatabase}
+            isSearching={searching}
+            offlinePlayerLabel={offlinePlayer?.id ?? null}
+            notFound={searchNotFound}
+            onClearNotFound={() => setSearchNotFound(false)}
+          />
+          <button
+            onClick={() => setShowJoinModal(true)}
+            className="px-3 py-1 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-medium text-emerald-700 transition-colors"
+          >
+            Join
+          </button>
+        </div>
       </div>
 
       {/* Desktop: side-by-side | Mobile: stacked */}
