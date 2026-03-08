@@ -108,6 +108,7 @@ export function useServerSimulation() {
     const sim = simRef.current;
     const map = particleMapRef.current;
 
+    let metaChanged = false;
     for (const ev of frame.events) {
       if (ev.e === "freeze") {
         const a = map.get(ev.a);
@@ -137,10 +138,18 @@ export function useServerSimulation() {
         sim.particles.push(cp);
         map.set(ev.id, cp);
         staticMetaRef.current.set(ev.id, { id: ev.id, label: ev.label, radius: ev.radius, strategy: ev.strategy, greeting: ev.greeting });
+        metaRef.current.set(ev.id, {
+          id: ev.id, label: ev.label, radius: ev.radius, strategy: ev.strategy,
+          color: "hsl(60,50%,45%)", score: 0, avgScore: 0,
+          cc: 0, cd: 0, dc: 0, dd: 0, greeting: ev.greeting,
+        });
+        metaChanged = true;
       } else if (ev.e === "remove") {
         sim.particles = sim.particles.filter((p) => p.id !== ev.id);
         map.delete(ev.id);
         staticMetaRef.current.delete(ev.id);
+        metaRef.current.delete(ev.id);
+        metaChanged = true;
       }
     }
 
@@ -225,6 +234,11 @@ export function useServerSimulation() {
           gameLog: gameLogRef.current,
         }));
       }
+    }
+
+    // Re-render for add/remove if no pmu/log already triggered setState
+    if (metaChanged && !frame.pmu && (!frame.log || frame.log.length === 0)) {
+      setState((prev) => ({ ...prev, particles: Array.from(metaRef.current.values()) }));
     }
   }, []);
 
