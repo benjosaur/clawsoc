@@ -22,8 +22,8 @@ const PHASE_ORDER: CollisionPhase[] = [
 ];
 
 interface FrozenPair {
-  aId: number;
-  bId: number;
+  aId: string;
+  bId: string;
   phase: CollisionPhase;
   phaseStartTick: number;
   unfreezeAtTick: number;
@@ -46,14 +46,14 @@ export type ExternalRequestCallback = (
   side: "a" | "b",
   self: Particle,
   opponent: Particle,
-  aId: number,
-  bId: number,
+  aId: string,
+  bId: string,
 ) => void;
 
 export type MatchResolvedCallback = (
   record: MatchRecord,
-  aId: number,
-  bId: number,
+  aId: string,
+  bId: string,
 ) => void;
 
 export class SimulationEngine {
@@ -66,20 +66,18 @@ export class SimulationEngine {
   totalCooperations: number = 0;
   totalDefections: number = 0;
   pendingEvents: SimEvent[] = [];
-  pendingMetaUpdates: number[] = [];
+  pendingMetaUpdates: string[] = [];
   pendingGameLog: GameLogEntry[] = [];
   onRequestLLMMessage: LLMRequestCallback | null = null;
   onRequestExternalDecision: ExternalRequestCallback | null = null;
   onMatchResolved: MatchResolvedCallback | null = null;
-  private nextId: number;
 
   constructor(config: SimulationConfig = DEFAULT_CONFIG) {
     this.config = config;
     this.particles = createParticles(config);
-    this.nextId = this.particles.length;
   }
 
-  private isFrozen(particleId: number): boolean {
+  private isFrozen(particleId: string): boolean {
     return this.frozenPairs.some((fp) => fp.aId === particleId || fp.bId === particleId);
   }
 
@@ -281,7 +279,7 @@ export class SimulationEngine {
     }
   }
 
-  resolveMessage(aId: number, bId: number, side: "a" | "b", text: string): void {
+  resolveMessage(aId: string, bId: string, side: "a" | "b", text: string): void {
     const fp = this.frozenPairs.find((f) => f.aId === aId && f.bId === bId);
     if (!fp) return;
 
@@ -297,7 +295,7 @@ export class SimulationEngine {
 
   private timeoutCounter = 0;
 
-  abortPair(aId: number, bId: number): void {
+  abortPair(aId: string, bId: string): void {
     const idx = this.frozenPairs.findIndex((f) => f.aId === aId && f.bId === bId);
     if (idx === -1) return;
 
@@ -328,8 +326,8 @@ export class SimulationEngine {
       type: "timeout",
       id: `timeout-${this.timeoutCounter}`,
       tick: this.tick,
-      particleA: { id: a.id, label: a.label },
-      particleB: { id: b.id, label: b.label },
+      particleA: { id: a.id },
+      particleB: { id: b.id },
       reason: "LLM response timed out",
       timestamp: Date.now(),
     });
@@ -342,7 +340,7 @@ export class SimulationEngine {
     return events;
   }
 
-  drainMetaUpdates(): number[] {
+  drainMetaUpdates(): string[] {
     const ids = this.pendingMetaUpdates;
     this.pendingMetaUpdates = [];
     return ids;
@@ -355,8 +353,8 @@ export class SimulationEngine {
   }
 
   resolveExternalDecision(
-    aId: number,
-    bId: number,
+    aId: string,
+    bId: string,
     side: "a" | "b",
     message: string,
     decision: Decision,
@@ -376,21 +374,17 @@ export class SimulationEngine {
     fp.phaseStartTick = this.tick;
   }
 
-  allocateId(): number {
-    return this.nextId++;
-  }
-
   addParticle(p: Particle): void {
     this.particles.push(p);
     this.pendingEvents.push({
       e: "add", id: p.id,
       x: p.position.x, y: p.position.y,
       vx: p.velocity.x, vy: p.velocity.y,
-      radius: p.radius, label: p.label, strategy: p.strategy,
+      radius: p.radius, strategy: p.strategy,
     });
   }
 
-  removeParticle(id: number): void {
+  removeParticle(id: string): void {
     // Abort any frozen pairs involving this particle
     const pairsToAbort = this.frozenPairs.filter(
       (fp) => fp.aId === id || fp.bId === id,

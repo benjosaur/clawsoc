@@ -38,8 +38,7 @@ export function createParticles(config: SimulationConfig): Particle[] {
       const label = agentClass.names?.[n] ?? uniqueName(i);
 
       particles.push({
-        id: i,
-        label,
+        id: label,
         position: { x, y },
         velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
         radius: config.particleRadius,

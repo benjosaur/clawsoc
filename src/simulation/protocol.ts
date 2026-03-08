@@ -5,24 +5,24 @@ import type { GameLogEntry, StrategyType } from "./types";
 export type SimEvent =
   | {
       e: "freeze";
-      a: number; b: number;
+      a: string; b: string;
       ax: number; ay: number; avx: number; avy: number;
       bx: number; by: number; bvx: number; bvy: number;
     }
   | {
       e: "unfreeze";
-      a: number; b: number;
+      a: string; b: string;
       ax: number; ay: number; avx: number; avy: number;
       bx: number; by: number; bvx: number; bvy: number;
     }
   | {
       e: "abort";
-      a: number; b: number;
+      a: string; b: string;
       ax: number; ay: number; avx: number; avy: number;
       bx: number; by: number; bvx: number; bvy: number;
     }
-  | { e: "add"; id: number; x: number; y: number; vx: number; vy: number; radius: number; label: string; strategy: StrategyType; greeting?: string }
-  | { e: "remove"; id: number };
+  | { e: "add"; id: string; x: number; y: number; vx: number; vy: number; radius: number; strategy: StrategyType; greeting?: string }
+  | { e: "remove"; id: string };
 
 // --- Server → Client frames ---
 
@@ -32,13 +32,13 @@ export interface InitFrame {
   tick: number;
   config: { canvasWidth: number; canvasHeight: number };
   particles: {
-    id: number;
+    id: string;
     x: number; y: number;
     vx: number; vy: number;
     radius: number;
     state: number; // 0=moving, 1=colliding
   }[];
-  meta: { id: number; label: string; radius: number; strategy: StrategyType; greeting?: string }[];
+  meta: { id: string; radius: number; strategy: StrategyType; greeting?: string }[];
 }
 
 /** Sent when simulation events occur (collisions, unfreezes). */
@@ -47,8 +47,8 @@ export interface EventFrame {
   tick: number;
   events: SimEvent[];
   pop?: [number, number, string, string][]; // [x, y, text, color]
-  pos?: number[]; // flat [id, x, y, vx, vy, ...] position sync for all moving particles
-  pmu?: [number, number, number, number][]; // [id, hue, avgScore, score]
+  pos?: { id: string; x: number; y: number; vx: number; vy: number }[];
+  pmu?: [string, number, number, number][]; // [id, hue, avgScore, score]
   log?: GameLogEntry[];
 }
 
@@ -57,7 +57,7 @@ export interface SlowFrame {
   type: "s";
   tick: number;
   particles: {
-    id: number;
+    id: string;
     hue: number;
     score: number;
     avgScore: number;

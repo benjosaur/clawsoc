@@ -21,10 +21,10 @@ export default function Home() {
     total > 0 ? Math.round((state.totalCooperations / total) * 100) : 0;
   const externalCount = state.particles.filter(p => p.strategy === "external").length;
   const npcCount = state.particles.length - externalCount;
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showJoinModal, setShowJoinModal] = useState(true);
   const [offlinePlayer, setOfflinePlayer] = useState<{
-    label: string;
+    id: string;
     strategy: StrategyType;
     score: number;
     avgScore: number;
@@ -33,7 +33,7 @@ export default function Home() {
   const [searching, setSearching] = useState(false);
   const [searchNotFound, setSearchNotFound] = useState(false);
 
-  const handleSelect = useCallback((id: number | null) => {
+  const handleSelect = useCallback((id: string | null) => {
     setSelectedId(id);
     if (id !== null) { setOfflinePlayer(null); setSearchNotFound(false); }
   }, []);
@@ -52,10 +52,10 @@ export default function Home() {
       if (!res.ok) return;
       const data = await res.json();
       if (data.status === "live") {
-        setSelectedId(data.particleId);
+        setSelectedId(data.id);
       } else if (data.status === "offline") {
         setOfflinePlayer({
-          label: data.label,
+          id: data.id,
           strategy: data.strategy,
           score: data.score,
           avgScore: data.avgScore,
@@ -122,8 +122,7 @@ export default function Home() {
   const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} />;
   const displayParticle = isOffline
     ? {
-        id: -1,
-        label: offlinePlayer.label,
+        id: offlinePlayer.id,
         color: "#9CA3AF",
         score: offlinePlayer.score,
         avgScore: offlinePlayer.avgScore,
@@ -171,7 +170,7 @@ export default function Home() {
           onSelect={handleSelect}
           onSearchDatabase={searchDatabase}
           isSearching={searching}
-          offlinePlayerLabel={offlinePlayer?.label ?? null}
+          offlinePlayerLabel={offlinePlayer?.id ?? null}
           notFound={searchNotFound}
           onClearNotFound={() => setSearchNotFound(false)}
         />

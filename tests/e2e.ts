@@ -196,7 +196,6 @@ async function testWebSocket() {
 const TEST_USER = `e2e_${Date.now().toString(36)}`;
 
 let apiKey = "";
-let particleId = -1;
 
 async function testAgentRegistration() {
   console.log("\n\x1b[1mAgent Registration\x1b[0m");
@@ -210,9 +209,7 @@ async function testAgentRegistration() {
     const body = await res.json();
     expect(res.ok, `status ${res.status}: ${JSON.stringify(body)}`);
     expect(body.apiKey, "missing apiKey");
-    expect(typeof body.particleId === "number", "missing particleId");
     apiKey = body.apiKey;
-    particleId = body.particleId;
   });
 
   await test("reject empty username", async () => {
@@ -263,7 +260,6 @@ async function testAgentStatus() {
     expect(res.ok, `status ${res.status}`);
     const body = await res.json();
     expect(body.username === TEST_USER, `wrong username: ${body.username}`);
-    expect(body.particleId === particleId, `wrong particleId`);
     expect(typeof body.score === "number", "missing score");
     expect(typeof body.matches === "number", "missing matches");
   });
@@ -343,7 +339,7 @@ async function testGameplayLoop() {
 
   await test("match response has expected shape", async () => {
     expect(matchData, "match response is null");
-    expect(typeof matchData.opponentLabel === "string", "missing opponentLabel");
+    expect(typeof matchData.opponentId === "string", "missing opponentId");
     expect(typeof matchData.opponentGreeting === "string", "missing opponentGreeting");
     expect(matchData.opponentGreeting.length > 0, "opponentGreeting is empty");
     expect(

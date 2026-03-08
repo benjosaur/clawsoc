@@ -4,29 +4,28 @@ import type { SimulationEngine } from "./engine";
 
 export interface ExternalAgent {
   apiKeyHash: string;
-  particleId: number;
-  displacedLabel: string;
+  displacedId: string;
   displacedStrategy: StrategyType;
   joinedAt: number;
   greeting: string;
 }
 
 export interface PendingMatch {
-  aId: number;
-  bId: number;
+  aId: string;
+  bId: string;
   side: "a" | "b";
-  opponentLabel: string;
+  opponentId: string;
   opponentGreeting: string;
   vsRecord: { cc: number; cd: number; dc: number; dd: number } | null;
   createdAt: number;
 }
 
 export type RegisterResult =
-  | { apiKey: string; particleId: number }
+  | { apiKey: string }
   | { error: string };
 
 export type LoginResult =
-  | { particleId: number; returning: true; score: number; matches: number }
+  | { returning: true; score: number; matches: number }
   | { error: string };
 
 type Redis = {
@@ -50,7 +49,7 @@ export class AgentManager {
   private pendingMatches = new Map<string, PendingMatch>();
   private matchWaiters = new Map<string, { resolve: (match: PendingMatch) => void; reject: (err: Error) => void }>();
   private resultWaiters = new Map<string, { resolve: (record: MatchRecord | null) => void }>();
-  private activeResultKeys = new Map<string, string>(); // username → "aId-bId"
+  private activeResultKeys = new Map<string, string>(); // username → "aId|bId"
   private redis: Redis | null = null;
 
   constructor(redisUrl?: string) {
@@ -86,15 +85,13 @@ export class AgentManager {
     await this.snapshotRecord(npc);
     engine.removeParticle(npc.id);
 
-    const particleId = engine.allocateId();
     const config = engine.config;
     const margin = config.particleRadius * 3;
     const angle = Math.random() * Math.PI * 2;
     const speed = config.minSpeed + Math.random() * (config.maxSpeed - config.minSpeed);
 
     const particle: Particle = {
-      id: particleId,
-      label: username,
+      id: username,
       position: {
         x: margin + Math.random() * (config.canvasWidth - margin * 2),
         y: margin + Math.random() * (config.canvasHeight - margin * 2),
@@ -116,8 +113,7 @@ export class AgentManager {
 
     const agent: ExternalAgent = {
       apiKeyHash,
-      particleId,
-      displacedLabel: npc.label,
+      displacedId: npc.id,
       displacedStrategy: npc.strategy,
       joinedAt: Date.now(),
       greeting: greeting.trim().slice(0, 280),
@@ -160,7 +156,7 @@ export class AgentManager {
       await this.redis.set(`owner:${username}`, apiKeyH);
     }
 
-    return { apiKey, particleId: agent.particleId };
+    return { apiKey };
   }
 
   async login(username: string, greeting: string, apiKey: string, engine: SimulationEngine): Promise<LoginResult> {
@@ -206,7 +202,7 @@ export class AgentManager {
       (sum, h) => sum + h.cc + h.cd + h.dc + h.dd, 0
     );
 
-    return { particleId: agent.particleId, returning: true, score: particle.score, matches: matchCount };
+    return { returning: true, score: particle.score, matches: matchCount };
   }
 
   authenticateRequest(authHeader: string | undefined): string | null {
@@ -251,7 +247,7 @@ export class AgentManager {
     }
   }
 
-  waitForResult(username: string, aId: number, bId: number): Promise<MatchRecord | null> {
+  waitForResult(username: string, aId: string, bId: string): Promise<MatchRecord | null> {
     const key = `${aId}|${bId}`;
     this.activeResultKeys.set(username, key);
     return new Promise((resolve) => {
@@ -259,7 +255,7 @@ export class AgentManager {
     });
   }
 
-  resolveResultWaiter(aId: number, bId: number, record: MatchRecord | null): void {
+  resolveResultWaiter(aId: string, bId: string, record: MatchRecord | null): void {
     const key = `${aId}|${bId}`;
     const waiter = this.resultWaiters.get(key);
     if (waiter) {
@@ -312,24 +308,22 @@ export class AgentManager {
     if (!agent) return;
 
     // Snapshot agent record before removal
-    const particle = engine.particles.find(p => p.id === agent.particleId);
+    const particle = engine.particles.find(p => p.id === username);
     if (particle) {
       await this.snapshotRecord(particle);
     }
 
     // Remove external particle
-    engine.removeParticle(agent.particleId);
+    engine.removeParticle(username);
 
     // Respawn the displaced NPC
     const config = engine.config;
     const margin = config.particleRadius * 3;
     const angle = Math.random() * Math.PI * 2;
     const speed = config.minSpeed + Math.random() * (config.maxSpeed - config.minSpeed);
-    const npcId = engine.allocateId();
 
     const npc: Particle = {
-      id: npcId,
-      label: agent.displacedLabel,
+      id: agent.displacedId,
       position: {
         x: margin + Math.random() * (config.canvasWidth - margin * 2),
         y: margin + Math.random() * (config.canvasHeight - margin * 2),
@@ -348,7 +342,7 @@ export class AgentManager {
 
     // Restore NPC record from Redis if available
     if (this.redis) {
-      const raw = await this.redis.get(`record:${agent.displacedLabel}`);
+      const raw = await this.redis.get(`record:${agent.displacedId}`);
       if (raw) {
         try {
           const rec = JSON.parse(raw);
@@ -394,7 +388,7 @@ export class AgentManager {
       isExternal: particle.isExternal,
       externalOwner: particle.externalOwner,
     };
-    await this.redis.set(`record:${particle.label}`, JSON.stringify(rec));
+    await this.redis.set(`record:${particle.id}`, JSON.stringify(rec));
   }
 
   async snapshotAllRecords(engine: SimulationEngine): Promise<void> {
@@ -407,7 +401,7 @@ export class AgentManager {
         isExternal: p.isExternal,
         externalOwner: p.externalOwner,
       };
-      await this.redis.set(`record:${p.label}`, JSON.stringify(rec));
+      await this.redis.set(`record:${p.id}`, JSON.stringify(rec));
     }
     await this.redis.set("global:stats", JSON.stringify({
       tick: engine.tick,
@@ -447,8 +441,8 @@ export class AgentManager {
     // Restore particle records
     const keys = await this.redis.keys("record:*");
     for (const key of keys) {
-      const label = key.slice("record:".length);
-      const particle = engine.particles.find((p) => p.label === label);
+      const id = key.slice("record:".length);
+      const particle = engine.particles.find((p) => p.id === id);
       if (!particle) continue;
       const raw = await this.redis.get(key);
       if (!raw) continue;
@@ -464,10 +458,6 @@ export class AgentManager {
     return this.agents.get(username);
   }
 
-  getAgentParticleId(username: string): number | undefined {
-    return this.agents.get(username)?.particleId;
-  }
-
   getAllPendingMatches(): Map<string, PendingMatch> {
     return this.pendingMatches;
   }
@@ -476,15 +466,15 @@ export class AgentManager {
     return this.agents.size;
   }
 
-  async lookupRecord(label: string): Promise<{
+  async lookupRecord(id: string): Promise<{
     strategy: StrategyType;
     score: number;
-    matchHistory: Record<number, { cc: number; cd: number; dc: number; dd: number }>;
+    matchHistory: Record<string, { cc: number; cd: number; dc: number; dd: number }>;
     isExternal: boolean;
     externalOwner?: string;
   } | null> {
     if (!this.redis) return null;
-    const raw = await this.redis.get(`record:${label}`);
+    const raw = await this.redis.get(`record:${id}`);
     if (!raw) return null;
     try {
       return JSON.parse(raw);

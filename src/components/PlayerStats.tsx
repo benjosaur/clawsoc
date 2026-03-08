@@ -12,8 +12,7 @@ const STRATEGY_SHORT: Record<StrategyType, string> = {
 };
 
 interface ParticleData {
-  id: number;
-  label: string;
+  id: string;
   color: string;
   score: number;
   avgScore: number;
@@ -83,7 +82,7 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
             className="w-2.5 h-2.5 rounded-full flex-shrink-0"
             style={{ backgroundColor: offline ? "#9CA3AF" : particle.color }}
           />
-          <span className="text-zinc-800 font-semibold truncate">{particle.label}</span>
+          <span className="text-zinc-800 font-semibold truncate">{particle.id}</span>
           <span className="text-zinc-300 text-[9px] tracking-wide">
             {STRATEGY_SHORT[particle.strategy]}
           </span>

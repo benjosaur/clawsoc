@@ -94,5 +94,5 @@ export function generateMessage(self: Particle, opponent: Particle): string {
     template = pick(TEMPLATES[self.strategy]);
   }
 
-  return template.replace(/\{opponent\}/g, opponent.label);
+  return template.replace(/\{opponent\}/g, opponent.id);
 }
