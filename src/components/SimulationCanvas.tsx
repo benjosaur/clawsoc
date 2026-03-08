@@ -123,7 +123,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
     const id = hitTest(e.clientX, e.clientY);
     canvas.style.cursor = id != null ? "pointer" : "default";
 
-    if (id == null || id === selectedIdRef.current) {
+    if (id == null) {
       setHoveredId((prev) => prev !== null ? null : prev);
       return;
     }
