@@ -106,6 +106,28 @@ export interface SimulationConfig {
   freezeDurationTicks: number;
 }
 
+export interface HallOfFameEntry {
+  label: string;
+  strategy: StrategyType;
+  totalScore: number;
+  avgScore: number;
+  bayesianRating: number;
+  games: number;
+  coopPct: number;
+  isLive: boolean;
+  isExternal: boolean;
+}
+
+export interface HallOfFameResponse {
+  entries: HallOfFameEntry[];
+  globalMean: number;
+  updatedAt: number;
+  priorWeight: number;
+  totalEntries: number;
+  page: number;
+  pageSize: number;
+}
+
 export const DEFAULT_CONFIG: SimulationConfig = {
   canvasWidth: 800,
   canvasHeight: 600,

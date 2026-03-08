@@ -557,6 +557,22 @@ async function main() {
       return;
     }
 
+    // Hall of Fame endpoint (public, no auth)
+    if (pathname === "/api/halloffame" && req.method === "GET") {
+      try {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Cache-Control", "public, max-age=60");
+        const page = Math.max(1, parseInt(parsed.query.page as string, 10) || 1);
+        const pageSize = Math.min(100, Math.max(1, parseInt(parsed.query.pageSize as string, 10) || 50));
+        const data = await agentManager.getHallOfFamePage(page, pageSize, engine);
+        jsonResponse(res, 200, data);
+      } catch (err) {
+        console.error("Hall of fame error:", err);
+        jsonResponse(res, 500, { error: "Internal server error" });
+      }
+      return;
+    }
+
     handle(req, res, parsed);
   });
 
@@ -646,12 +662,17 @@ async function main() {
     }
   }, 100);
 
-  // Snapshot all particle records to Redis every hour
+  // Snapshot all particle records to Redis every hour, then upsert qualifying live particles into hall of fame
   setInterval(() => {
-    agentManager.snapshotAllRecords(engine).catch((err) =>
-      console.error("Periodic snapshot failed:", err)
-    );
+    agentManager.snapshotAllRecords(engine)
+      .then(() => agentManager.updateHallOfFameForLiveParticles(engine))
+      .catch((err) => console.error("Periodic snapshot/hall of fame failed:", err));
   }, 60 * 60 * 1000);
+
+  // Upsert qualifying live particles into hall of fame on startup
+  agentManager.updateHallOfFameForLiveParticles(engine).catch((err) =>
+    console.error("Initial hall of fame update failed:", err)
+  );
 
   server.listen(port, () => {
     console.log(`> Server listening on http://localhost:${port} (${dev ? "dev" : "production"})`);

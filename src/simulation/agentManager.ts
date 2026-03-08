@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import type { Decision, MatchRecord, Particle, StrategyType } from "./types";
+import type { Decision, MatchRecord, Particle, StrategyType, HallOfFameEntry, HallOfFameResponse } from "./types";
 import type { SimulationEngine } from "./engine";
 
 export interface ExternalAgent {
@@ -29,6 +29,12 @@ type Redis = {
   get(key: string): Promise<string | null>;
   del(...keys: string[]): Promise<unknown>;
   keys(pattern: string): Promise<string[]>;
+  zadd(key: string, score: number, member: string): Promise<unknown>;
+  zrevrange(key: string, start: number, stop: number, scoring?: string): Promise<string[]>;
+  zcard(key: string): Promise<number>;
+  zrem(key: string, ...members: string[]): Promise<unknown>;
+  hset(key: string, field: string, value: string): Promise<unknown>;
+  hmget(key: string, ...fields: string[]): Promise<(string | null)[]>;
 };
 
 function hashKey(apiKey: string): string {
@@ -282,10 +288,11 @@ export class AgentManager {
     const agent = this.agents.get(username);
     if (!agent) return;
 
-    // Snapshot agent record before removal
+    // Snapshot agent record + upsert hall of fame before removal
     const particle = engine.particles.find(p => p.id === username);
     if (particle) {
       await this.snapshotRecord(particle);
+      await this.upsertHallOfFameEntry(particle);
     }
 
     // Remove external particle
@@ -457,6 +464,147 @@ export class AgentManager {
     } catch {
       return null;
     }
+  }
+
+  // --- Hall of Fame ---
+
+  private static readonly HOF_PRIOR_WEIGHT = 20;
+  private static readonly HOF_GLOBAL_MEAN = 2.2215;
+  private static readonly HOF_MIN_GAMES = 20;
+
+  /** Upsert a single player into the Hall of Fame ZSET if they qualify (≥20 games). */
+  async upsertHallOfFameEntry(particle: {
+    id: string; score: number; strategy: StrategyType;
+    matchHistory: Record<string, { cc: number; cd: number; dc: number; dd: number }>;
+    isExternal: boolean;
+  }): Promise<void> {
+    if (!this.redis) return;
+    let games = 0, coops = 0;
+    for (const r of Object.values(particle.matchHistory)) {
+      games += r.cc + r.cd + r.dc + r.dd;
+      coops += r.cc + r.cd;
+    }
+    if (games < AgentManager.HOF_MIN_GAMES) return;
+
+    const avg = particle.score / games;
+    const m = AgentManager.HOF_PRIOR_WEIGHT;
+    const C = AgentManager.HOF_GLOBAL_MEAN;
+    const rating = (games * avg + m * C) / (games + m);
+
+    await this.redis.zadd("halloffame", rating, particle.id);
+    await this.redis.hset("halloffame:meta", particle.id, JSON.stringify({
+      strategy: particle.strategy,
+      totalScore: particle.score,
+      avgScore: Math.round(avg * 10000) / 10000,
+      games,
+      coopPct: Math.round((coops / games) * 10000) / 100,
+      isExternal: particle.isExternal,
+    }));
+  }
+
+  /** Upsert all current live particles that qualify into the Hall of Fame. No Redis record scanning. */
+  async updateHallOfFameForLiveParticles(engine: SimulationEngine): Promise<void> {
+    let count = 0;
+    for (const p of engine.particles) {
+      await this.upsertHallOfFameEntry(p);
+      let games = 0;
+      for (const r of Object.values(p.matchHistory)) games += r.cc + r.cd + r.dc + r.dd;
+      if (games >= AgentManager.HOF_MIN_GAMES) count++;
+    }
+    if (this.redis) {
+      await this.redis.set("halloffame:stats", JSON.stringify({
+        globalMean: AgentManager.HOF_GLOBAL_MEAN,
+        updatedAt: Date.now(),
+        priorWeight: AgentManager.HOF_PRIOR_WEIGHT,
+      }));
+    }
+    console.log(`[HallOfFame] Updated ${count} qualifying live particles`);
+  }
+
+  async getHallOfFamePage(page: number, pageSize: number, engine: SimulationEngine): Promise<HallOfFameResponse> {
+    const m = AgentManager.HOF_PRIOR_WEIGHT;
+    const C = AgentManager.HOF_GLOBAL_MEAN;
+
+    if (!this.redis) {
+      // Fallback: compute from live particles only
+      const entries: HallOfFameEntry[] = [];
+      for (const p of engine.particles) {
+        let games = 0, coops = 0;
+        for (const r of Object.values(p.matchHistory)) {
+          games += r.cc + r.cd + r.dc + r.dd;
+          coops += r.cc + r.cd;
+        }
+        if (games < AgentManager.HOF_MIN_GAMES) continue;
+        const avg = p.score / games;
+        const rating = (games * avg + m * C) / (games + m);
+        entries.push({
+          label: p.id, strategy: p.strategy, totalScore: p.score,
+          avgScore: Math.round(avg * 10000) / 10000,
+          bayesianRating: Math.round(rating * 10000) / 10000,
+          games, coopPct: Math.round((coops / games) * 10000) / 100,
+          isLive: true, isExternal: p.isExternal,
+        });
+      }
+      entries.sort((a, b) => b.bayesianRating - a.bayesianRating);
+      const sliced = entries.slice((page - 1) * pageSize, page * pageSize);
+      return {
+        entries: sliced, globalMean: C, updatedAt: Date.now(),
+        priorWeight: m, totalEntries: entries.length, page, pageSize,
+      };
+    }
+
+    const totalEntries = await this.redis.zcard("halloffame");
+    const start = (page - 1) * pageSize;
+    const stop = start + pageSize - 1;
+
+    // ZREVRANGE returns [member, score, member, score, ...]
+    const raw = await this.redis.zrevrange("halloffame", start, stop, "WITHSCORES");
+    const labels: string[] = [];
+    const ratings: number[] = [];
+    for (let i = 0; i < raw.length; i += 2) {
+      labels.push(raw[i]);
+      ratings.push(parseFloat(raw[i + 1]));
+    }
+
+    if (labels.length === 0) {
+      const statsRaw = await this.redis.get("halloffame:stats");
+      const stats = statsRaw ? JSON.parse(statsRaw) : { globalMean: C, updatedAt: 0, priorWeight: m };
+      return { entries: [], globalMean: stats.globalMean, updatedAt: stats.updatedAt, priorWeight: stats.priorWeight, totalEntries, page, pageSize };
+    }
+
+    // Fetch metadata for these labels
+    const metaRaw = await this.redis.hmget("halloffame:meta", ...labels);
+    const statsRaw = await this.redis.get("halloffame:stats");
+    const stats = statsRaw ? JSON.parse(statsRaw) : { globalMean: C, updatedAt: 0, priorWeight: m };
+
+    const liveLabels = new Set(engine.particles.map(p => p.id));
+    const entries: HallOfFameEntry[] = [];
+
+    for (let i = 0; i < labels.length; i++) {
+      const label = labels[i];
+      const rating = ratings[i];
+      const metaStr = metaRaw[i];
+      if (!metaStr) continue;
+      try {
+        const meta = JSON.parse(metaStr);
+        entries.push({
+          label,
+          strategy: meta.strategy,
+          totalScore: meta.totalScore,
+          avgScore: meta.avgScore,
+          bayesianRating: Math.round(rating * 10000) / 10000,
+          games: meta.games,
+          coopPct: meta.coopPct,
+          isLive: liveLabels.has(label),
+          isExternal: meta.isExternal,
+        });
+      } catch { /* skip bad meta */ }
+    }
+
+    return {
+      entries, globalMean: stats.globalMean, updatedAt: stats.updatedAt,
+      priorWeight: stats.priorWeight, totalEntries, page, pageSize,
+    };
   }
 
 }
