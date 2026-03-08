@@ -37,6 +37,7 @@ button {
   animation: hof-spin 3s linear infinite;
   border-radius: 0.25rem;
   transition: box-shadow 0.3s;
+  cursor: pointer;
 }
 
 .hof-rainbow:hover {

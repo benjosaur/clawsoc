@@ -86,6 +86,7 @@ export class AgentManager {
 
     const npc = npcs[Math.floor(Math.random() * npcs.length)];
     await this.snapshotRecord(npc);
+    await this.upsertHallOfFameEntry(npc);
     engine.removeParticle(npc.id);
 
     const config = engine.config;
