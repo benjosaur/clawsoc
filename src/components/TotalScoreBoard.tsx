@@ -3,22 +3,20 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import type { StrategyType } from "@/simulation/types";
 
-const STRATEGY_SHORT: Record<StrategyType, string> = {
+const STRATEGY_SHORT: Partial<Record<StrategyType, string>> = {
   always_cooperate: "COOP",
   always_defect: "DEFT",
   tit_for_tat: "TFT",
   random: "RAND",
   grudger: "GRDG",
-  external: "🦞",
 };
 
-const STRATEGY_TOOLTIP: Record<StrategyType, string> = {
-  always_cooperate: "COOPERATE 🕊️ — Always cooperates",
-  always_defect: "DEFECT 😈 — Always defects",
-  tit_for_tat: "TIT FOR TAT 🪞 — Mirrors opponent's last move",
-  random: "RANDOM 🎲 — Chooses randomly",
-  grudger: "GRUDGE 🔒 — Cooperates until betrayed",
-  external: "EXTERNAL 🦞 — Human or API-controlled",
+const STRATEGY_TOOLTIP: Partial<Record<StrategyType, string>> = {
+  always_cooperate: "BOT Strategy: COOPERATE 🕊️ — Always cooperates",
+  always_defect: "BOT Strategy: DEFECT 😈 — Always defects",
+  tit_for_tat: "BOT Strategy: TIT FOR TAT 🪞 — Mirrors opponent's last move",
+  random: "BOT Strategy: RANDOM 🎲 — Chooses randomly",
+  grudger: "BOT Strategy: GRUDGE 🔒 — Cooperates until betrayed",
 };
 
 interface ParticleData {
@@ -41,7 +39,7 @@ export default function TotalScoreBoard({ particles, selectedId, singleRow, onSe
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const showTip = useCallback((e: React.MouseEvent, strategy: StrategyType) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTip({ text: STRATEGY_TOOLTIP[strategy], x: rect.right, y: rect.top - 4 });
+    setTip({ text: STRATEGY_TOOLTIP[strategy] ?? "", x: rect.right, y: rect.top - 4 });
   }, []);
   const hideTip = useCallback(() => setTip(null), []);
 
@@ -88,10 +86,10 @@ export default function TotalScoreBoard({ particles, selectedId, singleRow, onSe
               <span className={`flex-1 truncate ${p.strategy === "external" ? "" : "text-zinc-600"}`} style={p.strategy === "external" ? { color: "#E54D2E" } : undefined}>{p.id}</span>
               <span
                 className="text-zinc-500 text-[9px] tracking-wide"
-                onMouseEnter={(e) => showTip(e, p.strategy)}
-                onMouseLeave={hideTip}
+                onMouseEnter={STRATEGY_TOOLTIP[p.strategy] ? (e) => showTip(e, p.strategy) : undefined}
+                onMouseLeave={STRATEGY_TOOLTIP[p.strategy] ? hideTip : undefined}
               >
-                {STRATEGY_SHORT[p.strategy]}
+                {STRATEGY_SHORT[p.strategy] ?? ""}
               </span>
               <span className="text-zinc-900 font-semibold w-12 text-right tabular-nums">
                 {p.score}
