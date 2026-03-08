@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import type { StrategyType } from "@/simulation/types";
 
 const STRATEGY_SHORT: Record<StrategyType, string> = {
@@ -10,6 +10,15 @@ const STRATEGY_SHORT: Record<StrategyType, string> = {
   random: "RAND",
   grudger: "GRDG",
   external: "🦞",
+};
+
+const STRATEGY_TOOLTIP: Record<StrategyType, string> = {
+  always_cooperate: "COOPERATE 🕊️ — Always cooperates",
+  always_defect: "DEFECT 😈 — Always defects",
+  tit_for_tat: "TIT FOR TAT 🪞 — Mirrors opponent's last move",
+  random: "RANDOM 🎲 — Chooses randomly",
+  grudger: "GRUDGE 🔒 — Cooperates until betrayed",
+  external: "EXTERNAL 🦞 — Human or API-controlled",
 };
 
 interface ParticleData {
@@ -23,11 +32,18 @@ interface Props {
   particles: ParticleData[];
   selectedId?: string | null;
   singleRow?: boolean;
+  onSelect?: (id: string | null) => void;
 }
 
-export default function ScoreBoard({ particles, selectedId, singleRow }: Props) {
+export default function ScoreBoard({ particles, selectedId, singleRow, onSelect }: Props) {
   const sorted = [...particles].sort((a, b) => b.avgScore - a.avgScore);
   const selectedRef = useRef<HTMLDivElement>(null);
+  const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const showTip = useCallback((e: React.MouseEvent, strategy: StrategyType) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTip({ text: STRATEGY_TOOLTIP[strategy], x: rect.right, y: rect.top - 4 });
+  }, []);
+  const hideTip = useCallback(() => setTip(null), []);
 
   useEffect(() => {
     if (selectedId != null && selectedRef.current) {
@@ -47,7 +63,7 @@ export default function ScoreBoard({ particles, selectedId, singleRow }: Props) 
   return (
     <>
       <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
-        Avg Score
+        Avg Score - Live
       </h2>
       <div className="space-y-0.5 overflow-y-auto min-h-0 flex-1">
         {rows.map((p) => {
@@ -58,17 +74,23 @@ export default function ScoreBoard({ particles, selectedId, singleRow }: Props) 
             <div
               key={p.id}
               ref={isSelected ? selectedRef : undefined}
-              className={`flex items-center gap-1.5 text-[11px] font-mono py-px ${
+              className={`flex items-center gap-1.5 text-[11px] font-mono py-px cursor-pointer hover:bg-zinc-50 ${
                 isSelected ? "bg-amber-50 rounded" : ""
               }`}
+              onClick={() => onSelect?.(isSelected ? null : p.id)}
             >
-              <span className="text-zinc-300 w-3 text-right">{rank}</span>
+              <span className="text-zinc-500 w-5 text-right">{rank}</span>
               <span
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ backgroundColor: p.color }}
               />
+              <span className="text-[10px]">{p.strategy === "external" ? "🦞" : "🤖"}</span>
               <span className={`flex-1 truncate ${p.strategy === "external" ? "" : "text-zinc-600"}`} style={p.strategy === "external" ? { color: "#E54D2E" } : undefined}>{p.id}</span>
-              <span className="text-zinc-300 text-[9px] tracking-wide">
+              <span
+                className="text-zinc-500 text-[9px] tracking-wide"
+                onMouseEnter={(e) => showTip(e, p.strategy)}
+                onMouseLeave={hideTip}
+              >
                 {STRATEGY_SHORT[p.strategy]}
               </span>
               <span className="text-zinc-900 font-semibold w-12 text-right tabular-nums">
@@ -88,6 +110,14 @@ export default function ScoreBoard({ particles, selectedId, singleRow }: Props) 
           );
         })}
       </div>
+      {tip && (
+        <div
+          className="fixed px-2.5 py-1.5 bg-white border border-zinc-200 rounded shadow-sm text-[10px] font-mono text-zinc-600 whitespace-nowrap z-50 pointer-events-none"
+          style={{ left: tip.x, top: tip.y, transform: "translate(-100%, -100%)" }}
+        >
+          {tip.text}
+        </div>
+      )}
     </>
   );
 }

@@ -117,8 +117,8 @@ export default function Home() {
     : undefined;
   const isOffline = offlinePlayer != null && selectedId == null;
   const hasSelection = selectedId != null || isOffline;
-  const avgPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} />;
-  const totalPanel = <TotalScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} />;
+  const avgPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
+  const totalPanel = <TotalScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
   const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} />;
   const displayParticle = isOffline
     ? {
