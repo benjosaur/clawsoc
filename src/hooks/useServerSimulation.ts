@@ -33,7 +33,7 @@ export interface ClientParticle {
   x: number; y: number;
   vx: number; vy: number;
   radius: number;
-  state: number; // 0=moving, 1=colliding, 2=approaching
+  state: number; // 0=moving, 1=colliding, 2=approaching, 3=parked
   /** Correction offset from position sync — lerped to zero over several ticks. */
   cx: number; cy: number;
   /** Approach target (collision point) — used when state=2. */
@@ -143,6 +143,12 @@ export function useServerSimulation() {
           cc: 0, cd: 0, dc: 0, dd: 0, greeting: ev.greeting,
         });
         metaChanged = true;
+      } else if (ev.e === "park") {
+        const p = map.get(ev.id);
+        if (p) { p.state = 3; p.vx = 0; p.vy = 0; }
+      } else if (ev.e === "unpark") {
+        const p = map.get(ev.id);
+        if (p) { p.x = ev.x; p.y = ev.y; p.vx = ev.vx; p.vy = ev.vy; p.state = 0; }
       } else if (ev.e === "remove") {
         sim.particles = sim.particles.filter((p) => p.id !== ev.id);
         map.delete(ev.id);

@@ -486,7 +486,7 @@ async function testOwnership() {
     expect(res.status === 400, `expected 400, got ${res.status}`);
     const body = await res.json();
     expect(
-      body.error?.includes("claimed"),
+      body.error?.includes("taken"),
       `unexpected error: ${body.error}`
     );
   });

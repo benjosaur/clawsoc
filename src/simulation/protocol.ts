@@ -22,7 +22,9 @@ export type SimEvent =
       bx: number; by: number; bvx: number; bvy: number;
     }
   | { e: "add"; id: string; x: number; y: number; vx: number; vy: number; radius: number; strategy: StrategyType; greeting?: string }
-  | { e: "remove"; id: string };
+  | { e: "remove"; id: string }
+  | { e: "park"; id: string }
+  | { e: "unpark"; id: string; x: number; y: number; vx: number; vy: number };
 
 // --- Server → Client frames ---
 
@@ -36,7 +38,7 @@ export interface InitFrame {
     x: number; y: number;
     vx: number; vy: number;
     radius: number;
-    state: number; // 0=moving, 1=colliding
+    state: number; // 0=moving, 1=colliding, 3=parked
   }[];
   meta: { id: string; radius: number; strategy: StrategyType; greeting?: string }[];
 }

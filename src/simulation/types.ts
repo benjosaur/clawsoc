@@ -27,7 +27,7 @@ export function totalMatches(history: Record<string, OpponentRecord>): number {
   return n;
 }
 
-export type ParticleState = "moving" | "colliding";
+export type ParticleState = "moving" | "colliding" | "parked";
 
 export interface Particle {
   id: string;

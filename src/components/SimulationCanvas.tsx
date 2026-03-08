@@ -279,9 +279,12 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       // Draw particles
       for (const p of displayParticles) {
         const isSelected = sel != null && p.id === sel;
+        const isParked = p.state === 3;
         ctx.save();
 
-        if (p.state === 1 || p.state === 2) {
+        if (isParked) {
+          ctx.globalAlpha = 0.4;
+        } else if (p.state === 1 || p.state === 2) {
           ctx.shadowColor = p.color;
           ctx.shadowBlur = 24;
         }
