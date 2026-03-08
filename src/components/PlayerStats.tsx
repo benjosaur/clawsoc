@@ -148,7 +148,11 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
         {/* Badge row */}
         <div className="mt-1.5 flex items-center gap-2 text-xs">
           {total >= 100 && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border bg-amber-50 border-amber-200 text-amber-700 font-semibold text-[8px]">
+            <span
+              className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded border bg-amber-50 border-amber-200 text-amber-700 font-semibold text-[10px] cursor-default"
+              onMouseEnter={(e) => showTip(e, "Played 100+ games")}
+              onMouseLeave={hideTip}
+            >
               {"\u{1F3DB}\u{FE0F}"} Centurion
             </span>
           )}
