@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import type { SimState, ClientPopup, ParticleMeta } from "@/hooks/useServerSimulation";
 import { bounceOffWallsXY } from "@/simulation/physics";
 
@@ -15,6 +15,7 @@ interface Props {
   popupsRef: React.RefObject<ClientPopup[]>;
   containerRef: React.RefObject<HTMLDivElement | null>;
   selectedId?: number | null;
+  onSelect?: (id: number | null) => void;
 }
 
 /** Advance one tick of client-side physics (movement + wall bounce).
@@ -59,10 +60,105 @@ function stepParticles(sim: SimState): void {
   sim.localTick++;
 }
 
-export default function SimulationCanvas({ simRef, metaRef, popupsRef, containerRef, selectedId }: Props) {
+// Strategy display names
+const STRATEGY_LABELS: Record<string, string> = {
+  always_cooperate: "Always Cooperate",
+  always_defect: "Always Defect",
+  tit_for_tat: "Tit for Tat",
+  random: "Random",
+  grudger: "Grudger",
+  external: "External",
+};
+
+export default function SimulationCanvas({ simRef, metaRef, popupsRef, containerRef, selectedId, onSelect }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+
+  // Shared refs for mouse → draw loop coordination
+  const transformRef = useRef({ camX: 0, camY: 0, s: 1 });
+  const displayRef = useRef<{ id: number; x: number; y: number; radius: number }[]>([]);
+  const dprRef = useRef(1);
+
+  // Hover: track particle ID in state (triggers render), position in ref (no render)
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const hoverPosRef = useRef({ x: 0, y: 0 });
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  const hitTest = useCallback((clientX: number, clientY: number): number | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = dprRef.current;
+    const cx = (clientX - rect.left) * dpr;
+    const cy = (clientY - rect.top) * dpr;
+    const { camX, camY, s } = transformRef.current;
+    const wx = (cx - camX) / s;
+    const wy = (cy - camY) / s;
+
+    // Use a generous hit area (bounding box with padding) around each particle
+    const HIT_PAD = 6;
+    let closest: number | null = null;
+    let closestDistSq = Infinity;
+    for (const p of displayRef.current) {
+      const dx = wx - p.x;
+      const dy = wy - p.y;
+      const hitR = p.radius + HIT_PAD;
+      // Quick bounding-box check then distance
+      if (Math.abs(dx) > hitR || Math.abs(dy) > hitR) continue;
+      const distSq = dx * dx + dy * dy;
+      if (distSq <= hitR * hitR && distSq < closestDistSq) {
+        closest = p.id;
+        closestDistSq = distSq;
+      }
+    }
+    return closest;
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const id = hitTest(e.clientX, e.clientY);
+    canvas.style.cursor = id != null ? "pointer" : "default";
+
+    if (id == null || id === selectedIdRef.current) {
+      setHoveredId((prev) => prev !== null ? null : prev);
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    hoverPosRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    // Update tooltip position imperatively to avoid re-renders on every mouse move
+    if (tooltipRef.current) {
+      const cw = canvas.clientWidth;
+      const ch = canvas.clientHeight;
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      tooltipRef.current.style.left = `${mx + 12}px`;
+      tooltipRef.current.style.top = `${my + 12}px`;
+      tooltipRef.current.style.transform =
+        `${mx > cw - 180 ? "translateX(calc(-100% - 24px))" : ""}` +
+        `${my > ch - 80 ? " translateY(calc(-100% - 24px))" : ""}`;
+    }
+    setHoveredId((prev) => prev === id ? prev : id);
+  }, [hitTest]);
+
+  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const id = hitTest(e.clientX, e.clientY);
+    if (!onSelectRef.current) return;
+    if (id != null && id === selectedIdRef.current) {
+      onSelectRef.current(null);
+    } else {
+      onSelectRef.current(id);
+    }
+    setHoveredId(null);
+  }, [hitTest]);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoveredId(null);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -78,6 +174,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
     function resize() {
       if (!canvas || !ctx || !container) return;
       dpr = window.devicePixelRatio || 1;
+      dprRef.current = dpr;
       const sim = simRef.current;
       const worldW = sim.config.canvasWidth;
       const worldH = sim.config.canvasHeight;
@@ -157,24 +254,14 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         };
       });
 
-      // Zoom: 2x centered on selected particle
+      // Store for hit testing
+      displayRef.current = displayParticles;
+
       const sel = selectedIdRef.current;
-      let zoom = 1;
-      let camX = 0;
-      let camY = 0;
-
-      if (sel != null) {
-        const sp = displayParticles.find((p) => p.id === sel);
-        if (sp) {
-          zoom = 2;
-          const s = dpr * scale * zoom;
-          camX = canvas.width / 2 - sp.x * s;
-          camY = canvas.height / 2 - sp.y * s;
-        }
-      }
-
-      const s = dpr * scale * zoom;
-      ctx.setTransform(s, 0, 0, s, camX, camY);
+      const s = dpr * scale;
+      // Store transform for mouse event coordinate conversion
+      transformRef.current = { camX: 0, camY: 0, s };
+      ctx.setTransform(s, 0, 0, s, 0, 0);
 
       // Background
       ctx.fillStyle = "#fafafa";
@@ -192,6 +279,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
 
       // Draw particles
       for (const p of displayParticles) {
+        const isSelected = sel != null && p.id === sel;
         ctx.save();
 
         if (p.state === 1 || p.state === 2) {
@@ -204,11 +292,9 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         ctx.fillStyle = p.color;
         ctx.fill();
 
-        if (p.state === 1 || p.state === 2) {
-          ctx.shadowBlur = 0;
-        }
-
         ctx.restore();
+
+        ctx.save();
 
         // Average score inside circle
         const isSmall = (container?.clientWidth ?? 640) < 640;
@@ -224,10 +310,12 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
 
         // Name label above
         const labelFontSize = 8 * fontScale * (isSmall ? 0.7 : 1);
-        ctx.fillStyle = p.strategy === "external" ? "#E54D2E" : "#71717a";
-        ctx.font = `${labelFontSize}px Inter, system-ui, sans-serif`;
+        ctx.fillStyle = p.strategy === "external" ? "#E54D2E" : (isSelected ? "#18181b" : "#71717a");
+        ctx.font = `${isSelected ? "bold " : ""}${labelFontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(p.label, p.x, p.y - p.radius - 4);
+
+        ctx.restore();
       }
 
       // Draw floating popups
@@ -260,9 +348,48 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
   }, [simRef, metaRef, popupsRef, containerRef]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="rounded border border-zinc-200 w-full"
-    />
+    <div className="relative">
+      <canvas
+        ref={canvasRef}
+        className="rounded border border-zinc-200 w-full"
+        onMouseMove={handleMouseMove}
+        onClick={handleClick}
+        onMouseLeave={handleMouseLeave}
+      />
+      {hoveredId != null && (() => {
+        const meta = metaRef.current.get(hoveredId);
+        if (!meta) return null;
+        const games = meta.cc + meta.cd + meta.dc + meta.dd;
+        const coops = meta.cc + meta.cd;
+        const coopPct = games > 0 ? Math.round((coops / games) * 100) : 0;
+        const pos = hoverPosRef.current;
+        const cw = canvasRef.current?.clientWidth ?? 300;
+        const ch = canvasRef.current?.clientHeight ?? 200;
+        return (
+          <div
+            ref={tooltipRef}
+            className="absolute pointer-events-none z-10 px-2.5 py-1.5 bg-white border border-zinc-200 rounded shadow-sm text-[11px] font-mono leading-relaxed whitespace-nowrap"
+            style={{
+              left: pos.x + 12,
+              top: pos.y + 12,
+              transform:
+                `${pos.x > cw - 180 ? "translateX(calc(-100% - 24px))" : ""}` +
+                `${pos.y > ch - 80 ? " translateY(calc(-100% - 24px))" : ""}`,
+            }}
+          >
+            <div className="font-semibold text-zinc-800">
+              {meta.strategy === "external" ? "\uD83E\uDD9E" : "\uD83E\uDD16"}{" "}
+              {meta.label}{" "}
+              <span className="font-normal text-zinc-400">
+                {STRATEGY_LABELS[meta.strategy] ?? meta.strategy}
+              </span>
+            </div>
+            <div className="text-zinc-500">
+              Avg: {meta.avgScore.toFixed(1)} · Games: {games} · Coop: <span style={{ color: meta.color }}>{coopPct}%</span>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
   );
 }

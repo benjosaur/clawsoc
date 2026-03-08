@@ -197,6 +197,7 @@ export default function Home() {
               popupsRef={popupsRef}
               containerRef={canvasContainerRef}
               selectedId={selectedId}
+              onSelect={handleSelect}
             />
           </div>
 

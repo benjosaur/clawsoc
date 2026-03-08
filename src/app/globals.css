@@ -16,6 +16,10 @@ body {
   color: var(--foreground);
 }
 
+button {
+  cursor: pointer;
+}
+
 ::-webkit-scrollbar {
   width: 4px;
 }
