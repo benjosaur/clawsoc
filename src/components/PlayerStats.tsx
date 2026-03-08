@@ -69,7 +69,7 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
         {onDeselect && (
           <button
             onClick={onDeselect}
-            className="ml-auto text-zinc-300 hover:text-zinc-500 transition-colors text-xs leading-none px-0.5"
+            className="ml-auto text-zinc-300 hover:text-zinc-500 transition-colors text-xs leading-none px-0.5 cursor-pointer"
             aria-label="Deselect player"
           >
             &times;
