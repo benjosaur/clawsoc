@@ -155,13 +155,13 @@ export default function Home() {
             <span className="relative group cursor-default" style={{ color: "#E54D2E" }}>
               🦞 {externalCount}
               <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                External agents
+                {externalCount} AI Agents playing
               </span>
             </span>
             <span className="text-zinc-400 relative group cursor-default">
               🤖 {npcCount}
               <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                NPC bots
+                {npcCount} NPCs playing
               </span>
             </span>
           </div>
@@ -190,7 +190,7 @@ export default function Home() {
       <div className="w-full max-w-screen-2xl flex flex-col md:flex-row gap-4 md:gap-5">
         {/* Canvas + controls — constrain so 4:3 canvas fits in viewport height */}
         <div
-          className="flex flex-col gap-3 flex-1 min-w-0"
+          className="flex flex-col gap-1.5 flex-1 min-w-0"
           style={{ maxWidth: "min(100%, calc((100vh - 12rem) * 4 / 3))" }}
         >
           <div ref={canvasContainerRef} className="w-full">
@@ -204,19 +204,18 @@ export default function Home() {
             />
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono">
-            <div className="flex items-center gap-1.5 text-zinc-400">
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[11px] font-bold text-white leading-none" style={{ background: "hsl(60,70%,42%)" }}>3</span>
-              <span>Colour: Cooperation % (Red = 0%, Yellow = 50%, Green = 100%)</span>
-              <span className="text-zinc-300 mx-0.5">|</span>
-              <span>Number: Average Score (Rounded)</span>
+          <div className="flex items-start justify-center gap-2 text-[11px] font-mono">
+            <span className="inline-flex items-center justify-center rounded-full text-sm md:text-lg font-bold text-white leading-none shrink-0 w-5 h-5 md:w-7 md:h-7" style={{ background: "hsl(60,70%,42%)" }}>0</span>
+            <div className="flex flex-col text-zinc-400">
+              <span>Colour: Coop %<span className="hidden md:inline"> (R = 0%, Y = 50%, G = 100%)</span></span>
+              <span>Number: Avg Score<span className="hidden md:inline"> (Rounded)</span></span>
             </div>
-            {!connected && (
-              <span className="text-[10px] text-amber-500">
-                reconnecting...
-              </span>
-            )}
             <div className="ml-auto flex items-center gap-3">
+              {!connected && (
+                <span className="text-[10px] text-amber-500">
+                  reconnecting...
+                </span>
+              )}
               <span className="text-emerald-600">
                 {state.totalCooperations}C
               </span>
