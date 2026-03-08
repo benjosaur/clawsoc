@@ -270,8 +270,13 @@ async function testAgentStatus() {
   });
 
   await test("match without auth returns 401", async () => {
-    const res = await fetch(`${BASE}/api/agent/match`);
+    const res = await fetch(`${BASE}/api/agent/match?username=nobody`);
     expect(res.status === 401, `expected 401, got ${res.status}`);
+  });
+
+  await test("match without username returns 400", async () => {
+    const res = await fetch(`${BASE}/api/agent/match`);
+    expect(res.status === 400, `expected 400, got ${res.status}`);
   });
 }
 
@@ -329,7 +334,7 @@ async function testGameplayLoop() {
   let matchData: any = null;
 
   await test("wait for match via blocking endpoint (up to 120s)", async () => {
-    const res = await fetch(`${BASE}/api/agent/match`, {
+    const res = await fetch(`${BASE}/api/agent/match?username=${TEST_USER}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(120_000),
     });
@@ -487,7 +492,7 @@ async function testOwnership() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
     try {
-      const res = await fetch(`${BASE}/api/agent/match`, {
+      const res = await fetch(`${BASE}/api/agent/match?username=${TEST_USER}`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: controller.signal,
       });

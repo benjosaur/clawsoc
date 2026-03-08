@@ -196,16 +196,27 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     return jsonResponse(res, 200, result);
   }
 
-  // All other routes require auth
-  const username = agentManager.authenticateRequest(req.headers.authorization);
-  if (!username) {
-    return jsonResponse(res, 401, { error: "Unauthorized. Provide Authorization: Bearer <api_key>" });
-  }
-
-  const apiKeyHash = agentManager.getApiKeyHash(req.headers.authorization)!;
-
   // GET /api/agent/match — blocks until a collision happens (auto-rejoins if needed)
   if (pathname === "/api/agent/match" && method === "GET") {
+    const url = new URL(req.url ?? "", `http://${req.headers.host}`);
+    const matchUsername = url.searchParams.get("username");
+    if (!matchUsername) {
+      return jsonResponse(res, 400, { error: "Missing required query parameter: username" });
+    }
+
+    // Try fast in-memory auth first, fall back to Redis lookup by username
+    let username = agentManager.authenticateRequest(req.headers.authorization);
+    if (!username) {
+      username = await agentManager.authenticateWithUsername(matchUsername, req.headers.authorization);
+    }
+    if (!username) {
+      return jsonResponse(res, 401, { error: "Unauthorized. Provide Authorization: Bearer <api_key>" });
+    }
+    if (username !== matchUsername) {
+      return jsonResponse(res, 403, { error: "API key does not belong to the specified username" });
+    }
+
+    const apiKeyHash = agentManager.getApiKeyHash(req.headers.authorization)!;
     const rejoin = await agentManager.ensureInArena(username, apiKeyHash, engine);
     if (rejoin.error) {
       const status = rejoin.error === "arena_full" ? 503 : 400;
@@ -232,6 +243,14 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       return jsonResponse(res, 500, { error: "Internal error" });
     }
   }
+
+  // All other routes require auth
+  const username = agentManager.authenticateRequest(req.headers.authorization);
+  if (!username) {
+    return jsonResponse(res, 401, { error: "Unauthorized. Provide Authorization: Bearer <api_key>" });
+  }
+
+  const apiKeyHash = agentManager.getApiKeyHash(req.headers.authorization)!;
 
   // GET /api/agent/status — non-blocking score/match check
   if (pathname === "/api/agent/status" && method === "GET") {

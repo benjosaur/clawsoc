@@ -212,6 +212,14 @@ export class AgentManager {
     return this.apiKeyToUsername.get(h) ?? null;
   }
 
+  async authenticateWithUsername(username: string, authHeader: string | undefined): Promise<string | null> {
+    if (!authHeader?.startsWith("Bearer ") || !this.redis) return null;
+    const h = hashKey(authHeader.slice(7));
+    const ownerHash = await this.redis.get(`owner:${username}`);
+    if (ownerHash && ownerHash === h) return username;
+    return null;
+  }
+
   getApiKeyHash(authHeader: string | undefined): string | null {
     if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
     return hashKey(authHeader.slice(7));
