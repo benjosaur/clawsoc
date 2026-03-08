@@ -54,7 +54,8 @@ export default function PlayerSearch({
     } else if (!offlinePlayerLabel) {
       setQuery("");
     }
-  }, [selectedId, particles, offlinePlayerLabel]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, offlinePlayerLabel]);
 
   const selectedParticle = selectedId != null ? particles.find((p) => p.id === selectedId) : null;
 
@@ -154,10 +155,7 @@ export default function PlayerSearch({
             </button>
           ))}
           <button
-            onClick={() => {
-              onSearchDatabase(query);
-              setOpen(false);
-            }}
+            onClick={() => onSearchDatabase(query)}
             disabled={isSearching}
             className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-mono text-left text-zinc-400 hover:bg-zinc-50 transition-colors border-t border-zinc-100"
           >
@@ -168,11 +166,11 @@ export default function PlayerSearch({
               {isSearching ? "Searching..." : `Search database`}
             </span>
           </button>
-        </div>
-      )}
-      {notFound && !open && (
-        <div className="absolute top-full left-0 mt-1 px-2 py-1 text-[11px] font-mono text-red-400 whitespace-nowrap">
-          Not found in database
+          {notFound && (
+            <div className="px-2 py-1.5 text-[11px] font-mono text-red-400 border-t border-zinc-100">
+              Not found in database
+            </div>
+          )}
         </div>
       )}
     </div>
