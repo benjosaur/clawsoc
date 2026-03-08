@@ -11,11 +11,11 @@ const POPUP_DURATION_MS = 670;
 
 interface Props {
   simRef: React.RefObject<SimState>;
-  metaRef: React.RefObject<Map<number, ParticleMeta>>;
+  metaRef: React.RefObject<Map<string, ParticleMeta>>;
   popupsRef: React.RefObject<ClientPopup[]>;
   containerRef: React.RefObject<HTMLDivElement | null>;
-  selectedId?: number | null;
-  onSelect?: (id: number | null) => void;
+  selectedId?: string | null;
+  onSelect?: (id: string | null) => void;
 }
 
 /** Advance one tick of client-side physics (movement + wall bounce).
@@ -79,15 +79,15 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
 
   // Shared refs for mouse → draw loop coordination
   const transformRef = useRef({ camX: 0, camY: 0, s: 1 });
-  const displayRef = useRef<{ id: number; x: number; y: number; radius: number }[]>([]);
+  const displayRef = useRef<{ id: string; x: number; y: number; radius: number }[]>([]);
   const dprRef = useRef(1);
 
   // Hover: track particle ID in state (triggers render), position in ref (no render)
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const hoverPosRef = useRef({ x: 0, y: 0 });
   const tooltipRef = useRef<HTMLDivElement>(null);
 
-  const hitTest = useCallback((clientX: number, clientY: number): number | null => {
+  const hitTest = useCallback((clientX: number, clientY: number): string | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
@@ -100,7 +100,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
 
     // Use a generous hit area (bounding box with padding) around each particle
     const HIT_PAD = 6;
-    let closest: number | null = null;
+    let closest: string | null = null;
     let closestDistSq = Infinity;
     for (const p of displayRef.current) {
       const dx = wx - p.x;
@@ -248,7 +248,6 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
           state: p.state,
           color: m?.color ?? "#888",
           radius: p.radius,
-          label: m?.label ?? "",
           avgScore: m?.avgScore ?? 0,
           strategy: m?.strategy,
         };
@@ -313,7 +312,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         ctx.fillStyle = p.strategy === "external" ? "#E54D2E" : (isSelected ? "#18181b" : "#71717a");
         ctx.font = `${isSelected ? "bold " : ""}${labelFontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = "center";
-        ctx.fillText(p.label, p.x, p.y - p.radius - 4);
+        ctx.fillText(p.id, p.x, p.y - p.radius - 4);
 
         ctx.restore();
       }
@@ -379,7 +378,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
           >
             <div className="font-semibold text-zinc-800">
               {meta.strategy === "external" ? "\uD83E\uDD9E" : "\uD83E\uDD16"}{" "}
-              {meta.label}{" "}
+              {meta.id}{" "}
               <span className="font-normal text-zinc-400">
                 {STRATEGY_LABELS[meta.strategy] ?? meta.strategy}
               </span>

@@ -6,8 +6,7 @@ import type { InitFrame, EventFrame, SlowFrame, ServerFrame } from "@/simulation
 
 /** Particle metadata from slow frames, keyed by id. */
 export interface ParticleMeta {
-  id: number;
-  label: string;
+  id: string;
   color: string;
   radius: number;
   score: number;
@@ -30,7 +29,7 @@ export interface ServerSimulationState {
 
 /** Client-side particle with position + velocity for deterministic movement. */
 export interface ClientParticle {
-  id: number;
+  id: string;
   x: number; y: number;
   vx: number; vy: number;
   radius: number;
@@ -67,9 +66,9 @@ export function useServerSimulation() {
     localTick: 0,
     lastAdvanceTime: 0,
   });
-  const particleMapRef = useRef<Map<number, ClientParticle>>(new Map());
-  const staticMetaRef = useRef<Map<number, { id: number; label: string; radius: number; strategy: StrategyType; greeting?: string }>>(new Map());
-  const metaRef = useRef<Map<number, ParticleMeta>>(new Map());
+  const particleMapRef = useRef<Map<string, ClientParticle>>(new Map());
+  const staticMetaRef = useRef<Map<string, { id: string; radius: number; strategy: StrategyType; greeting?: string }>>(new Map());
+  const metaRef = useRef<Map<string, ParticleMeta>>(new Map());
   const gameLogRef = useRef<GameLogEntry[]>([]);
   const popupsRef = useRef<ClientPopup[]>([]);
   const popupIdRef = useRef(0);
@@ -137,9 +136,9 @@ export function useServerSimulation() {
         const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius: ev.radius, state: 0, cx: 0, cy: 0, tx: 0, ty: 0, tvx: 0, tvy: 0, freezeAt: 0 };
         sim.particles.push(cp);
         map.set(ev.id, cp);
-        staticMetaRef.current.set(ev.id, { id: ev.id, label: ev.label, radius: ev.radius, strategy: ev.strategy, greeting: ev.greeting });
+        staticMetaRef.current.set(ev.id, { id: ev.id, radius: ev.radius, strategy: ev.strategy, greeting: ev.greeting });
         metaRef.current.set(ev.id, {
-          id: ev.id, label: ev.label, radius: ev.radius, strategy: ev.strategy,
+          id: ev.id, radius: ev.radius, strategy: ev.strategy,
           color: "hsl(60,50%,45%)", score: 0, avgScore: 0,
           cc: 0, cd: 0, dc: 0, dd: 0, greeting: ev.greeting,
         });
@@ -159,17 +158,15 @@ export function useServerSimulation() {
 
     // Apply position sync — set correction offset instead of snapping
     if (frame.pos) {
-      for (let i = 0; i < frame.pos.length; i += 5) {
-        const p = map.get(frame.pos[i]);
+      for (const entry of frame.pos) {
+        const p = map.get(entry.id);
         if (!p) continue;
-        const sx = frame.pos[i + 1];
-        const sy = frame.pos[i + 2];
         // Correction = where server says minus where client is
-        p.cx = sx - p.x;
-        p.cy = sy - p.y;
+        p.cx = entry.x - p.x;
+        p.cy = entry.y - p.y;
         // Velocity is authoritative — apply immediately
-        p.vx = frame.pos[i + 3];
-        p.vy = frame.pos[i + 4];
+        p.vx = entry.vx;
+        p.vy = entry.vy;
       }
     }
 
@@ -250,7 +247,6 @@ export function useServerSimulation() {
       const color = p.hue < 0 ? "hsl(60,50%,45%)" : `hsl(${p.hue},70%,42%)`;
       meta.set(p.id, {
         id: p.id,
-        label: s?.label ?? `#${p.id}`,
         radius: s?.radius ?? 5,
         strategy: s?.strategy ?? "random",
         color,

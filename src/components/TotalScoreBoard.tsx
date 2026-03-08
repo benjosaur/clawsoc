@@ -13,8 +13,7 @@ const STRATEGY_SHORT: Record<StrategyType, string> = {
 };
 
 interface ParticleData {
-  id: number;
-  label: string;
+  id: string;
   color: string;
   score: number;
   strategy: StrategyType;
@@ -22,7 +21,7 @@ interface ParticleData {
 
 interface Props {
   particles: ParticleData[];
-  selectedId?: number | null;
+  selectedId?: string | null;
   singleRow?: boolean;
 }
 
@@ -68,7 +67,7 @@ export default function TotalScoreBoard({ particles, selectedId, singleRow }: Pr
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ backgroundColor: p.color }}
               />
-              <span className={`flex-1 truncate ${p.strategy === "external" ? "" : "text-zinc-600"}`} style={p.strategy === "external" ? { color: "#E54D2E" } : undefined}>{p.label}</span>
+              <span className={`flex-1 truncate ${p.strategy === "external" ? "" : "text-zinc-600"}`} style={p.strategy === "external" ? { color: "#E54D2E" } : undefined}>{p.id}</span>
               <span className="text-zinc-300 text-[9px] tracking-wide">
                 {STRATEGY_SHORT[p.strategy]}
               </span>

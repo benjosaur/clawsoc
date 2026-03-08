@@ -21,7 +21,7 @@ export interface OpponentRecord {
   dd: number;
 }
 
-export function totalMatches(history: Record<number, OpponentRecord>): number {
+export function totalMatches(history: Record<string, OpponentRecord>): number {
   let n = 0;
   for (const r of Object.values(history)) n += r.cc + r.cd + r.dc + r.dd;
   return n;
@@ -30,8 +30,7 @@ export function totalMatches(history: Record<number, OpponentRecord>): number {
 export type ParticleState = "moving" | "colliding";
 
 export interface Particle {
-  id: number;
-  label: string;
+  id: string;
   position: Vec2;
   velocity: Vec2;
   radius: number;
@@ -41,7 +40,7 @@ export interface Particle {
   score: number;
   strategy: StrategyType;
   useLLM: boolean;
-  matchHistory: Record<number, OpponentRecord>;
+  matchHistory: Record<string, OpponentRecord>;
   isExternal: boolean;
   externalOwner?: string;
 }
@@ -57,8 +56,8 @@ export interface MatchRecord {
   type: "match";
   id: string;
   tick: number;
-  particleA: { id: number; label: string; strategy: StrategyType };
-  particleB: { id: number; label: string; strategy: StrategyType };
+  particleA: { id: string; strategy: StrategyType };
+  particleB: { id: string; strategy: StrategyType };
   decisionA: Decision;
   decisionB: Decision;
   scoreA: number;
@@ -72,8 +71,8 @@ export interface TimeoutRecord {
   type: "timeout";
   id: string;
   tick: number;
-  particleA: { id: number; label: string };
-  particleB: { id: number; label: string };
+  particleA: { id: string };
+  particleB: { id: string };
   reason: string;
   timestamp: number;
 }

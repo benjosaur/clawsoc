@@ -6,7 +6,7 @@ import { GameLogEntry, MatchRecord, TimeoutRecord } from "@/simulation/types";
 
 interface Props {
   entries: GameLogEntry[];
-  selectedId?: number | null;
+  selectedId?: string | null;
   label?: string;
 }
 
@@ -41,7 +41,7 @@ function MatchModalContent({ entry }: { entry: MatchRecord }) {
     <>
       <div className="mb-3">
         <div className="flex items-center gap-1.5">
-          <span className="font-medium text-zinc-900">{strategyEmoji(entry.particleA.strategy)} {entry.particleA.label}</span>
+          <span className="font-medium text-zinc-900">{strategyEmoji(entry.particleA.strategy)} {entry.particleA.id}</span>
           <span className="text-zinc-400">{STRATEGY_LABELS[entry.particleA.strategy] ?? entry.particleA.strategy}</span>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
@@ -56,7 +56,7 @@ function MatchModalContent({ entry }: { entry: MatchRecord }) {
       </div>
       <div className="border-t border-zinc-100 pt-3">
         <div className="flex items-center gap-1.5">
-          <span className="font-medium text-zinc-900">{strategyEmoji(entry.particleB.strategy)} {entry.particleB.label}</span>
+          <span className="font-medium text-zinc-900">{strategyEmoji(entry.particleB.strategy)} {entry.particleB.id}</span>
           <span className="text-zinc-400">{STRATEGY_LABELS[entry.particleB.strategy] ?? entry.particleB.strategy}</span>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
@@ -78,7 +78,7 @@ function TimeoutModalContent({ entry }: { entry: TimeoutRecord }) {
     <>
       <div className="font-semibold text-zinc-900 mb-1">Timed Out</div>
       <div className="text-zinc-600">
-        {entry.particleA.label} vs {entry.particleB.label}
+        {entry.particleA.id} vs {entry.particleB.id}
       </div>
       {entry.reason && (
         <div className="mt-1 text-zinc-400 italic">{entry.reason}</div>
@@ -155,7 +155,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label }: Props)
                   <span className="flex-shrink-0">{strategyEmoji(entry.particleA.strategy)}</span>
                   <DecisionBadge decision={entry.decisionA} />
                   <span className="text-zinc-400 tabular-nums flex-shrink-0">+{entry.scoreA}</span>
-                  <span className="truncate">{entry.particleA.label}</span>
+                  <span className="truncate">{entry.particleA.id}</span>
                 </div>
                 {entry.messageA && (
                   <p className="text-xs text-zinc-500 truncate">
@@ -166,7 +166,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label }: Props)
               {/* Right: player B */}
               <div className="flex-1 min-w-0 text-right">
                 <div className="flex items-center justify-end gap-1">
-                  <span className="truncate">{entry.particleB.label}</span>
+                  <span className="truncate">{entry.particleB.id}</span>
                   <span className="text-zinc-400 tabular-nums flex-shrink-0">+{entry.scoreB}</span>
                   <DecisionBadge decision={entry.decisionB} />
                   <span className="flex-shrink-0">{strategyEmoji(entry.particleB.strategy)}</span>
@@ -184,9 +184,9 @@ export default function MatchHistoryPanel({ entries, selectedId, label }: Props)
               className="text-sm font-mono text-zinc-500 flex gap-2 cursor-pointer hover:bg-zinc-50 rounded -mx-1 px-1 transition-colors"
               onClick={() => setOpenId(entry.id)}
             >
-              <div className="flex-1 min-w-0 text-left truncate">{entry.particleA.label}</div>
+              <div className="flex-1 min-w-0 text-left truncate">{entry.particleA.id}</div>
               <span className="text-zinc-400 italic text-xs flex-shrink-0">timed out</span>
-              <div className="flex-1 min-w-0 text-right truncate">{entry.particleB.label}</div>
+              <div className="flex-1 min-w-0 text-right truncate">{entry.particleB.id}</div>
             </div>
           ),
         )}

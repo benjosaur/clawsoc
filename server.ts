@@ -71,9 +71,9 @@ engine.onRequestLLMMessage = (side, self, opponent) => {
 
   const systemPrompt = `Prisoner's Dilemma. Payoffs: CC=3/3, CD=0/5, DC=5/0, DD=1/1.
 ${STRATEGY_PERSONA[self.strategy]}
-Opponent: ${opponent.label} (defects ${oppDefectPct}% overall). ${vsRecord}`;
+Opponent: ${opponent.id} (defects ${oppDefectPct}% overall). ${vsRecord}`;
 
-  const userPrompt = `Say 1-2 sentences to ${opponent.label} before you both decide. Stay in character.`;
+  const userPrompt = `Say 1-2 sentences to ${opponent.id} before you both decide. Stay in character.`;
 
   // 30s timeout via AbortController
   const controller = new AbortController();
@@ -100,7 +100,7 @@ Opponent: ${opponent.label} (defects ${oppDefectPct}% overall). ${vsRecord}`;
     .catch((err) => {
       clearTimeout(timeout);
       if (err?.name === "AbortError" || controller.signal.aborted) {
-        console.warn(`LLM timeout for ${self.label} ↔ ${opponent.label}, aborting pair`);
+        console.warn(`LLM timeout for ${self.id} ↔ ${opponent.id}, aborting pair`);
         engine.abortPair(aId, bId);
       } else {
         console.error("OpenAI error, falling back:", err?.message);
@@ -134,7 +134,7 @@ engine.onRequestExternalDecision = (side, self, opponent, aId, bId) => {
     aId,
     bId,
     side,
-    opponentLabel: opponent.label,
+    opponentId: opponent.id,
     opponentGreeting,
     vsRecord,
     createdAt: Date.now(),
@@ -221,7 +221,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       ]);
 
       return jsonResponse(res, 200, {
-        opponentLabel: match.opponentLabel,
+        opponentId: match.opponentId,
         opponentGreeting: match.opponentGreeting,
         vsRecord: match.vsRecord,
       });
@@ -235,14 +235,10 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
 
   // GET /api/agent/status — non-blocking score/match check
   if (pathname === "/api/agent/status" && method === "GET") {
-    const agent = agentManager.getAgentByUsername(username);
-    if (!agent) return jsonResponse(res, 404, { error: "Agent not found in arena" });
-
-    const particle = engine.particles.find((p) => p.id === agent.particleId);
+    const particle = engine.particles.find((p) => p.id === username);
 
     return jsonResponse(res, 200, {
       username,
-      particleId: agent.particleId,
       score: particle?.score ?? 0,
       matches: particle ? totalMatches(particle.matchHistory) : 0,
     });
@@ -294,7 +290,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       return jsonResponse(res, 200, {
         ok: true,
         result: {
-          opponent: isSideA ? record.particleB.label : record.particleA.label,
+          opponent: isSideA ? record.particleB.id : record.particleA.id,
           yourDecision: isSideA ? record.decisionA : record.decisionB,
           theirDecision: isSideA ? record.decisionB : record.decisionA,
           yourScore: isSideA ? record.scoreA : record.scoreB,
@@ -332,8 +328,8 @@ function buildInitFrame(): string {
       state: p.state === "colliding" ? 1 : 0,
     })),
     meta: engine.particles.map((p) => {
-      const m: { id: number; label: string; radius: number; strategy: StrategyType; greeting?: string } = {
-        id: p.id, label: p.label, radius: p.radius, strategy: p.strategy,
+      const m: { id: string; radius: number; strategy: StrategyType; greeting?: string } = {
+        id: p.id, radius: p.radius, strategy: p.strategy,
       };
       if (p.isExternal && p.externalOwner) {
         const greeting = agentManager.getAgentByUsername(p.externalOwner)?.greeting;
@@ -347,7 +343,7 @@ function buildInitFrame(): string {
 
 let lastPopupBroadcastTick = 0;
 
-function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: number[] = [], gameLogEntries: GameLogEntry[] = []): string | null {
+function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: string[] = [], gameLogEntries: GameLogEntry[] = []): string | null {
   // Only send popups spawned since the last broadcast (client manages expiry)
   const pops: [number, number, string, string][] = [];
   for (const popup of engine.popups) {
@@ -363,27 +359,27 @@ function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: nu
   }
   if (pops.length > 0) lastPopupBroadcastTick = engine.tick;
 
-  // Position sync: compact flat array [id, x, y, vx, vy, ...] for moving particles
-  let pos: number[] | undefined;
+  // Position sync: object array for moving particles
+  let pos: { id: string; x: number; y: number; vx: number; vy: number }[] | undefined;
   if (syncPos) {
     pos = [];
     for (const p of engine.particles) {
       if (p.state !== "moving") continue;
-      pos.push(
-        p.id,
-        Math.round(p.position.x * 10) / 10,
-        Math.round(p.position.y * 10) / 10,
-        Math.round(p.velocity.x * 1000) / 1000,
-        Math.round(p.velocity.y * 1000) / 1000,
-      );
+      pos.push({
+        id: p.id,
+        x: Math.round(p.position.x * 10) / 10,
+        y: Math.round(p.position.y * 10) / 10,
+        vx: Math.round(p.velocity.x * 1000) / 1000,
+        vy: Math.round(p.velocity.y * 1000) / 1000,
+      });
     }
   }
 
   // Inline particle meta updates (score/hue) — primary update path
-  let pmu: [number, number, number, number][] | undefined;
+  let pmu: [string, number, number, number][] | undefined;
   if (metaUpdatedIds.length > 0) {
     pmu = [];
-    const seen = new Set<number>();
+    const seen = new Set<string>();
     for (const id of metaUpdatedIds) {
       if (seen.has(id)) continue;
       seen.add(id);
@@ -423,7 +419,7 @@ function coopHue(particle: typeof engine.particles[number]): number {
   return Math.round(ratio * 120); // 0° red → 120° green
 }
 
-const lastSlowState = new Map<number, { hue: number; score: number; cc: number; cd: number; dc: number; dd: number }>();
+const lastSlowState = new Map<string, { hue: number; score: number; cc: number; cd: number; dc: number; dd: number }>();
 
 function buildSlowFrame(full = false): string | null {
   const particles: SlowFrame["particles"] = [];
@@ -497,10 +493,10 @@ async function main() {
         }
         // Check if player is currently live
         const liveParticle = engine.particles.find(
-          (p) => p.label.toLowerCase() === name.toLowerCase(),
+          (p) => p.id.toLowerCase() === name.toLowerCase(),
         );
         if (liveParticle) {
-          jsonResponse(res, 200, { status: "live", particleId: liveParticle.id });
+          jsonResponse(res, 200, { status: "live", id: liveParticle.id });
           return;
         }
         // Look up in Redis
@@ -517,7 +513,7 @@ async function main() {
         const avgScore = totalGames > 0 ? Math.round(((record.score ?? 0) / totalGames) * 10) / 10 : 0;
         jsonResponse(res, 200, {
           status: "offline",
-          label: name,
+          id: name,
           strategy: record.strategy ?? "external",
           score: record.score ?? 0,
           avgScore,

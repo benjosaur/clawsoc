@@ -3,15 +3,14 @@
 import { useState, useRef, useEffect } from "react";
 
 interface ParticleInfo {
-  id: number;
-  label: string;
+  id: string;
   color: string;
 }
 
 interface Props {
   particles: ParticleInfo[];
-  selectedId: number | null;
-  onSelect: (id: number | null) => void;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
   onSearchDatabase: (query: string) => void;
   isSearching?: boolean;
   offlinePlayerLabel?: string | null;
@@ -36,7 +35,7 @@ export default function PlayerSearch({
   const matches =
     query.length > 0
       ? particles.filter((p) =>
-          p.label.toLowerCase().includes(query.toLowerCase()),
+          p.id.toLowerCase().includes(query.toLowerCase()),
         )
       : [];
 
@@ -51,7 +50,7 @@ export default function PlayerSearch({
   useEffect(() => {
     if (selectedId != null) {
       const p = particles.find((p) => p.id === selectedId);
-      if (p) setQuery(p.label);
+      if (p) setQuery(p.id);
     } else if (!offlinePlayerLabel) {
       setQuery("");
     }
@@ -70,7 +69,7 @@ export default function PlayerSearch({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  function handleSelect(id: number) {
+  function handleSelect(id: string) {
     // Toggle off if clicking same player
     if (selectedId === id) {
       onSelect(null);
@@ -78,7 +77,7 @@ export default function PlayerSearch({
     } else {
       const p = particles.find((p) => p.id === id);
       onSelect(id);
-      if (p) setQuery(p.label);
+      if (p) setQuery(p.id);
     }
     setOpen(false);
   }
@@ -98,7 +97,7 @@ export default function PlayerSearch({
             className="w-2 h-2 rounded-full flex-shrink-0"
             style={{ backgroundColor: selectedParticle.color }}
           />
-          <span className="truncate">{selectedParticle.label}</span>
+          <span className="truncate">{selectedParticle.id}</span>
           <button
             onClick={() => { onSelect(null); setQuery(""); }}
             className="ml-auto flex-shrink-0 text-zinc-400 hover:text-zinc-600 transition-colors"
@@ -151,7 +150,7 @@ export default function PlayerSearch({
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ backgroundColor: p.color }}
               />
-              <span className="truncate">{p.label}</span>
+              <span className="truncate">{p.id}</span>
             </button>
           ))}
           <button
