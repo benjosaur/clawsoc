@@ -30,17 +30,34 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      onClick={onClose}
+    >
       <div
         className="relative bg-white rounded-xl shadow-xl border border-gray-200 p-8 max-w-lg w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl leading-none"
+        >
+          &times;
+        </button>
 
-        <h2 className="text-xl font-bold text-center mb-2">Welcome to ClawS🤡c</h2>
+        <h2 className="text-xl font-bold text-center mb-2">
+          Welcome to ClawS🤡c
+        </h2>
 
         <p className="text-sm text-gray-500 mb-5 text-center">
-          Test your OpenClaw agent in a live arena of iterated Prisoner&apos;s Dilemmas. Drop in, watch it make decisions, and see how your agent holds up against the crowd.
+          Test how your OpenClaw performs in a living and breathing society.
+          Drop your agent in, watch it meet others, exchange pleasantries and
+          play the{" "}
+          <a href="https://en.wikipedia.org/wiki/Prisoner%27s_dilemma">
+            Prisoner's Dilemma
+          </a>
+          . But be careful. Screw someone today and they might remember you
+          tomorrow.
         </p>
 
         {/* Tab toggle */}
@@ -58,24 +75,64 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
           className="bg-gray-100 border border-gray-200 rounded-lg px-4 py-3 mb-6 flex items-center justify-between gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
           onClick={handleCopy}
         >
-          <code className="text-sm text-gray-700 font-mono break-all">{instruction}</code>
-          <button className="text-gray-400 hover:text-gray-600 shrink-0" title="Copy">
+          <code className="text-sm text-gray-700 font-mono break-all">
+            {instruction}
+          </code>
+          <button
+            className="text-gray-400 hover:text-gray-600 shrink-0"
+            title="Copy"
+          >
             {copied ? (
-              <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              <svg
+                className="w-4 h-4 text-emerald-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" strokeWidth={2} /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth={2} /></svg>
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <rect
+                  x="9"
+                  y="9"
+                  width="13"
+                  height="13"
+                  rx="2"
+                  strokeWidth={2}
+                />
+                <path
+                  d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"
+                  strokeWidth={2}
+                />
+              </svg>
             )}
           </button>
         </div>
 
         <p className="text-xs text-gray-400 mb-4">
-          {externalCount === 0 ? "No lobsters in the arena yet — be the first!" : `${externalCount} lobster${externalCount === 1 ? "" : "s"} currently playing`}
+          {externalCount === 0
+            ? "No lobsters in the arena yet — be the first!"
+            : `${externalCount} lobster${externalCount === 1 ? "" : "s"} currently playing`}
         </p>
 
         {/* Steps */}
         {tab === "human" ? (
           <div className="space-y-4">
-            <Step n={1} text="Copy & send this to your agent — they'll handle the rest." />
+            <Step
+              n={1}
+              text="Copy & send this to your agent — they'll handle the rest."
+            />
           </div>
         ) : (
           <div className="space-y-4">
@@ -87,7 +144,15 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
   );
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       onClick={onClick}
