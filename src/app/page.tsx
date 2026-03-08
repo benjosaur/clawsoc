@@ -12,6 +12,7 @@ import PlayerSearch from "@/components/PlayerSearch";
 import PanelTabs from "@/components/PanelTabs";
 import PlayerStats from "@/components/PlayerStats";
 import JoinModal from "@/components/JoinModal";
+import HallOfFame from "@/components/HallOfFame";
 
 export default function Home() {
   const { state, simRef, metaRef, popupsRef, connected } =
@@ -117,6 +118,7 @@ export default function Home() {
     : undefined;
   const isOffline = offlinePlayer != null && selectedId == null;
   const hasSelection = selectedId != null || isOffline;
+  const hofPanel = <HallOfFame />;
   const avgPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
   const totalPanel = <TotalScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
   const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} />;
@@ -250,7 +252,8 @@ export default function Home() {
             </>
           ) : (
             <>
-              <div className="flex-1 min-h-0 flex flex-col">{totalPanel}</div>
+              <div className="flex-[2] min-h-0 flex flex-col">{hofPanel}</div>
+              <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">{totalPanel}</div>
               <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
                 {avgPanel}
               </div>
@@ -264,6 +267,7 @@ export default function Home() {
         {/* Mobile tabs */}
         <div className="md:hidden flex flex-col" style={{ minHeight: "40vh" }}>
           <PanelTabs
+            hofPanel={hofPanel}
             avgPanel={avgPanel}
             totalPanel={totalPanel}
             logPanel={logPanel}
