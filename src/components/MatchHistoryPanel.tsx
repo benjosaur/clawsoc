@@ -1,13 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { GameLogEntry, MatchRecord, TimeoutRecord } from "@/simulation/types";
+import { GameLogEntry, MatchRecord, TimeoutRecord, StrategyType } from "@/simulation/types";
+import type { ParticleMeta } from "@/hooks/useServerSimulation";
+
+const STRATEGY_SHORT: Partial<Record<StrategyType, string>> = {
+  always_cooperate: "COOP",
+  always_defect: "DEFT",
+  tit_for_tat: "TFT",
+  random: "RAND",
+  grudger: "GRDG",
+};
+
+const STRATEGY_TOOLTIP: Partial<Record<StrategyType, string>> = {
+  always_cooperate: "BOT Strategy: COOPERATE 🕊️ — Always cooperates",
+  always_defect: "BOT Strategy: DEFECT 😈 — Always defects",
+  tit_for_tat: "BOT Strategy: TIT FOR TAT 🪞 — Mirrors opponent's last move",
+  random: "BOT Strategy: RANDOM 🎲 — Chooses randomly",
+  grudger: "BOT Strategy: GRUDGE 🔒 — Cooperates until betrayed",
+};
+
+function getFaction(coopPct: number) {
+  if (coopPct >= 75) return { label: "True Cooperative", emoji: "🕊️", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" };
+  if (coopPct >= 50) return { label: "Pragmatic Cooperative", emoji: "⚖️", color: "text-blue-700", bg: "bg-blue-50 border-blue-200" };
+  if (coopPct >= 25) return { label: "Pragmatic Defector", emoji: "🗡️", color: "text-orange-700", bg: "bg-orange-50 border-orange-200" };
+  return { label: "True Defector", emoji: "😈", color: "text-red-700", bg: "bg-red-50 border-red-200" };
+}
 
 interface Props {
   entries: GameLogEntry[];
   selectedId?: string | null;
   label?: string;
+  particles?: ParticleMeta[];
 }
 
 function DecisionBadge({ decision }: { decision: "cooperate" | "defect" }) {
@@ -22,52 +47,81 @@ function DecisionBadge({ decision }: { decision: "cooperate" | "defect" }) {
   );
 }
 
-const STRATEGY_LABELS: Record<string, string> = {
-  always_cooperate: "Always Cooperate",
-  always_defect: "Always Defect",
-  tit_for_tat: "Tit for Tat",
-  random: "Random",
-  grudger: "Grudger",
-  external: "External",
-};
+function ParticipantRow({
+  participant,
+  decision,
+  score,
+  message,
+  lookup,
+}: {
+  participant: { id: string; strategy: StrategyType };
+  decision: "cooperate" | "defect";
+  score: number;
+  message?: string;
+  lookup?: ParticleMeta;
+}) {
+  const total = lookup ? lookup.cc + lookup.cd + lookup.dc + lookup.dd : 0;
+  const coopPct = total > 0 && lookup ? ((lookup.cc + lookup.cd) / total) * 100 : 0;
+  const faction = total > 0 ? getFaction(coopPct) : null;
 
-function strategyEmoji(strategy: string): string {
-  if (strategy === "external") return "\uD83E\uDD9E";
-  return "\uD83E\uDD16";
+  return (
+    <div>
+      <div className="flex items-center gap-1.5">
+        <span
+          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+          style={{ backgroundColor: lookup?.color ?? "hsl(60,50%,45%)" }}
+        />
+        <span className="text-[10px]">{participant.strategy === "external" ? "🦞" : "🤖"}</span>
+        <span className="font-medium text-zinc-900">{participant.id}</span>
+        {STRATEGY_SHORT[participant.strategy] && (
+          <span className="relative group cursor-default text-zinc-500 text-[9px] tracking-wide bg-zinc-100 px-1 py-0.5 rounded">
+            {STRATEGY_SHORT[participant.strategy]}
+            {STRATEGY_TOOLTIP[participant.strategy] && (
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] font-mono bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                {STRATEGY_TOOLTIP[participant.strategy]}
+              </span>
+            )}
+          </span>
+        )}
+        {faction && (
+          <span className={`ml-auto text-[9px] font-semibold px-1.5 py-0.5 rounded border ${faction.bg} ${faction.color}`}>
+            {faction.emoji} {faction.label}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 mt-1">
+        <DecisionBadge decision={decision} />
+        <span className={decision === "cooperate" ? "text-emerald-600" : "text-red-500"}>+{score}</span>
+      </div>
+      {message && (
+        <p className="mt-1.5 text-zinc-500 italic leading-snug">
+          &ldquo;{message}&rdquo;
+        </p>
+      )}
+    </div>
+  );
 }
 
-function MatchModalContent({ entry }: { entry: MatchRecord }) {
+function MatchModalContent({ entry, particleMap }: { entry: MatchRecord; particleMap: Map<string, ParticleMeta> }) {
   return (
     <>
       <div className="mb-3">
-        <div className="flex items-center gap-1.5">
-          <span className="font-medium text-zinc-900">{strategyEmoji(entry.particleA.strategy)} {entry.particleA.id}</span>
-          <span className="text-zinc-400">{STRATEGY_LABELS[entry.particleA.strategy] ?? entry.particleA.strategy}</span>
-        </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <DecisionBadge decision={entry.decisionA} />
-          <span className={entry.decisionA === "cooperate" ? "text-emerald-600" : "text-red-500"}>+{entry.scoreA}</span>
-        </div>
-        {entry.messageA && (
-          <p className="mt-1.5 text-zinc-500 italic leading-snug">
-            &ldquo;{entry.messageA}&rdquo;
-          </p>
-        )}
+        <ParticipantRow
+          participant={entry.particleA}
+          decision={entry.decisionA}
+          score={entry.scoreA}
+          message={entry.messageA}
+          lookup={particleMap.get(entry.particleA.id)}
+        />
       </div>
       <div className="border-t border-zinc-100 pt-3">
-        <div className="flex items-center gap-1.5">
-          <span className="font-medium text-zinc-900">{strategyEmoji(entry.particleB.strategy)} {entry.particleB.id}</span>
-          <span className="text-zinc-400">{STRATEGY_LABELS[entry.particleB.strategy] ?? entry.particleB.strategy}</span>
-        </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <DecisionBadge decision={entry.decisionB} />
-          <span className={entry.decisionB === "cooperate" ? "text-emerald-600" : "text-red-500"}>+{entry.scoreB}</span>
-        </div>
-        {entry.messageB && (
-          <p className="mt-1.5 text-zinc-500 italic leading-snug">
-            &ldquo;{entry.messageB}&rdquo;
-          </p>
-        )}
+        <ParticipantRow
+          participant={entry.particleB}
+          decision={entry.decisionB}
+          score={entry.scoreB}
+          message={entry.messageB}
+          lookup={particleMap.get(entry.particleB.id)}
+        />
       </div>
     </>
   );
@@ -87,7 +141,7 @@ function TimeoutModalContent({ entry }: { entry: TimeoutRecord }) {
   );
 }
 
-function EntryModal({ entry, onClose }: { entry: GameLogEntry; onClose: () => void }) {
+function EntryModal({ entry, onClose, particleMap }: { entry: GameLogEntry; onClose: () => void; particleMap: Map<string, ParticleMeta> }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -108,7 +162,7 @@ function EntryModal({ entry, onClose }: { entry: GameLogEntry; onClose: () => vo
           &times;
         </button>
         {entry.type === "match" ? (
-          <MatchModalContent entry={entry} />
+          <MatchModalContent entry={entry} particleMap={particleMap} />
         ) : (
           <TimeoutModalContent entry={entry} />
         )}
@@ -118,8 +172,13 @@ function EntryModal({ entry, onClose }: { entry: GameLogEntry; onClose: () => vo
   );
 }
 
-export default function MatchHistoryPanel({ entries, selectedId, label }: Props) {
+export default function MatchHistoryPanel({ entries, selectedId, label, particles = [] }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const particleMap = useMemo(() => {
+    const map = new Map<string, ParticleMeta>();
+    for (const p of particles) map.set(p.id, p);
+    return map;
+  }, [particles]);
 
   const recent = [...entries].reverse();
   const filtered =
@@ -152,7 +211,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label }: Props)
               {/* Left: player A */}
               <div className="flex-1 min-w-0 text-left">
                 <div className="flex items-center gap-1">
-                  <span className="flex-shrink-0">{strategyEmoji(entry.particleA.strategy)}</span>
+                  <span className="flex-shrink-0">{entry.particleA.strategy === "external" ? "🦞" : "🤖"}</span>
                   <DecisionBadge decision={entry.decisionA} />
                   <span className={`${entry.decisionA === "cooperate" ? "text-emerald-600" : "text-red-500"} tabular-nums flex-shrink-0`}>+{entry.scoreA}</span>
                   <span className="truncate">{entry.particleA.id}</span>
@@ -169,7 +228,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label }: Props)
                   <span className="truncate">{entry.particleB.id}</span>
                   <span className={`${entry.decisionB === "cooperate" ? "text-emerald-600" : "text-red-500"} tabular-nums flex-shrink-0`}>+{entry.scoreB}</span>
                   <DecisionBadge decision={entry.decisionB} />
-                  <span className="flex-shrink-0">{strategyEmoji(entry.particleB.strategy)}</span>
+                  <span className="flex-shrink-0">{entry.particleB.strategy === "external" ? "🦞" : "🤖"}</span>
                 </div>
                 {entry.messageB && (
                   <p className="text-xs text-zinc-500 truncate">
@@ -193,7 +252,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label }: Props)
       </div>
 
       {openEntry && (
-        <EntryModal entry={openEntry} onClose={() => setOpenId(null)} />
+        <EntryModal entry={openEntry} onClose={() => setOpenId(null)} particleMap={particleMap} />
       )}
     </>
   );

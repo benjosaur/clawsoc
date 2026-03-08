@@ -121,7 +121,7 @@ export default function Home() {
   const hofPanel = <HallOfFame />;
   const avgPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
   const totalPanel = <TotalScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
-  const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} />;
+  const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} particles={state.particles} />;
   const displayParticle = isOffline
     ? {
         id: offlinePlayer.id,
@@ -141,7 +141,7 @@ export default function Home() {
       offline={isOffline}
     />
   );
-  const playerLogPanel = <MatchHistoryPanel entries={playerLog} label="Match Log" />;
+  const playerLogPanel = <MatchHistoryPanel entries={playerLog} label="Match Log" particles={state.particles} />;
 
   return (
     <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-4 md:gap-5">
