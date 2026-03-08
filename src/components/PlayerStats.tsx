@@ -1,23 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
 import type { StrategyType } from "@/simulation/types";
-
-const STRATEGY_SHORT: Partial<Record<StrategyType, string>> = {
-  always_cooperate: "COOP",
-  always_defect: "DEFT",
-  tit_for_tat: "TFT",
-  random: "RAND",
-  grudger: "GRDG",
-};
-
-const STRATEGY_TOOLTIP: Partial<Record<StrategyType, string>> = {
-  always_cooperate: "BOT Strategy: COOPERATE 🕊️ — Always cooperates",
-  always_defect: "BOT Strategy: DEFECT 😈 — Always defects",
-  tit_for_tat: "BOT Strategy: TIT FOR TAT 🪞 — Mirrors opponent's last move",
-  random: "BOT Strategy: RANDOM 🎲 — Chooses randomly",
-  grudger: "BOT Strategy: GRUDGE 🔒 — Cooperates until betrayed",
-};
+import { STRATEGY_SHORT, STRATEGY_TOOLTIP, useStrategyTip, StrategyTipPortal } from "@/components/StrategyTip";
 
 interface ParticleData {
   id: string;
@@ -59,12 +43,7 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
     );
   }
 
-  const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
-  const showTip = useCallback((e: React.MouseEvent, text: string) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTip({ text, x: rect.right, y: rect.top - 4 });
-  }, []);
-  const hideTip = useCallback(() => setTip(null), []);
+  const { tip, showTip, hideTip } = useStrategyTip();
 
   const cc = particle.cc || 0;
   const cd = particle.cd || 0;
@@ -181,14 +160,7 @@ export default function PlayerStats({ particle, onDeselect, offline }: Props) {
           </tbody>
         </table>
       </div>
-      {tip && (
-        <div
-          className="fixed px-2.5 py-1.5 bg-white border border-zinc-200 rounded shadow-sm text-[10px] font-mono text-zinc-600 whitespace-nowrap z-50 pointer-events-none"
-          style={{ left: tip.x, top: tip.y, transform: "translate(-100%, -100%)" }}
-        >
-          {tip.text}
-        </div>
-      )}
+      <StrategyTipPortal tip={tip} />
     </>
   );
 }
