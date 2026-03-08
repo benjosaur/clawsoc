@@ -24,6 +24,7 @@ export default function Home() {
   const npcCount = state.particles.length - externalCount;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showJoinModal, setShowJoinModal] = useState(true);
+  const [showHallOfFame, setShowHallOfFame] = useState(false);
   const [offlinePlayer, setOfflinePlayer] = useState<{
     id: string;
     strategy: StrategyType;
@@ -118,7 +119,6 @@ export default function Home() {
     : undefined;
   const isOffline = offlinePlayer != null && selectedId == null;
   const hasSelection = selectedId != null || isOffline;
-  const hofPanel = <HallOfFame />;
   const avgPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
   const totalPanel = <TotalScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
   const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} particles={state.particles} />;
@@ -179,6 +179,14 @@ export default function Home() {
             notFound={searchNotFound}
             onClearNotFound={() => setSearchNotFound(false)}
           />
+          <span className="hof-rainbow">
+            <button
+              onClick={() => setShowHallOfFame(true)}
+              className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-xs font-medium text-amber-700 transition-colors"
+            >
+              Hall of Fame
+            </button>
+          </span>
           <button
             onClick={() => setShowJoinModal(true)}
             className="px-3 py-1 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-medium text-emerald-700 transition-colors"
@@ -252,8 +260,7 @@ export default function Home() {
             </>
           ) : (
             <>
-              <div className="flex-[2] min-h-0 flex flex-col">{hofPanel}</div>
-              <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">{totalPanel}</div>
+              <div className="flex-1 min-h-0 flex flex-col">{totalPanel}</div>
               <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
                 {avgPanel}
               </div>
@@ -267,7 +274,6 @@ export default function Home() {
         {/* Mobile tabs */}
         <div className="md:hidden flex flex-col" style={{ minHeight: "40vh" }}>
           <PanelTabs
-            hofPanel={hofPanel}
             avgPanel={avgPanel}
             totalPanel={totalPanel}
             logPanel={logPanel}
@@ -276,6 +282,7 @@ export default function Home() {
         </div>
       </div>
       <JoinModal open={showJoinModal} onClose={() => setShowJoinModal(false)} externalCount={externalCount} />
+      <HallOfFame open={showHallOfFame} onClose={() => setShowHallOfFame(false)} />
     </main>
   );
 }
