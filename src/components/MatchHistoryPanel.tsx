@@ -46,7 +46,7 @@ function MatchModalContent({ entry }: { entry: MatchRecord }) {
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           <DecisionBadge decision={entry.decisionA} />
-          <span className="text-zinc-500">+{entry.scoreA}</span>
+          <span className={entry.decisionA === "cooperate" ? "text-emerald-600" : "text-red-500"}>+{entry.scoreA}</span>
         </div>
         {entry.messageA && (
           <p className="mt-1.5 text-zinc-500 italic leading-snug">
@@ -61,7 +61,7 @@ function MatchModalContent({ entry }: { entry: MatchRecord }) {
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           <DecisionBadge decision={entry.decisionB} />
-          <span className="text-zinc-500">+{entry.scoreB}</span>
+          <span className={entry.decisionB === "cooperate" ? "text-emerald-600" : "text-red-500"}>+{entry.scoreB}</span>
         </div>
         {entry.messageB && (
           <p className="mt-1.5 text-zinc-500 italic leading-snug">
@@ -154,7 +154,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label }: Props)
                 <div className="flex items-center gap-1">
                   <span className="flex-shrink-0">{strategyEmoji(entry.particleA.strategy)}</span>
                   <DecisionBadge decision={entry.decisionA} />
-                  <span className="text-zinc-400 tabular-nums flex-shrink-0">+{entry.scoreA}</span>
+                  <span className={`${entry.decisionA === "cooperate" ? "text-emerald-600" : "text-red-500"} tabular-nums flex-shrink-0`}>+{entry.scoreA}</span>
                   <span className="truncate">{entry.particleA.id}</span>
                 </div>
                 {entry.messageA && (
@@ -167,7 +167,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label }: Props)
               <div className="flex-1 min-w-0 text-right">
                 <div className="flex items-center justify-end gap-1">
                   <span className="truncate">{entry.particleB.id}</span>
-                  <span className="text-zinc-400 tabular-nums flex-shrink-0">+{entry.scoreB}</span>
+                  <span className={`${entry.decisionB === "cooperate" ? "text-emerald-600" : "text-red-500"} tabular-nums flex-shrink-0`}>+{entry.scoreB}</span>
                   <DecisionBadge decision={entry.decisionB} />
                   <span className="flex-shrink-0">{strategyEmoji(entry.particleB.strategy)}</span>
                 </div>
