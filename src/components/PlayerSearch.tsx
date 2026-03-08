@@ -102,10 +102,10 @@ export default function PlayerSearch({
         }}
         onFocus={() => query.length > 0 && setOpen(true)}
         placeholder="Find player…"
-        className="w-28 pl-5 pr-2 py-1 border border-zinc-200 rounded text-xs font-mono text-zinc-700 placeholder:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-amber-300 focus:border-amber-300"
+        className="w-48 pl-5 pr-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-300 focus:border-amber-300"
       />
       {open && query.length > 0 && (
-        <div className="absolute top-full left-0 mt-1 w-48 max-h-48 overflow-y-auto bg-white border border-zinc-200 rounded shadow-lg z-50">
+        <div className="absolute top-full left-0 mt-1 w-56 max-h-48 overflow-y-auto bg-white border border-zinc-200 rounded shadow-lg z-50">
           {matches.map((p) => (
             <button
               key={p.id}

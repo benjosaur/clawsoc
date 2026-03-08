@@ -175,6 +175,12 @@ export default function Home() {
           notFound={searchNotFound}
           onClearNotFound={() => setSearchNotFound(false)}
         />
+        <button
+          onClick={() => setShowJoinModal(true)}
+          className="px-3 py-1 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-medium text-emerald-700 transition-colors"
+        >
+          Join
+        </button>
       </div>
 
       {/* Desktop: side-by-side | Mobile: stacked */}
@@ -195,12 +201,6 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setShowJoinModal(true)}
-              className="px-3 py-1 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-medium text-emerald-700 transition-colors"
-            >
-              Join
-            </button>
             {!connected && (
               <span className="text-[10px] text-amber-500 font-mono">
                 reconnecting...
