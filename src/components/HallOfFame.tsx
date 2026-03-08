@@ -1,16 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { StrategyType, HallOfFameResponse } from "@/simulation/types";
-
-const STRATEGY_SHORT: Record<StrategyType, string> = {
-  always_cooperate: "COOP",
-  always_defect: "DEFT",
-  tit_for_tat: "TFT",
-  random: "RAND",
-  grudger: "GRDG",
-  external: "\u{1F99E}",
-};
+import type { HallOfFameResponse } from "@/simulation/types";
+import { STRATEGY_SHORT, STRATEGY_TOOLTIP, useStrategyTip, StrategyTipPortal } from "@/components/StrategyTip";
 
 const PAGE_SIZE = 20;
 
@@ -23,6 +15,7 @@ export default function HallOfFame({ open, onClose }: Props) {
   const [data, setData] = useState<HallOfFameResponse | null>(null);
   const [page, setPage] = useState(1);
   const [includeBots, setIncludeBots] = useState(false);
+  const { tip, showTip, hideTip } = useStrategyTip();
 
   const fetchPage = (p: number) => {
     fetch(`/api/halloffame?page=${p}&pageSize=${PAGE_SIZE}`)
@@ -93,8 +86,9 @@ export default function HallOfFame({ open, onClose }: Props) {
         <div className="flex items-center gap-2 text-[10px] font-medium text-zinc-400 uppercase font-mono border-b border-zinc-100 pb-1.5 mb-1">
           <span className="w-5 text-right">#</span>
           <span className="w-2.5" />
+          <span className="w-4" />
           <span className="flex-1">Name</span>
-          <span className="w-10">Strat</span>
+          {includeBots && <span className="w-10">Strat</span>}
           <span className="w-10 text-right">Games</span>
           <span className="w-12 text-right">Avg</span>
           <span className="w-16 text-right">Rating</span>
@@ -124,6 +118,7 @@ export default function HallOfFame({ open, onClose }: Props) {
                     className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                     style={{ backgroundColor: color }}
                   />
+                  <span className="w-4 text-center flex-shrink-0">{entry.isExternal ? "\u{1F99E}" : "\u{1F916}"}</span>
                   <span
                     className={`flex-1 truncate flex items-center gap-1 ${entry.isExternal ? "" : "text-zinc-700"}`}
                     style={entry.isExternal ? { color: "#E54D2E" } : undefined}
@@ -133,9 +128,15 @@ export default function HallOfFame({ open, onClose }: Props) {
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" title="Live" />
                     )}
                   </span>
-                  <span className="text-zinc-500 w-10 text-[10px] tracking-wide">
-                    {STRATEGY_SHORT[entry.strategy]}
-                  </span>
+                  {includeBots && (
+                    <span
+                      className="text-zinc-500 w-10 text-[10px] tracking-wide cursor-default"
+                      onMouseEnter={STRATEGY_TOOLTIP[entry.strategy] ? (e) => showTip(e, STRATEGY_TOOLTIP[entry.strategy]!) : undefined}
+                      onMouseLeave={hideTip}
+                    >
+                      {STRATEGY_SHORT[entry.strategy] ?? ""}
+                    </span>
+                  )}
                   <span className="text-zinc-600 w-10 text-right tabular-nums" title="Games played">
                     {entry.games}
                   </span>
@@ -184,6 +185,7 @@ export default function HallOfFame({ open, onClose }: Props) {
           </div>
         )}
       </div>
+      <StrategyTipPortal tip={tip} />
     </div>
   );
 }

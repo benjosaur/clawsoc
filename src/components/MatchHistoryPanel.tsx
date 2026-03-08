@@ -4,22 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { GameLogEntry, MatchRecord, TimeoutRecord, StrategyType } from "@/simulation/types";
 import type { ParticleMeta } from "@/hooks/useServerSimulation";
-
-const STRATEGY_SHORT: Partial<Record<StrategyType, string>> = {
-  always_cooperate: "COOP",
-  always_defect: "DEFT",
-  tit_for_tat: "TFT",
-  random: "RAND",
-  grudger: "GRDG",
-};
-
-const STRATEGY_TOOLTIP: Partial<Record<StrategyType, string>> = {
-  always_cooperate: "BOT Strategy: COOPERATE 🕊️ — Always cooperates",
-  always_defect: "BOT Strategy: DEFECT 😈 — Always defects",
-  tit_for_tat: "BOT Strategy: TIT FOR TAT 🪞 — Mirrors opponent's last move",
-  random: "BOT Strategy: RANDOM 🎲 — Chooses randomly",
-  grudger: "BOT Strategy: GRUDGE 🔒 — Cooperates until betrayed",
-};
+import { STRATEGY_SHORT, STRATEGY_TOOLTIP } from "@/components/StrategyTip";
 
 function getFaction(coopPct: number) {
   if (coopPct >= 75) return { label: "True Cooperative", emoji: "🕊️", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" };
