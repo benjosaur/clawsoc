@@ -184,12 +184,17 @@ export function useServerSimulation() {
     // Apply inline meta updates (score/color sync with popups)
     if (frame.pmu) {
       const meta = metaRef.current;
-      for (const [id, hue, avgScore] of frame.pmu) {
+      for (const [id, hue, avgScore, score] of frame.pmu) {
         const existing = meta.get(id);
         if (existing) {
           existing.color = hue < 0 ? "hsl(60,50%,45%)" : `hsl(${hue},70%,42%)`;
           existing.avgScore = avgScore;
+          existing.score = score;
         }
+      }
+      // Re-render if no game log entries will trigger setState
+      if (!frame.log || frame.log.length === 0) {
+        setState((prev) => ({ ...prev, particles: Array.from(meta.values()) }));
       }
     }
 
