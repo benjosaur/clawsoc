@@ -254,7 +254,7 @@ async function testAgentStatus() {
   }
 
   await test("status with valid token", async () => {
-    const res = await fetch(`${BASE}/api/agent/status`, {
+    const res = await fetch(`${BASE}/api/agent/status?username=${TEST_USER}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     expect(res.ok, `status ${res.status}`);
@@ -265,13 +265,23 @@ async function testAgentStatus() {
   });
 
   await test("status without auth returns 401", async () => {
-    const res = await fetch(`${BASE}/api/agent/status`);
+    const res = await fetch(`${BASE}/api/agent/status?username=nobody`);
     expect(res.status === 401, `expected 401, got ${res.status}`);
   });
 
+  await test("status without username returns 400", async () => {
+    const res = await fetch(`${BASE}/api/agent/status`);
+    expect(res.status === 400, `expected 400, got ${res.status}`);
+  });
+
   await test("match without auth returns 401", async () => {
-    const res = await fetch(`${BASE}/api/agent/match`);
+    const res = await fetch(`${BASE}/api/agent/match?username=nobody`);
     expect(res.status === 401, `expected 401, got ${res.status}`);
+  });
+
+  await test("match without username returns 400", async () => {
+    const res = await fetch(`${BASE}/api/agent/match`);
+    expect(res.status === 400, `expected 400, got ${res.status}`);
   });
 }
 
@@ -288,7 +298,7 @@ async function testAgentDecision() {
   }
 
   await test("invalid decision returns 400", async () => {
-    const res = await fetch(`${BASE}/api/agent/decide`, {
+    const res = await fetch(`${BASE}/api/agent/decide?username=${TEST_USER}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -300,7 +310,7 @@ async function testAgentDecision() {
   });
 
   await test("decide with no pending match returns 409", async () => {
-    const res = await fetch(`${BASE}/api/agent/decide`, {
+    const res = await fetch(`${BASE}/api/agent/decide?username=${TEST_USER}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -329,7 +339,7 @@ async function testGameplayLoop() {
   let matchData: any = null;
 
   await test("wait for match via blocking endpoint (up to 120s)", async () => {
-    const res = await fetch(`${BASE}/api/agent/match`, {
+    const res = await fetch(`${BASE}/api/agent/match?username=${TEST_USER}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(120_000),
     });
@@ -349,7 +359,7 @@ async function testGameplayLoop() {
   });
 
   await test("submit decision and receive result", async () => {
-    const res = await fetch(`${BASE}/api/agent/decide`, {
+    const res = await fetch(`${BASE}/api/agent/decide?username=${TEST_USER}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -370,7 +380,7 @@ async function testGameplayLoop() {
   });
 
   await test("score updated after match", async () => {
-    const res = await fetch(`${BASE}/api/agent/status`, {
+    const res = await fetch(`${BASE}/api/agent/status?username=${TEST_USER}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     expect(res.ok, `status ${res.status}`);
@@ -424,7 +434,7 @@ async function testAgentLeave() {
   }
 
   await test("leave with valid token", async () => {
-    const res = await fetch(`${BASE}/api/agent/leave`, {
+    const res = await fetch(`${BASE}/api/agent/leave?username=${TEST_USER}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${apiKey}` },
     });
@@ -476,7 +486,7 @@ async function testOwnership() {
     expect(res.status === 400, `expected 400, got ${res.status}`);
     const body = await res.json();
     expect(
-      body.error?.includes("claimed"),
+      body.error?.includes("taken"),
       `unexpected error: ${body.error}`
     );
   });
@@ -487,7 +497,7 @@ async function testOwnership() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
     try {
-      const res = await fetch(`${BASE}/api/agent/match`, {
+      const res = await fetch(`${BASE}/api/agent/match?username=${TEST_USER}`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: controller.signal,
       });
@@ -506,14 +516,14 @@ async function testOwnership() {
       );
     }
     // Verify agent is back in arena via status
-    const statusRes = await fetch(`${BASE}/api/agent/status`, {
+    const statusRes = await fetch(`${BASE}/api/agent/status?username=${TEST_USER}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     expect(statusRes.ok, `status after rejoin: ${statusRes.status}`);
   });
 
   await test("cleanup: leave rejoined agent", async () => {
-    const res = await fetch(`${BASE}/api/agent/leave`, {
+    const res = await fetch(`${BASE}/api/agent/leave?username=${TEST_USER}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${apiKey}` },
     });

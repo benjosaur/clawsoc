@@ -144,6 +144,20 @@ engine.onRequestExternalDecision = (side, self, opponent, aId, bId) => {
   agentManager.resolveMatchWaiter(username, match);
 };
 
+// --- Park callback (external particles freeze after match until next /match) ---
+
+engine.onParticleParked = (particleId, username) => {
+  agentManager.parkAgent(username);
+
+  // Race condition fix: if the agent already called /match before the previous
+  // match resolved, a waiter is registered. Unpark immediately so the particle
+  // can collide again.
+  if (agentManager.hasMatchWaiter(username)) {
+    agentManager.unparkAgent(username);
+    engine.unparkParticle(particleId);
+  }
+};
+
 // --- Match result callback ---
 
 engine.onMatchResolved = (record, aId, bId) => {
@@ -196,10 +210,23 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     return jsonResponse(res, 200, result);
   }
 
-  // All other routes require auth
-  const username = agentManager.authenticateRequest(req.headers.authorization);
+  // All other routes require auth + username query param
+  const url = new URL(req.url ?? "", `http://${req.headers.host}`);
+  const queryUsername = url.searchParams.get("username");
+  if (!queryUsername) {
+    return jsonResponse(res, 400, { error: "Missing required query parameter: username" });
+  }
+
+  // Try fast in-memory auth first, fall back to Redis lookup by username
+  let username = agentManager.authenticateRequest(req.headers.authorization);
+  if (!username) {
+    username = await agentManager.authenticateWithUsername(queryUsername, req.headers.authorization);
+  }
   if (!username) {
     return jsonResponse(res, 401, { error: "Unauthorized. Provide Authorization: Bearer <api_key>" });
+  }
+  if (username !== queryUsername) {
+    return jsonResponse(res, 403, { error: "API key does not belong to the specified username" });
   }
 
   const apiKeyHash = agentManager.getApiKeyHash(req.headers.authorization)!;
@@ -211,6 +238,10 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       const status = rejoin.error === "arena_full" ? 503 : 400;
       return jsonResponse(res, status, { error: rejoin.error });
     }
+
+    // Unpark if parked from a previous match
+    agentManager.unparkAgent(username);
+    engine.unparkParticle(username);
 
     try {
       const match = await Promise.race([
@@ -325,7 +356,7 @@ function buildInitFrame(): string {
       vx: p.velocity.x,
       vy: p.velocity.y,
       radius: p.radius,
-      state: p.state === "colliding" ? 1 : 0,
+      state: p.state === "colliding" ? 1 : p.state === "parked" ? 3 : 0,
     })),
     meta: engine.particles.map((p) => {
       const m: { id: string; radius: number; strategy: StrategyType; greeting?: string } = {
@@ -573,6 +604,15 @@ async function main() {
         engine.abortPair(match.aId, match.bId);
         agentManager.removeAgent(username, engine).catch((err) =>
           console.error(`[server] removeAgent failed for ${username}:`, err)
+        );
+      }
+    }
+
+    // Parked timeout: kick agents idle for 30s after match
+    for (const [username, parkedTime] of agentManager.getParkedAgents()) {
+      if (now - parkedTime > 30_000) {
+        agentManager.removeAgent(username, engine).catch((err) =>
+          console.error(`[server] parked timeout removeAgent failed for ${username}:`, err)
         );
       }
     }

@@ -24,10 +24,6 @@ export type RegisterResult =
   | { apiKey: string }
   | { error: string };
 
-export type LoginResult =
-  | { returning: true; score: number; matches: number }
-  | { error: string };
-
 type Redis = {
   set(key: string, value: string): Promise<unknown>;
   get(key: string): Promise<string | null>;
@@ -50,6 +46,7 @@ export class AgentManager {
   private matchWaiters = new Map<string, { resolve: (match: PendingMatch) => void; reject: (err: Error) => void }>();
   private resultWaiters = new Map<string, { resolve: (record: MatchRecord | null) => void }>();
   private activeResultKeys = new Map<string, string>(); // username → "aId|bId"
+  private parkedAt = new Map<string, number>(); // username → Date.now() when parked
   private redis: Redis | null = null;
 
   constructor(redisUrl?: string) {
@@ -137,7 +134,7 @@ export class AgentManager {
     if (this.redis) {
       const ownerHash = await this.redis.get(`owner:${username}`);
       if (ownerHash) {
-        return { error: "Username is claimed. Use POST /api/agent/login to rejoin." };
+        return { error: "Username is taken. If this is your account, use GET /api/agent/match?username=<username> to rejoin. Otherwise, pick a different username." };
       }
     }
 
@@ -159,52 +156,6 @@ export class AgentManager {
     return { apiKey };
   }
 
-  async login(username: string, greeting: string, apiKey: string, engine: SimulationEngine): Promise<LoginResult> {
-    const invalid = this.validateUsername(username);
-    if (invalid) return { error: invalid };
-    if (this.agents.has(username)) return { error: "Already in the arena" };
-    if (!apiKey) return { error: "apiKey is required" };
-
-    if (!this.redis) {
-      return { error: "No persistence layer — cannot verify ownership" };
-    }
-
-    const ownerHash = await this.redis.get(`owner:${username}`);
-    if (!ownerHash) {
-      return { error: "Username not found. Use POST /api/agent/register to create an account." };
-    }
-
-    const apiKeyH = hashKey(apiKey);
-    if (apiKeyH !== ownerHash) {
-      return { error: "Invalid API key for this username" };
-    }
-
-    const result = await this.displaceAndSpawn(username, greeting, apiKeyH, engine);
-    if ("error" in result) return result;
-
-    const { particle, agent } = result;
-    this.agents.set(username, agent);
-    this.apiKeyToUsername.set(apiKeyH, username);
-
-    // Restore prior record from Redis
-    const raw = await this.redis.get(`record:${username}`);
-    if (raw) {
-      try {
-        const rec = JSON.parse(raw);
-        particle.score = rec.score ?? 0;
-        particle.matchHistory = rec.matchHistory ?? {};
-      } catch (err) { console.error(`[AgentManager] Failed to parse record for ${username}:`, err); }
-    }
-
-    await this.redis.set(`agent:${username}`, JSON.stringify(agent));
-
-    const matchCount = Object.values(particle.matchHistory).reduce(
-      (sum, h) => sum + h.cc + h.cd + h.dc + h.dd, 0
-    );
-
-    return { returning: true, score: particle.score, matches: matchCount };
-  }
-
   authenticateRequest(authHeader: string | undefined): string | null {
     if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
     const token = authHeader.slice(7);
@@ -212,9 +163,33 @@ export class AgentManager {
     return this.apiKeyToUsername.get(h) ?? null;
   }
 
+  async authenticateWithUsername(username: string, authHeader: string | undefined): Promise<string | null> {
+    if (!authHeader?.startsWith("Bearer ") || !this.redis) return null;
+    const h = hashKey(authHeader.slice(7));
+    const ownerHash = await this.redis.get(`owner:${username}`);
+    if (ownerHash && ownerHash === h) return username;
+    return null;
+  }
+
   getApiKeyHash(authHeader: string | undefined): string | null {
     if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
     return hashKey(authHeader.slice(7));
+  }
+
+  parkAgent(username: string): void {
+    this.parkedAt.set(username, Date.now());
+  }
+
+  unparkAgent(username: string): void {
+    this.parkedAt.delete(username);
+  }
+
+  getParkedAgents(): Map<string, number> {
+    return this.parkedAt;
+  }
+
+  hasMatchWaiter(username: string): boolean {
+    return this.matchWaiters.has(username);
   }
 
   setPendingMatch(username: string, match: PendingMatch): void {
@@ -370,6 +345,7 @@ export class AgentManager {
         rw.resolve(null);
       }
     }
+    this.parkedAt.delete(username);
     this.apiKeyToUsername.delete(agent.apiKeyHash);
     this.agents.delete(username);
 
