@@ -40,7 +40,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl leading-none"
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl leading-none cursor-pointer"
         >
           &times;
         </button>
