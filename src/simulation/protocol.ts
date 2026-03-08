@@ -48,7 +48,7 @@ export interface EventFrame {
   events: SimEvent[];
   pop?: [number, number, string, string][]; // [x, y, text, color]
   pos?: number[]; // flat [id, x, y, vx, vy, ...] position sync for all moving particles
-  pmu?: [number, number, number][]; // [id, hue, avgScore]
+  pmu?: [number, number, number, number][]; // [id, hue, avgScore, score]
   log?: GameLogEntry[];
 }
 

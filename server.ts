@@ -380,7 +380,7 @@ function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: nu
   }
 
   // Inline particle meta updates (score/hue) — primary update path
-  let pmu: [number, number, number][] | undefined;
+  let pmu: [number, number, number, number][] | undefined;
   if (metaUpdatedIds.length > 0) {
     pmu = [];
     const seen = new Set<number>();
@@ -392,7 +392,7 @@ function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: nu
       const hue = coopHue(p);
       const matches = totalMatches(p.matchHistory);
       const avgScore = matches > 0 ? Math.round((p.score / matches) * 10) / 10 : 0;
-      pmu.push([id, hue, avgScore]);
+      pmu.push([id, hue, avgScore, p.score]);
       // Sync lastSlowState so next delta SlowFrame skips these particles
       let cc = 0, cd = 0, dc = 0, dd = 0;
       for (const r of Object.values(p.matchHistory)) {
