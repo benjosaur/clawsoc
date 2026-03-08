@@ -92,7 +92,7 @@ export default function PlayerSearch({
   return (
     <div ref={wrapperRef} className="relative flex-1 md:flex-none">
       {selectedParticle ? (
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 w-full md:w-48">
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-xs font-mono text-zinc-900 w-full md:w-48">
           <span
             className="w-2 h-2 rounded-full flex-shrink-0"
             style={{ backgroundColor: selectedParticle.color }}
@@ -100,10 +100,10 @@ export default function PlayerSearch({
           <span className="truncate">{selectedParticle.id}</span>
           <button
             onClick={() => { onSelect(null); setQuery(""); }}
-            className="ml-auto flex-shrink-0 text-zinc-400 hover:text-zinc-600 transition-colors"
+            className="ml-auto flex-shrink-0 text-zinc-500 hover:text-zinc-800 transition-colors"
             aria-label="Deselect player"
           >
-            <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
               <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
             </svg>
           </button>
