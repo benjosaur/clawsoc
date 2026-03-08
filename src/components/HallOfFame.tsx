@@ -12,6 +12,8 @@ const STRATEGY_SHORT: Record<StrategyType, string> = {
   external: "\u{1F99E}",
 };
 
+const PAGE_SIZE = 20;
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -19,24 +21,32 @@ interface Props {
 
 export default function HallOfFame({ open, onClose }: Props) {
   const [data, setData] = useState<HallOfFameResponse | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [includeBots, setIncludeBots] = useState(false);
 
-  const fetchData = () => {
-    setRefreshing(true);
-    fetch("/api/halloffame")
+  const fetchPage = (p: number) => {
+    fetch(`/api/halloffame?page=${p}&pageSize=${PAGE_SIZE}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d) setData(d); })
-      .catch(() => {})
-      .finally(() => setRefreshing(false));
+      .catch(() => {});
   };
 
   useEffect(() => {
     if (!open) return;
     setData(null);
-    fetchData();
+    setPage(1);
+    fetchPage(1);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const goToPage = (p: number) => {
+    setPage(p);
+    setData(null);
+    fetchPage(p);
+  };
+
   if (!open) return null;
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.totalEntries / PAGE_SIZE)) : 1;
 
   return (
     <div
@@ -57,22 +67,27 @@ export default function HallOfFame({ open, onClose }: Props) {
         <h2 className="text-lg font-bold text-center mb-1">
           🏆 Hall of Fame 🏆
         </h2>
-        <div className="flex items-center justify-center gap-2 text-[10px] text-zinc-400 mb-3">
-          {data && <span>min {data.priorWeight} games</span>}
+        {data && (
+          <div className="text-xs text-zinc-500 text-center mb-2">
+            Only those with {data.priorWeight} games are worthy to enter
+          </div>
+        )}
+        <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-3">
+          <span>Updated when a player leaves or hourly on the server</span>
           <button
-            onClick={fetchData}
-            disabled={refreshing}
-            className="hover:text-zinc-600 transition-colors disabled:opacity-50"
-            title="Refresh"
+            onClick={() => setIncludeBots(!includeBots)}
+            className="flex items-center gap-2 cursor-pointer select-none text-zinc-500 hover:text-zinc-700 transition-colors"
           >
-            <svg className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h5M20 20v-5h-5M4.93 9a9 9 0 0115.04-2.34L20 4M19.07 15a9 9 0 01-15.04 2.34L4 20" />
-            </svg>
+            <span>Include bots</span>
+            <span
+              className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${includeBots ? "bg-amber-400" : "bg-zinc-200"}`}
+            >
+              <span
+                className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${includeBots ? "translate-x-3.5" : "translate-x-0.5"}`}
+              />
+            </span>
           </button>
         </div>
-        <p className="text-[9px] text-zinc-300 text-center mb-3">
-          Stats update when players leave, or hourly for live players
-        </p>
 
         {/* Column headers */}
         <div className="flex items-center gap-2 text-[10px] font-medium text-zinc-400 uppercase font-mono border-b border-zinc-100 pb-1.5 mb-1">
@@ -90,12 +105,12 @@ export default function HallOfFame({ open, onClose }: Props) {
             <div className="flex items-center justify-center text-xs text-zinc-300 font-mono py-8">
               loading...
             </div>
-          ) : data.entries.length === 0 ? (
+          ) : (includeBots ? data.entries : data.entries.filter(e => e.isExternal)).length === 0 ? (
             <div className="text-xs text-zinc-300 font-mono py-4 text-center">
               No players qualify yet (need {data.priorWeight}+ games)
             </div>
           ) : (
-            data.entries.map((entry, i) => {
+            (includeBots ? data.entries : data.entries.filter(e => e.isExternal)).map((entry, i) => {
               const rank = (data.page - 1) * data.pageSize + i + 1;
               const hue = Math.round((entry.coopPct / 100) * 120);
               const color = `hsl(${hue},70%,42%)`;
@@ -135,6 +150,39 @@ export default function HallOfFame({ open, onClose }: Props) {
             })
           )}
         </div>
+
+        {/* Pagination */}
+        {data && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-1 pt-3 mt-2 border-t border-zinc-100">
+            <button
+              onClick={() => goToPage(page - 1)}
+              disabled={page <= 1}
+              className="px-2 py-0.5 text-xs text-zinc-500 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-default"
+            >
+              &lsaquo;
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => goToPage(p)}
+                className={`w-6 h-6 rounded text-xs font-mono ${
+                  p === page
+                    ? "bg-zinc-900 text-white"
+                    : "text-zinc-500 hover:bg-zinc-100"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              onClick={() => goToPage(page + 1)}
+              disabled={page >= totalPages}
+              className="px-2 py-0.5 text-xs text-zinc-500 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-default"
+            >
+              &rsaquo;
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
