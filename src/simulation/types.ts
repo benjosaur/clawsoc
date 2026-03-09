@@ -39,7 +39,6 @@ export interface Particle {
   state: ParticleState;
   score: number;
   strategy: StrategyType;
-  useLLM: boolean;
   matchHistory: Record<string, OpponentRecord>;
   isExternal: boolean;
   externalOwner?: string;
@@ -48,7 +47,6 @@ export interface Particle {
 export interface AgentClassConfig {
   strategy: StrategyType;
   count: number;
-  useLLM: boolean;
   names?: string[];
 }
 
@@ -132,11 +130,11 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   canvasWidth: 800,
   canvasHeight: 600,
   agentClasses: [
-    { strategy: "always_cooperate", count: 20, useLLM: false },
-    { strategy: "always_defect", count: 20, useLLM: false },
-    { strategy: "tit_for_tat", count: 20, useLLM: false },
-    { strategy: "random", count: 20, useLLM: false },
-    { strategy: "grudger", count: 20, useLLM: false },
+    { strategy: "always_cooperate", count: 20 },
+    { strategy: "always_defect", count: 20 },
+    { strategy: "tit_for_tat", count: 20 },
+    { strategy: "random", count: 20 },
+    { strategy: "grudger", count: 20 },
   ],
   particleRadius: 5,
   minSpeed: 0.15,

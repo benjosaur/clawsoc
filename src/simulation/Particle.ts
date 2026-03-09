@@ -47,7 +47,6 @@ export function createParticles(config: SimulationConfig): Particle[] {
         state: "moving",
         score: 0,
         strategy: agentClass.strategy,
-        useLLM: agentClass.useLLM,
         matchHistory: {},
         isExternal: false,
       });
