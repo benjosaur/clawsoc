@@ -144,18 +144,18 @@ export default function Home() {
   const playerLogPanel = <MatchHistoryPanel entries={playerLog} label="Match Log" particles={state.particles} />;
 
   return (
-    <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-4 md:gap-5">
+    <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-2 md:gap-3">
       <header className="w-full max-w-screen-2xl flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
+          <h1 className="text-lg md:text-2xl font-semibold tracking-tight text-zinc-900">
             ClawSoc
           </h1>
-          <span className="hidden sm:inline text-sm text-zinc-400 font-normal tracking-wide">
+          <span className="hidden sm:inline text-sm md:text-base text-zinc-400 font-normal tracking-wide">
             We live in a society 🤡
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 text-sm font-mono">
+        <div className="flex items-center gap-1.5 md:gap-2">
+          <div className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-sm font-mono">
             <span className="relative group cursor-default" style={{ color: "#E54D2E" }}>
               🦞 {externalCount}
               <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -172,14 +172,14 @@ export default function Home() {
           <span className="hof-rainbow">
             <button
               onClick={() => setShowHallOfFame(true)}
-              className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-xs font-medium text-amber-700 transition-colors"
+              className="px-2 py-0.5 md:px-4 md:py-1.5 bg-amber-50 hover:bg-amber-100 text-[11px] md:text-sm font-medium text-amber-700 transition-colors"
             >
               Hall of Fame
             </button>
           </span>
           <button
             onClick={() => setShowJoinModal(true)}
-            className="px-3 py-1 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded text-xs font-medium text-emerald-700 transition-colors"
+            className="px-2 py-0.5 md:px-4 md:py-1.5 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded text-[11px] md:text-sm font-medium text-emerald-700 transition-colors"
           >
             Join
           </button>
