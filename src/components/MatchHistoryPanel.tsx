@@ -177,7 +177,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label, particle
 
   return (
     <>
-      <h2 className="text-xs font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
+      <h2 className="hidden md:block text-xs font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
         {label ?? "Game Log"}
       </h2>
       <div className="space-y-1.5 overflow-y-auto overflow-x-hidden min-h-0 flex-1">
