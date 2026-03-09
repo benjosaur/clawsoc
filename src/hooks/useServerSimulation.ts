@@ -158,9 +158,13 @@ export function useServerSimulation() {
       }
     }
 
-    // Sync tick — always reset clock to prevent double-advancing positions
-    sim.localTick = frame.tick;
-    sim.lastAdvanceTime = performance.now();
+    // Only hard-reset on catastrophic drift (reconnect, tab backgrounded).
+    // Do NOT reset every frame — that discards ~10-20ms of accumulated time
+    // (network latency) causing the client to step 5 ticks per 100ms instead of 6.
+    if (Math.abs(sim.localTick - frame.tick) > 30) {
+      sim.localTick = frame.tick;
+      sim.lastAdvanceTime = performance.now();
+    }
 
     // Apply position sync — set correction offset instead of snapping
     if (frame.pos) {
