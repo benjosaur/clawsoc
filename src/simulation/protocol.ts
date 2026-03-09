@@ -4,19 +4,19 @@ import type { GameLogEntry, StrategyType } from "./types";
 
 export type SimEvent =
   | {
-      e: "freeze";
+      e: "freeze"; tick: number;
       a: string; b: string;
       ax: number; ay: number; avx: number; avy: number;
       bx: number; by: number; bvx: number; bvy: number;
     }
   | {
-      e: "unfreeze";
+      e: "unfreeze"; tick: number;
       a: string; b: string;
       ax: number; ay: number; avx: number; avy: number;
       bx: number; by: number; bvx: number; bvy: number;
     }
   | {
-      e: "abort";
+      e: "abort"; tick: number;
       a: string; b: string;
       ax: number; ay: number; avx: number; avy: number;
       bx: number; by: number; bvx: number; bvy: number;
