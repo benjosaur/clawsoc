@@ -9,9 +9,10 @@ const PAGE_SIZE = 20;
 interface Props {
   open: boolean;
   onClose: () => void;
+  onSelectPlayer?: (label: string, isLive: boolean) => void;
 }
 
-export default function HallOfFame({ open, onClose }: Props) {
+export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
   const [data, setData] = useState<HallOfFameResponse | null>(null);
   const [page, setPage] = useState(1);
   const [includeBots, setIncludeBots] = useState(false);
@@ -111,7 +112,11 @@ export default function HallOfFame({ open, onClose }: Props) {
               return (
                 <div
                   key={entry.label}
-                  className="flex items-center gap-2 text-xs font-mono py-0.5"
+                  className="flex items-center gap-2 text-xs font-mono py-0.5 cursor-pointer hover:bg-zinc-50 rounded"
+                  onClick={() => {
+                    onSelectPlayer?.(entry.label, entry.isLive);
+                    onClose();
+                  }}
                 >
                   <span className="text-zinc-500 w-5 text-right">{rank}</span>
                   <span
@@ -125,7 +130,7 @@ export default function HallOfFame({ open, onClose }: Props) {
                   >
                     {entry.label}
                     {entry.isLive && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" title="Live" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0 online-dot" title="Live" />
                     )}
                   </span>
                   {includeBots && (

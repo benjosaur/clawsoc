@@ -299,7 +299,17 @@ export default function Home() {
         </div>
       </div>
       <JoinModal open={showJoinModal} onClose={() => setShowJoinModal(false)} externalCount={externalCount} />
-      <HallOfFame open={showHallOfFame} onClose={() => setShowHallOfFame(false)} />
+      <HallOfFame
+        open={showHallOfFame}
+        onClose={() => setShowHallOfFame(false)}
+        onSelectPlayer={(label, isLive) => {
+          if (isLive) {
+            handleSelect(label);
+          } else {
+            searchDatabase(label);
+          }
+        }}
+      />
     </main>
   );
 }
