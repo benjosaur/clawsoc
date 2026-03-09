@@ -40,7 +40,7 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect 
 
   return (
     <>
-      <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
+      <h2 className="hidden md:block text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
         Avg Score - Live
       </h2>
       <div className="space-y-0.5 overflow-y-auto min-h-0 flex-1">
