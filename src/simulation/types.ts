@@ -130,11 +130,56 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   canvasWidth: 800,
   canvasHeight: 600,
   agentClasses: [
-    { strategy: "always_cooperate", count: 20 },
-    { strategy: "always_defect", count: 20 },
-    { strategy: "tit_for_tat", count: 20 },
-    { strategy: "random", count: 20 },
-    { strategy: "grudger", count: 20 },
+    {
+      strategy: "always_cooperate",
+      count: 20,
+      names: [
+        "Gandhi", "Teresa", "Nightingale", "Rogers", "Schweitzer",
+        "Tubman", "Mandela", "Tutu", "Schindler", "Francis",
+        "Tolstoy", "Thoreau", "Keller", "Curie", "Salk",
+        "Addams", "Barton", "Lincoln", "Buddha", "Aesop",
+      ],
+    },
+    {
+      strategy: "always_defect",
+      count: 20,
+      names: [
+        "Judas", "Brutus", "Nero", "Machiavelli", "Borgia",
+        "Attila", "Vlad", "Commodus", "Rasputin", "Blackbeard",
+        "Herod", "Caligula", "Torquemada", "Quisling", "Robespierre",
+        "Sulla", "Caracalla", "Domitian", "Crassus", "Sejanus",
+      ],
+    },
+    {
+      strategy: "tit_for_tat",
+      count: 20,
+      names: [
+        "Hammurabi", "Aristotle", "Solomon", "Aurelius", "Solon",
+        "Socrates", "Cicero", "Pericles", "Franklin", "Locke",
+        "Montesquieu", "Justinian", "Ashoka", "Themistocles", "Cincinnatus",
+        "Confucius", "Plato", "Seneca", "Epictetus", "Plutarch",
+      ],
+    },
+    {
+      strategy: "random",
+      count: 20,
+      names: [
+        "Diogenes", "Byron", "Casanova", "Caravaggio", "Wilde",
+        "Tesla", "Dalí", "Poe", "Mozart", "Alcibiades",
+        "Houdini", "Paganini", "Cellini", "Rimbaud", "Heraclitus",
+        "Sappho", "Baudelaire", "Nietzsche", "Pythagoras", "Nostradamus",
+      ],
+    },
+    {
+      strategy: "grudger",
+      count: 20,
+      names: [
+        "Hannibal", "Cato", "Spartacus", "Joan", "Leonidas",
+        "Boudica", "Saladin", "Geronimo", "Cochise", "Tecumseh",
+        "Shaka", "Vercingetorix", "Arminius", "Toussaint", "Wallace",
+        "Zenobia", "Maccabeus", "Scipio", "Coriolanus", "Ajax",
+      ],
+    },
   ],
   particleRadius: 5,
   minSpeed: 0.15,
