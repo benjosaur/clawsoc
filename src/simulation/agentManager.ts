@@ -36,6 +36,9 @@ type Redis = {
   zrem(key: string, ...members: string[]): Promise<unknown>;
   hset(key: string, field: string, value: string): Promise<unknown>;
   hmget(key: string, ...fields: string[]): Promise<(string | null)[]>;
+  sadd(key: string, ...members: string[]): Promise<unknown>;
+  srem(key: string, ...members: string[]): Promise<unknown>;
+  smembers(key: string): Promise<string[]>;
 };
 
 function hashKey(apiKey: string): string {
@@ -55,6 +58,7 @@ export class AgentManager {
   private resultWaiters = new Map<string, { resolve: (record: MatchRecord | null) => void }>();
   private activeResultKeys = new Map<string, string>(); // username → "aId|bId"
   private parkedAt = new Map<string, number>(); // username → Date.now() when parked
+  private bannedUsers = new Set<string>();
   private redis: Redis | null = null;
 
   constructor(redisUrl?: string) {
@@ -146,6 +150,7 @@ export class AgentManager {
   async checkUsernameAvailable(username: string): Promise<{ available: boolean; reason?: string }> {
     const invalid = this.validateUsername(username);
     if (invalid) return { available: false, reason: invalid };
+    if (this.bannedUsers.has(username.toLowerCase())) return { available: false, reason: "This username has been banned" };
     if (this.reservedNames.has(username.toLowerCase())) return { available: false, reason: "Username is reserved" };
     if (this.agents.has(username)) return { available: false, reason: "Username already taken" };
     if (this.redis) {
@@ -158,6 +163,7 @@ export class AgentManager {
   async register(username: string, greeting: string, engine: SimulationEngine): Promise<RegisterResult> {
     const invalid = this.validateUsername(username);
     if (invalid) return { error: invalid };
+    if (this.bannedUsers.has(username.toLowerCase())) return { error: "This username has been banned" };
     if (this.agents.has(username)) return { error: "Username already taken" };
     if (this.reservedNames.has(username.toLowerCase())) return { error: "Username is reserved (matches a bot name)" };
 
@@ -271,6 +277,7 @@ export class AgentManager {
   }
 
   async ensureInArena(username: string, apiKeyHash: string, engine: SimulationEngine): Promise<{ error?: string }> {
+    if (this.bannedUsers.has(username.toLowerCase())) return { error: "This username has been banned" };
     if (this.agents.has(username)) return {};
 
     if (!this.redis) {
@@ -629,6 +636,56 @@ export class AgentManager {
       entries, globalMean: stats.globalMean, updatedAt: stats.updatedAt,
       priorWeight: stats.priorWeight, totalEntries, page, pageSize,
     };
+  }
+
+  // --- Ban management ---
+
+  isBanned(username: string): boolean {
+    return this.bannedUsers.has(username.toLowerCase());
+  }
+
+  async banUser(username: string, engine: SimulationEngine): Promise<void> {
+    const lower = username.toLowerCase();
+    this.bannedUsers.add(lower);
+
+    // Remove from arena if currently live
+    for (const [agentUsername] of this.agents) {
+      if (agentUsername.toLowerCase() === lower) {
+        await this.removeAgent(agentUsername, engine);
+        break;
+      }
+    }
+
+    if (this.redis) {
+      await this.redis.sadd("banned", lower);
+    }
+  }
+
+  async unbanUser(username: string): Promise<void> {
+    const lower = username.toLowerCase();
+    this.bannedUsers.delete(lower);
+    if (this.redis) {
+      await this.redis.srem("banned", lower);
+    }
+  }
+
+  getBannedUsers(): string[] {
+    return Array.from(this.bannedUsers);
+  }
+
+  async restoreBannedUsers(): Promise<void> {
+    if (!this.redis) return;
+    const members = await this.redis.smembers("banned");
+    for (const m of members) {
+      this.bannedUsers.add(m);
+    }
+    if (members.length > 0) {
+      console.log(`[AgentManager] Restored ${members.length} banned users`);
+    }
+  }
+
+  getAllAgents(): Map<string, ExternalAgent> {
+    return this.agents;
   }
 
 }

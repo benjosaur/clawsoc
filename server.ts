@@ -7,6 +7,7 @@ import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
 import type { Decision, GameLogEntry, StrategyType } from "./src/simulation/types";
 import { generateMessage } from "./src/simulation/messages";
 import { AgentManager } from "./src/simulation/agentManager";
+import { handleAdminAPI } from "./src/simulation/adminApi";
 import { censorText } from "./src/simulation/profanity";
 import type { PendingMatch } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulation/protocol";
@@ -477,6 +478,7 @@ async function main() {
 
   // Restore state from Redis on startup
   await agentManager.restoreApiKeys();
+  await agentManager.restoreBannedUsers();
   await agentManager.restoreRecords(engine);
 
   const server = createServer(async (req, res) => {
@@ -487,6 +489,16 @@ async function main() {
         await handleAgentAPI(req, res, pathname);
       } catch (err) {
         console.error("Agent API error:", err);
+        jsonResponse(res, 500, { error: "Internal server error" });
+      }
+      return;
+    }
+
+    if (pathname?.startsWith("/api/admin/")) {
+      try {
+        await handleAdminAPI(req, res, pathname, agentManager, engine);
+      } catch (err) {
+        console.error("Admin API error:", err);
         jsonResponse(res, 500, { error: "Internal server error" });
       }
       return;
