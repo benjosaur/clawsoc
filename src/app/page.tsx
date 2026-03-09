@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { DEFAULT_CONFIG } from "@/simulation/types";
 import type { GameLogEntry, StrategyType } from "@/simulation/types";
 import { useServerSimulation } from "@/hooks/useServerSimulation";
-import SimulationCanvas from "@/components/SimulationCanvas";
+import SimulationCanvas, { WORLD_PAD } from "@/components/SimulationCanvas";
 import ScoreBoard from "@/components/ScoreBoard";
 import TotalScoreBoard from "@/components/TotalScoreBoard";
 import MatchHistoryPanel from "@/components/MatchHistoryPanel";
@@ -105,9 +105,7 @@ export default function Home() {
     const ro = new ResizeObserver(() => {
       const w = el.clientWidth;
       setCanvasHeight(
-        Math.round(
-          w * (DEFAULT_CONFIG.canvasHeight / DEFAULT_CONFIG.canvasWidth),
-        ),
+        Math.round(w * (DEFAULT_CONFIG.canvasHeight / DEFAULT_CONFIG.canvasWidth)),
       );
     });
     ro.observe(el);
@@ -145,7 +143,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-2 md:gap-3 overflow-x-hidden">
-      <header className="w-full max-w-screen-2xl flex items-center justify-between">
+      <header className="relative z-10 shadow-[0_0_16px_8px_rgba(255,255,255,0.3)] w-full max-w-screen-2xl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-lg md:text-2xl font-semibold tracking-tight text-zinc-900">
             ClawSoc
@@ -204,7 +202,7 @@ export default function Home() {
             />
           </div>
 
-          <div className="flex items-start justify-center gap-2 text-[8px] md:text-[11px] font-mono">
+          <div className="relative z-10 shadow-[0_0_16px_8px_rgba(255,255,255,0.3)] flex items-start justify-center gap-2 text-[8px] md:text-[11px] font-mono">
             <div className="flex flex-wrap gap-x-3 text-zinc-400">
               <span>Colour: Coop %<span className="hidden md:inline"> (R = 0%, Y = 50%, G = 100%)</span></span>
               <span>Number: Avg Score<span className="hidden md:inline"> (Rounded)</span></span>
@@ -229,7 +227,7 @@ export default function Home() {
 
         {/* Desktop sidebar — match canvas height */}
         <div
-          className="hidden md:flex min-w-72 lg:min-w-80 xl:min-w-96 flex-col gap-1"
+          className="relative z-10 shadow-[0_0_16px_8px_rgba(255,255,255,0.3)] hidden md:flex min-w-72 lg:min-w-80 xl:min-w-96 flex-col gap-1"
           style={{ flex: "1 0 0%", height: canvasHeight }}
         >
           <div className="flex-shrink-0 pb-1">
@@ -277,7 +275,7 @@ export default function Home() {
         </div>
 
         {/* Mobile tabs */}
-        <div className="md:hidden flex flex-col" style={{ height: "50vh" }}>
+        <div className="relative z-10 shadow-[0_0_16px_8px_rgba(255,255,255,0.3)] md:hidden flex flex-col" style={{ height: "50vh" }}>
           <div className="pb-2">
             <PlayerSearch
               particles={state.particles}

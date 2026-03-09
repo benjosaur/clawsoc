@@ -20,6 +20,8 @@ const DEFORM_AMOUNT = 3;
 // Particle gravity on grid
 const GRAVITY_RADIUS = 200;
 const GRAVITY_STRENGTH = 1.5;
+// Padding around game area where grid fades out
+export const WORLD_PAD = 80;
 
 /** Convert any CSS color to an rgba string with the given alpha */
 function colorWithAlpha(color: string, alpha: number): string {
@@ -243,12 +245,19 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       const cw = container.clientWidth;
       scale = cw / worldW;
       scaleRef.current = scale;
-      const ch = Math.round(cw * (worldH / worldW));
+      const gameH = Math.round(cw * (worldH / worldW));
+      const padScreen = Math.round(WORLD_PAD * scale);
+      const totalW = cw + 2 * padScreen;
+      const totalH = gameH + 2 * padScreen;
 
-      canvas.width = Math.round(cw * dpr);
-      canvas.height = Math.round(ch * dpr);
-      canvas.style.width = `${cw}px`;
-      canvas.style.height = `${ch}px`;
+      canvas.width = Math.round(totalW * dpr);
+      canvas.height = Math.round(totalH * dpr);
+      canvas.style.width = `${totalW}px`;
+      canvas.style.height = `${totalH}px`;
+      canvas.style.marginLeft = `${-padScreen}px`;
+      canvas.style.marginRight = `${-padScreen}px`;
+      canvas.style.marginTop = `${-padScreen}px`;
+      canvas.style.marginBottom = `${-padScreen}px`;
     }
 
     resize();
@@ -344,13 +353,19 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
 
       const sel = selectedIdRef.current;
       const s = dpr * scale;
+      const padPx = WORLD_PAD * s;
       // Store transform for mouse event coordinate conversion
-      transformRef.current = { camX: 0, camY: 0, s };
-      ctx.setTransform(s, 0, 0, s, 0, 0);
+      transformRef.current = { camX: padPx, camY: padPx, s };
+      ctx.setTransform(s, 0, 0, s, padPx, padPx);
 
-      // Background
+      // Clear canvas to transparent, fill only game area
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      ctx.setTransform(s, 0, 0, s, padPx, padPx);
       ctx.fillStyle = "#fafafa";
-      ctx.fillRect(-worldW, -worldH, worldW * 3, worldH * 3);
+      ctx.fillRect(0, 0, worldW, worldH);
 
       // Animate cursor deformation strength (ease in/out)
       const CURSOR_LERP_IN = 0.08;
@@ -360,10 +375,12 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       cursorStrengthRef.current += (targetStrength - cursorStrengthRef.current) * lerpRate;
       const cursorStrength = cursorStrengthRef.current;
 
-      // Deformable line grid — use last known position for fade-out
+      // Deformable line grid — extends into padding area
       const mouse = lastMousePosRef.current;
-      const cols = Math.floor(worldW / GRID_SPACING) + 1;
-      const rows = Math.floor(worldH / GRID_SPACING) + 1;
+      const gridStartX = -WORLD_PAD;
+      const gridStartY = -WORLD_PAD;
+      const cols = Math.floor((worldW + 2 * WORLD_PAD) / GRID_SPACING) + 1;
+      const rows = Math.floor((worldH + 2 * WORLD_PAD) / GRID_SPACING) + 1;
 
       // Spatial hash for particle gravity (avoids O(particles × gridPoints))
       const cellSize = GRAVITY_RADIUS;
@@ -386,8 +403,8 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       for (let r = 0; r < rows; r++) {
         const row: { x: number; y: number }[] = [];
         for (let c = 0; c < cols; c++) {
-          let gx = c * GRID_SPACING;
-          let gy = r * GRID_SPACING;
+          let gx = gridStartX + c * GRID_SPACING;
+          let gy = gridStartY + r * GRID_SPACING;
           // Cursor repulsion (animated strength)
           if (cursorStrength > 0.001) {
             const dx = gx - mouse.x;
@@ -450,6 +467,47 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         }
         ctx.stroke();
       }
+
+      // Fade grid in padding area using destination-out (erase to transparent)
+      ctx.save();
+      ctx.globalCompositeOperation = "destination-out";
+
+      // Top fade
+      const topGrad = ctx.createLinearGradient(0, 0, 0, -WORLD_PAD);
+      topGrad.addColorStop(0, "rgba(0,0,0,0)");
+      topGrad.addColorStop(1, "rgba(0,0,0,1)");
+      ctx.fillStyle = topGrad;
+      ctx.fillRect(-WORLD_PAD, -WORLD_PAD, worldW + 2 * WORLD_PAD, WORLD_PAD);
+
+      // Bottom fade
+      const botGrad = ctx.createLinearGradient(0, worldH, 0, worldH + WORLD_PAD);
+      botGrad.addColorStop(0, "rgba(0,0,0,0)");
+      botGrad.addColorStop(1, "rgba(0,0,0,1)");
+      ctx.fillStyle = botGrad;
+      ctx.fillRect(-WORLD_PAD, worldH, worldW + 2 * WORLD_PAD, WORLD_PAD);
+
+      // Left fade
+      const leftGrad = ctx.createLinearGradient(0, 0, -WORLD_PAD, 0);
+      leftGrad.addColorStop(0, "rgba(0,0,0,0)");
+      leftGrad.addColorStop(1, "rgba(0,0,0,1)");
+      ctx.fillStyle = leftGrad;
+      ctx.fillRect(-WORLD_PAD, -WORLD_PAD, WORLD_PAD, worldH + 2 * WORLD_PAD);
+
+      // Right fade
+      const rightGrad = ctx.createLinearGradient(worldW, 0, worldW + WORLD_PAD, 0);
+      rightGrad.addColorStop(0, "rgba(0,0,0,0)");
+      rightGrad.addColorStop(1, "rgba(0,0,0,1)");
+      ctx.fillStyle = rightGrad;
+      ctx.fillRect(worldW, -WORLD_PAD, WORLD_PAD, worldH + 2 * WORLD_PAD);
+
+      ctx.restore();
+
+      // Game area border
+      ctx.strokeStyle = "#e4e4e7";
+      ctx.lineWidth = 1 / scale;
+      ctx.beginPath();
+      ctx.roundRect(0, 0, worldW, worldH, 4 / scale);
+      ctx.stroke();
 
       // Selected particle background aura
       if (sel) {
@@ -620,7 +678,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
     <div className="relative">
       <canvas
         ref={canvasRef}
-        className="rounded border border-zinc-200 w-full"
+        className="w-full"
         onMouseMove={handleMouseMove}
         onClick={handleClick}
         onMouseLeave={handleMouseLeave}
