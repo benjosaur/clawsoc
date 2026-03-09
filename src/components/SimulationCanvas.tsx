@@ -60,6 +60,16 @@ function stepParticles(sim: SimState): void {
   sim.localTick++;
 }
 
+// Tooltip edge-flip thresholds (estimated tooltip dimensions)
+const TOOLTIP_FLIP_W = 180;
+const TOOLTIP_FLIP_H = 80;
+
+function tooltipTransform(sx: number, sy: number, cw: number, ch: number): string {
+  const flipX = sx > cw - TOOLTIP_FLIP_W ? "translateX(calc(-100% - 24px))" : "";
+  const flipY = sy > ch - TOOLTIP_FLIP_H ? " translateY(calc(-100% - 24px))" : "";
+  return flipX + flipY;
+}
+
 // Strategy display names
 const STRATEGY_LABELS: Record<string, string> = {
   always_cooperate: "Always Cooperate",
@@ -85,10 +95,15 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
   // Hover: track particle ID in state (triggers render), position in ref (no render)
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const hoveredIdRef = useRef<string | null>(null);
-  hoveredIdRef.current = hoveredId;
   const hoverAnimRef = useRef<Map<string, number>>(new Map());
   const hoverPosRef = useRef({ x: 0, y: 0 });
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const scaleRef = useRef(1);
+
+  const updateHoveredId = useCallback((id: string | null) => {
+    hoveredIdRef.current = id;
+    setHoveredId((prev) => prev === id ? prev : id);
+  }, []);
 
   const hitTest = useCallback((clientX: number, clientY: number): string | null => {
     const canvas = canvasRef.current;
@@ -127,26 +142,19 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
     canvas.style.cursor = id != null ? "pointer" : "default";
 
     if (id == null) {
-      setHoveredId((prev) => prev !== null ? null : prev);
+      updateHoveredId(null);
       return;
     }
 
-    const rect = canvas.getBoundingClientRect();
-    hoverPosRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    // Update tooltip position imperatively to avoid re-renders on every mouse move
-    if (tooltipRef.current) {
-      const cw = canvas.clientWidth;
-      const ch = canvas.clientHeight;
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      tooltipRef.current.style.left = `${mx + 12}px`;
-      tooltipRef.current.style.top = `${my + 12}px`;
-      tooltipRef.current.style.transform =
-        `${mx > cw - 180 ? "translateX(calc(-100% - 24px))" : ""}` +
-        `${my > ch - 80 ? " translateY(calc(-100% - 24px))" : ""}`;
+    // Seed tooltip position from particle's screen coords for initial render frame
+    const p = displayRef.current.find(dp => dp.id === id);
+    if (p) {
+      const sc = scaleRef.current;
+      const offset = p.radius * sc + 2;
+      hoverPosRef.current = { x: p.x * sc + offset, y: p.y * sc + offset };
     }
-    setHoveredId((prev) => prev === id ? prev : id);
-  }, [hitTest]);
+    updateHoveredId(id);
+  }, [hitTest, updateHoveredId]);
 
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const id = hitTest(e.clientX, e.clientY);
@@ -156,12 +164,12 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
     } else {
       onSelectRef.current(id);
     }
-    setHoveredId(null);
-  }, [hitTest]);
+    updateHoveredId(null);
+  }, [hitTest, updateHoveredId]);
 
   const handleMouseLeave = useCallback(() => {
-    setHoveredId(null);
-  }, []);
+    updateHoveredId(null);
+  }, [updateHoveredId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -183,6 +191,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       const worldH = sim.config.canvasHeight;
       const cw = container.clientWidth;
       scale = cw / worldW;
+      scaleRef.current = scale;
       const ch = Math.round(cw * (worldH / worldW));
 
       canvas.width = Math.round(cw * dpr);
@@ -261,6 +270,25 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
 
       // Store for hit testing
       displayRef.current = displayParticles;
+
+      // Update tooltip position to track particle each frame
+      const hId = hoveredIdRef.current;
+      if (hId != null && tooltipRef.current && canvas) {
+        const hp = displayParticles.find(p => p.id === hId);
+        if (hp) {
+          const sx = hp.x * scale;
+          const sy = hp.y * scale;
+          const offset = hp.radius * scale + 2;
+          const tx = sx + offset;
+          const ty = sy + offset;
+          tooltipRef.current.style.left = `${tx}px`;
+          tooltipRef.current.style.top = `${ty}px`;
+          tooltipRef.current.style.transform = tooltipTransform(tx, ty, canvas.clientWidth, canvas.clientHeight);
+        } else {
+          hoveredIdRef.current = null;
+          setHoveredId(null);
+        }
+      }
 
       const sel = selectedIdRef.current;
       const s = dpr * scale;
@@ -379,19 +407,11 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         const coops = meta.cc + meta.cd;
         const coopPct = games > 0 ? Math.round((coops / games) * 100) : 0;
         const pos = hoverPosRef.current;
-        const cw = canvasRef.current?.clientWidth ?? 300;
-        const ch = canvasRef.current?.clientHeight ?? 200;
         return (
           <div
             ref={tooltipRef}
             className="absolute pointer-events-none z-10 px-2.5 py-1.5 bg-white border border-zinc-200 rounded shadow-sm text-[11px] font-mono leading-relaxed whitespace-nowrap"
-            style={{
-              left: pos.x + 12,
-              top: pos.y + 12,
-              transform:
-                `${pos.x > cw - 180 ? "translateX(calc(-100% - 24px))" : ""}` +
-                `${pos.y > ch - 80 ? " translateY(calc(-100% - 24px))" : ""}`,
-            }}
+            style={{ left: pos.x, top: pos.y }}
           >
             <div className="font-semibold text-zinc-800">
               {meta.strategy === "external" ? "\uD83E\uDD9E" : "\uD83E\uDD16"}{" "}
