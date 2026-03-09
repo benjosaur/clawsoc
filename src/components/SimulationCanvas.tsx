@@ -129,6 +129,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const hoveredIdRef = useRef<string | null>(null);
   const hoverAnimRef = useRef<Map<string, number>>(new Map());
+  const fadeAlphaRef = useRef<Map<string, number>>(new Map());
   const hoverPosRef = useRef({ x: 0, y: 0 });
   const mousePosRef = useRef<{ x: number; y: number } | null>(null);
   const lastMousePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 }); // persists after leave
@@ -497,15 +498,51 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         ctx.stroke();
       }
 
+      // Compute fade-through alpha for moving particles overlapping frozen ones
+      const FADE_LERP = 0.28;
+      const frozenParticles = displayParticles.filter(p => p.state === 1);
+      const fadeAlpha = fadeAlphaRef.current;
+      for (const p of displayParticles) {
+        if (p.state !== 0) {
+          // Non-moving particle: lerp any leftover fade back to 1
+          if (fadeAlpha.has(p.id)) {
+            const prev = fadeAlpha.get(p.id)!;
+            const next = prev + (1 - prev) * FADE_LERP;
+            if (next > 0.999) { fadeAlpha.delete(p.id); } else { fadeAlpha.set(p.id, next); }
+          }
+          continue;
+        }
+        let overlapping = false;
+        for (const fp of frozenParticles) {
+          const dx = p.x - fp.x;
+          const dy = p.y - fp.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < p.radius + fp.radius) {
+            overlapping = true;
+            break;
+          }
+        }
+        const prev = fadeAlpha.get(p.id) ?? 1;
+        const target = overlapping ? 0.4 : 1;
+        const next = prev + (target - prev) * FADE_LERP;
+        if (next > 0.999) { fadeAlpha.delete(p.id); } else { fadeAlpha.set(p.id, next); }
+      }
+
       // Draw particles
       for (const p of displayParticles) {
         const isSelected = sel != null && p.id === sel;
         const isParked = p.state === 3;
+        const pFadeAlpha = fadeAlpha.get(p.id);
+
+        // Fade-through alpha wraps both circle and text
+        if (pFadeAlpha != null) ctx.globalAlpha = pFadeAlpha;
+
         ctx.save();
 
         if (isParked) {
           ctx.globalAlpha = 0.4;
-        } else if (p.state === 1 || p.state === 2) {
+        }
+        if (p.state === 1 || p.state === 2) {
           ctx.shadowColor = p.color;
           ctx.shadowBlur = 24;
         }
@@ -547,6 +584,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         ctx.fillText(p.id, p.x, p.y - p.radius - 4);
 
         ctx.restore();
+        if (pFadeAlpha != null) ctx.globalAlpha = 1;
       }
 
       // Draw floating popups
