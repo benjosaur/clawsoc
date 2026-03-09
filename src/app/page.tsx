@@ -172,14 +172,14 @@ export default function Home() {
           <span className="hof-rainbow">
             <button
               onClick={() => setShowHallOfFame(true)}
-              className="px-2 py-0.5 md:px-4 md:py-1.5 bg-amber-50 hover:bg-amber-100 text-[11px] md:text-sm font-medium text-amber-700 transition-colors"
+              className="px-2 py-0.5 md:px-4 md:py-1.5 bg-amber-100 hover:bg-amber-50 text-[11px] md:text-sm font-medium text-amber-700"
             >
               Hall of Fame
             </button>
           </span>
           <button
             onClick={() => setShowJoinModal(true)}
-            className="px-2 py-0.5 md:px-4 md:py-1.5 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded text-[11px] md:text-sm font-medium text-emerald-700 transition-colors"
+            className="px-2 py-0.5 md:px-4 md:py-1.5 border border-emerald-300 bg-emerald-100 hover:bg-emerald-50 rounded text-[11px] md:text-sm font-medium text-emerald-700"
           >
             Join
           </button>
