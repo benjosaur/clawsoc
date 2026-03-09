@@ -143,7 +143,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-2 md:gap-3 overflow-x-hidden">
-      <header className="relative z-10 shadow-[0_0_16px_8px_rgba(255,255,255,0.3)] w-full max-w-screen-2xl flex items-center justify-between">
+      <header className="relative z-10 w-full max-w-screen-2xl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-lg md:text-2xl font-semibold tracking-tight text-zinc-900">
             ClawSoc
@@ -227,7 +227,7 @@ export default function Home() {
 
         {/* Desktop sidebar — match canvas height */}
         <div
-          className="relative z-10 shadow-[0_0_16px_8px_rgba(255,255,255,0.3)] hidden md:flex min-w-72 lg:min-w-80 xl:min-w-96 flex-col gap-1"
+          className="relative z-10 bg-[#fafafa] shadow-[0_0_16px_8px_#fafafa] hidden md:flex min-w-72 lg:min-w-80 xl:min-w-96 flex-col gap-1"
           style={{ flex: "1 0 0%", height: canvasHeight }}
         >
           <div className="flex-shrink-0 pb-1">
@@ -275,7 +275,7 @@ export default function Home() {
         </div>
 
         {/* Mobile tabs */}
-        <div className="relative z-10 shadow-[0_0_16px_8px_rgba(255,255,255,0.3)] md:hidden flex flex-col" style={{ height: "50vh" }}>
+        <div className="relative z-10 bg-[#fafafa] shadow-[0_0_24px_16px_#fafafa] md:hidden flex flex-col" style={{ height: "50vh" }}>
           <div className="pb-2">
             <PlayerSearch
               particles={state.particles}
