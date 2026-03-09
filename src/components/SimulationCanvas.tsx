@@ -22,6 +22,10 @@ const GRAVITY_RADIUS = 200;
 const GRAVITY_STRENGTH = 1.5;
 // Padding around game area where grid fades out
 export const WORLD_PAD = 80;
+// Border bounce on wall hit
+const BUMP_HALF_WIDTH = 40;
+const BUMP_MAX_OFFSET = 2.4;
+const BORDER_SAMPLE_STEP = 6;
 
 /** Return a pastel (desaturated, lightened) version of a color as rgba */
 function pastelWithAlpha(color: string, alpha: number): string {
@@ -59,6 +63,26 @@ function colorWithAlpha(color: string, alpha: number): string {
   }
   // Fallback
   return `rgba(128,128,128,${alpha})`;
+}
+
+/** Compute outward border displacement at a position along a wall edge */
+function borderBump(edgePos: number, edge: "t" | "b" | "l" | "r", hits: WallHit[], now: number, duration: number): number {
+  let offset = 0;
+  for (let i = 0; i < hits.length; i++) {
+    const hit = hits[i];
+    if (hit.edge !== edge) continue;
+    const age = now - hit.time;
+    if (age >= duration) continue;
+    const t = age / duration;
+    const hitPos = (edge === "t" || edge === "b") ? hit.x : hit.y;
+    const d = edgePos - hitPos;
+    if (d > BUMP_HALF_WIDTH || d < -BUMP_HALF_WIDTH) continue;
+    const attack = Math.min(t * (WALL_HIT_DURATION_MS / 100), 1); // ramp in over ~100ms
+    const ease = attack * (1 - t) * (1 - t);
+    const bump = (Math.cos((d / BUMP_HALF_WIDTH) * Math.PI) * 0.5 + 0.5) * BUMP_MAX_OFFSET * ease;
+    if (bump > offset) offset = bump;
+  }
+  return offset;
 }
 
 interface Props {
@@ -546,13 +570,36 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         }
       }
 
-      // Draw game area border
+      // Draw deformable game area border (bulges outward on wall hits)
       ctx.strokeStyle = "#e4e4e7";
       ctx.lineWidth = 1.5;
-      ctx.strokeRect(0, 0, worldW, worldH);
+      ctx.beginPath();
+      // Top edge (bumps upward)
+      ctx.moveTo(0, -borderBump(0, "t", wallHits, now, WALL_HIT_DURATION_MS));
+      for (let x = BORDER_SAMPLE_STEP; x < worldW; x += BORDER_SAMPLE_STEP) {
+        ctx.lineTo(x, -borderBump(x, "t", wallHits, now, WALL_HIT_DURATION_MS));
+      }
+      ctx.lineTo(worldW, -borderBump(worldW, "t", wallHits, now, WALL_HIT_DURATION_MS));
+      // Right edge (bumps rightward)
+      for (let y = BORDER_SAMPLE_STEP; y < worldH; y += BORDER_SAMPLE_STEP) {
+        ctx.lineTo(worldW + borderBump(y, "r", wallHits, now, WALL_HIT_DURATION_MS), y);
+      }
+      ctx.lineTo(worldW + borderBump(worldH, "r", wallHits, now, WALL_HIT_DURATION_MS), worldH);
+      // Bottom edge (bumps downward)
+      for (let x = worldW - BORDER_SAMPLE_STEP; x > 0; x -= BORDER_SAMPLE_STEP) {
+        ctx.lineTo(x, worldH + borderBump(x, "b", wallHits, now, WALL_HIT_DURATION_MS));
+      }
+      ctx.lineTo(0, worldH + borderBump(0, "b", wallHits, now, WALL_HIT_DURATION_MS));
+      // Left edge (bumps leftward)
+      for (let y = worldH - BORDER_SAMPLE_STEP; y > 0; y -= BORDER_SAMPLE_STEP) {
+        ctx.lineTo(-borderBump(y, "l", wallHits, now, WALL_HIT_DURATION_MS), y);
+      }
+      ctx.closePath();
+      ctx.stroke();
 
       // Draw wall hit glows on the border (spread outward from impact)
       const S = WALL_HIT_SPREAD;
+      const GLOW_SEGS = 8;
       for (let i = wallHits.length - 1; i >= 0; i--) {
         const hit = wallHits[i];
         const age = now - hit.time;
@@ -561,19 +608,36 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         const spread = S * t;
         const alpha = 0.7 * (1 - t);
         const isVert = hit.edge === "l" || hit.edge === "r";
+        // Gradient endpoints (along wall, undeformed) for color mapping
         const ex = isVert ? hit.x : hit.x - spread;
         const ey = isVert ? hit.y - spread : hit.y;
         const ex2 = isVert ? hit.x : hit.x + spread;
         const ey2 = isVert ? hit.y + spread : hit.y;
         const grad = ctx.createLinearGradient(ex, ey, ex2, ey2);
-        grad.addColorStop(0, `rgba(239, 68, 68, 0)`);
-        grad.addColorStop(0.5, `rgba(239, 68, 68, ${alpha})`);
-        grad.addColorStop(1, `rgba(239, 68, 68, 0)`);
+        grad.addColorStop(0, `rgba(140, 140, 140, 0)`);
+        grad.addColorStop(0.5, `rgba(140, 140, 140, ${alpha})`);
+        grad.addColorStop(1, `rgba(140, 140, 140, 0)`);
         ctx.strokeStyle = grad;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.moveTo(ex, ey);
-        ctx.lineTo(ex2, ey2);
+        // Draw as polyline following border deformation
+        for (let seg = 0; seg <= GLOW_SEGS; seg++) {
+          const frac = seg / GLOW_SEGS;
+          let gx: number, gy: number;
+          if (isVert) {
+            const py = ey + (ey2 - ey) * frac;
+            const sign = hit.edge === "l" ? -1 : 1;
+            gx = hit.x + sign * borderBump(py, hit.edge, wallHits, now, WALL_HIT_DURATION_MS);
+            gy = py;
+          } else {
+            const px = ex + (ex2 - ex) * frac;
+            const sign = hit.edge === "t" ? -1 : 1;
+            gx = px;
+            gy = hit.y + sign * borderBump(px, hit.edge, wallHits, now, WALL_HIT_DURATION_MS);
+          }
+          if (seg === 0) ctx.moveTo(gx, gy);
+          else ctx.lineTo(gx, gy);
+        }
         ctx.stroke();
       }
 
