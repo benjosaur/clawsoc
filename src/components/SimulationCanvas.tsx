@@ -335,7 +335,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         // Average score inside circle
         const isSmall = (container?.clientWidth ?? 640) < 640;
         const fontScale = Math.max(1, 1 / scale);
-        const isHovered = p.id === hoveredIdRef.current;
+        const isHovered = p.id === hoveredIdRef.current || isSelected;
         // Animate hover progress (0→1) per particle
         const hoverAnim = hoverAnimRef.current;
         const prevT = hoverAnim.get(p.id) ?? 0;
