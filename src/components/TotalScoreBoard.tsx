@@ -40,9 +40,8 @@ export default function TotalScoreBoard({ particles, selectedId, singleRow, onSe
 
   return (
     <>
-      <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-0.5 flex-shrink-0">
-        <span className="hidden md:inline">Total Score - Live</span>
-        <span className="md:hidden">Live Players</span>
+      <h2 className="hidden md:block text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-0.5 flex-shrink-0">
+        Total Score - Live
       </h2>
       <div className="space-y-0.5 overflow-y-auto min-h-0 flex-1">
         {rows.map((p) => {
