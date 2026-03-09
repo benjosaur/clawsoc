@@ -23,6 +23,27 @@ const GRAVITY_STRENGTH = 1.5;
 // Padding around game area where grid fades out
 export const WORLD_PAD = 80;
 
+/** Return a pastel (desaturated, lightened) version of a color as rgba */
+function pastelWithAlpha(color: string, alpha: number): string {
+  // HSL: reduce saturation, boost lightness
+  const hslMatch = color.match(/hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/);
+  if (hslMatch) {
+    const h = parseFloat(hslMatch[1]);
+    const s = Math.max(0, parseFloat(hslMatch[2]) * 0.35);
+    const l = Math.min(100, parseFloat(hslMatch[3]) + (100 - parseFloat(hslMatch[3])) * 0.55);
+    return `hsla(${h},${s}%,${l}%,${alpha})`;
+  }
+  // Hex: mix toward white
+  if (color.startsWith("#") && color.length >= 7) {
+    const mix = 0.6;
+    const r = Math.round(parseInt(color.slice(1, 3), 16) * (1 - mix) + 255 * mix);
+    const g = Math.round(parseInt(color.slice(3, 5), 16) * (1 - mix) + 255 * mix);
+    const b = Math.round(parseInt(color.slice(5, 7), 16) * (1 - mix) + 255 * mix);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+  return `rgba(200,200,200,${alpha})`;
+}
+
 /** Convert any CSS color to an rgba string with the given alpha */
 function colorWithAlpha(color: string, alpha: number): string {
   // HSL: inject alpha directly
@@ -513,10 +534,10 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       if (sel) {
         const sp = displayParticles.find(p => p.id === sel);
         if (sp) {
-          const auraRadius = sp.radius * 8;
+          const auraRadius = sp.radius * 14;
           const grad = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, auraRadius);
-          grad.addColorStop(0, colorWithAlpha(sp.color, 0.15));
-          grad.addColorStop(0.5, colorWithAlpha(sp.color, 0.06));
+          grad.addColorStop(0, pastelWithAlpha(sp.color, 0.18));
+          grad.addColorStop(0.5, pastelWithAlpha(sp.color, 0.07));
           grad.addColorStop(1, "rgba(0,0,0,0)");
           ctx.fillStyle = grad;
           ctx.beginPath();
