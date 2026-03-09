@@ -145,12 +145,12 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-4 md:gap-5">
-      <div className="flex flex-col items-center gap-2 md:flex-row md:gap-3">
+      <header className="w-full max-w-screen-2xl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
             ClawSoc
           </h1>
-          <span className="text-sm text-zinc-400 font-normal tracking-wide">
+          <span className="hidden sm:inline text-sm text-zinc-400 font-normal tracking-wide">
             We live in a society 🤡
           </span>
           <div className="flex items-center gap-2 text-sm font-mono">
@@ -168,17 +168,7 @@ export default function Home() {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <PlayerSearch
-            particles={state.particles}
-            selectedId={selectedId}
-            onSelect={handleSelect}
-            onSearchDatabase={searchDatabase}
-            isSearching={searching}
-            offlinePlayerLabel={offlinePlayer?.id ?? null}
-            notFound={searchNotFound}
-            onClearNotFound={() => setSearchNotFound(false)}
-          />
+        <div className="flex items-center gap-2">
           <span className="hof-rainbow">
             <button
               onClick={() => setShowHallOfFame(true)}
@@ -194,14 +184,14 @@ export default function Home() {
             Join
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Desktop: side-by-side | Mobile: stacked */}
       <div className="w-full max-w-screen-2xl flex flex-col md:flex-row gap-4 md:gap-5">
         {/* Canvas + controls — constrain so 4:3 canvas fits in viewport height */}
         <div
-          className="flex flex-col gap-1.5 flex-1 min-w-0"
-          style={{ maxWidth: "min(100%, calc((100vh - 12rem) * 4 / 3))" }}
+          className="flex flex-col gap-1.5 min-w-0"
+          style={{ flex: "3 1 0%", maxWidth: "min(100%, calc((100vh - 12rem) * 4 / 3))" }}
         >
           <div ref={canvasContainerRef} className="w-full">
             <SimulationCanvas
@@ -239,9 +229,21 @@ export default function Home() {
 
         {/* Desktop sidebar — match canvas height */}
         <div
-          className="hidden md:flex w-72 lg:w-80 xl:w-96 shrink-0 flex-col gap-1"
-          style={{ height: canvasHeight }}
+          className="hidden md:flex min-w-72 lg:min-w-80 xl:min-w-96 flex-col gap-1"
+          style={{ flex: "1 0 0%", height: canvasHeight }}
         >
+          <div className="flex-shrink-0 pb-1">
+            <PlayerSearch
+              particles={state.particles}
+              selectedId={selectedId}
+              onSelect={handleSelect}
+              onSearchDatabase={searchDatabase}
+              isSearching={searching}
+              offlinePlayerLabel={offlinePlayer?.id ?? null}
+              notFound={searchNotFound}
+              onClearNotFound={() => setSearchNotFound(false)}
+            />
+          </div>
           {hasSelection ? (
             <>
               <div className="flex-shrink-0 flex flex-col">{totalPanel}</div>
@@ -272,6 +274,18 @@ export default function Home() {
 
         {/* Mobile tabs */}
         <div className="md:hidden flex flex-col" style={{ minHeight: "40vh" }}>
+          <div className="pb-2">
+            <PlayerSearch
+              particles={state.particles}
+              selectedId={selectedId}
+              onSelect={handleSelect}
+              onSearchDatabase={searchDatabase}
+              isSearching={searching}
+              offlinePlayerLabel={offlinePlayer?.id ?? null}
+              notFound={searchNotFound}
+              onClearNotFound={() => setSearchNotFound(false)}
+            />
+          </div>
           <PanelTabs
             avgPanel={avgPanel}
             totalPanel={totalPanel}
