@@ -72,7 +72,7 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect 
                 {STRATEGY_SHORT[p.strategy] ?? ""}
               </span>
               <span className="text-zinc-900 font-semibold w-12 text-right tabular-nums">
-                {p.avgScore.toFixed(1)}
+                {p.avgScore.toFixed(2)}
               </span>
               {showSingle && (
                 <span
@@ -81,7 +81,7 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect 
                   }`}
                   title="Diff vs room average"
                 >
-                  {delta >= 0 ? "+" : ""}{delta.toFixed(1)}
+                  {delta >= 0 ? "+" : ""}{delta.toFixed(2)}
                 </span>
               )}
             </div>
