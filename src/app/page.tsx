@@ -144,7 +144,7 @@ export default function Home() {
   const playerLogPanel = <MatchHistoryPanel entries={playerLog} label="Match Log" particles={state.particles} />;
 
   return (
-    <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-2 md:gap-3">
+    <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-2 md:gap-3 overflow-x-hidden">
       <header className="w-full max-w-screen-2xl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-lg md:text-2xl font-semibold tracking-tight text-zinc-900">
@@ -204,12 +204,12 @@ export default function Home() {
             />
           </div>
 
-          <div className="flex items-start justify-center gap-2 text-[11px] font-mono">
+          <div className="flex items-start justify-center gap-2 text-[8px] md:text-[11px] font-mono">
             <div className="flex flex-wrap gap-x-3 text-zinc-400">
               <span>Colour: Coop %<span className="hidden md:inline"> (R = 0%, Y = 50%, G = 100%)</span></span>
               <span>Number: Avg Score<span className="hidden md:inline"> (Rounded)</span></span>
             </div>
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex items-center gap-1.5 md:gap-3">
               {!connected && (
                 <span className="text-[10px] text-amber-500">
                   reconnecting...
@@ -220,7 +220,7 @@ export default function Home() {
               </span>
               <span className="text-red-500">{state.totalDefections}D</span>
               {total > 0 && (
-                <span className="text-zinc-400">{coopPct}% coop</span>
+                <span className="hidden md:inline text-zinc-400">{coopPct}% coop</span>
               )}
               <span className="text-zinc-300">t={state.tick}</span>
             </div>
