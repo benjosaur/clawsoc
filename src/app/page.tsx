@@ -246,10 +246,14 @@ export default function Home() {
           </div>
           {hasSelection ? (
             <>
-              <div className="flex-shrink-0 flex flex-col">{totalPanel}</div>
-              <div className="flex-shrink-0 flex flex-col border-t border-zinc-100 pt-1">
-                {avgPanel}
-              </div>
+              {!isOffline && (
+                <div className="flex-shrink-0 flex flex-col">{totalPanel}</div>
+              )}
+              {!isOffline && (
+                <div className="flex-shrink-0 flex flex-col border-t border-zinc-100 pt-1">
+                  {avgPanel}
+                </div>
+              )}
               <div className="flex-[3] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
                 {playerStatsPanel}
               </div>

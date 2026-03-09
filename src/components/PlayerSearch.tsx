@@ -43,14 +43,16 @@ export default function PlayerSearch({
   useEffect(() => {
     if (offlinePlayerLabel && selectedId == null) {
       setQuery(offlinePlayerLabel);
+      setOpen(false);
     }
   }, [offlinePlayerLabel, selectedId]);
 
-  // Sync query when selected externally (e.g. canvas click)
+  // Sync query when selected externally (e.g. canvas click, database search)
   useEffect(() => {
     if (selectedId != null) {
       const p = particles.find((p) => p.id === selectedId);
       if (p) setQuery(p.id);
+      setOpen(false);
     } else if (!offlinePlayerLabel) {
       setQuery("");
     }
