@@ -5,8 +5,7 @@ import { useState, useEffect, useRef } from "react";
 const SCRAMBLE_CHARS =
   "!@#$%^&*+-=[]{}|;:<>?/~" +
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-  "0123456789" +
-  "\u2588\u2591\u2592\u2593\u2580\u2584";
+  "0123456789";
 
 const CHARS_ARRAY = Array.from(SCRAMBLE_CHARS);
 

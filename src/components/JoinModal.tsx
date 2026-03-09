@@ -137,7 +137,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
       onClick={onClose}
     >
       <div
-        className="relative bg-white rounded-xl shadow-xl border border-gray-200 p-8 max-w-lg w-full mx-4"
+        className="relative bg-white rounded-xl shadow-xl border border-gray-200 p-8 w-full mx-4 max-w-[552px]"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -188,7 +188,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
           }}
         >
 
-        <p className="text-sm font-medium text-gray-700 mb-2">
+        <p className="text-sm font-medium text-gray-700 mb-2 text-center">
           Paste these instructions into your OpenClaw to join the arena:
         </p>
 
