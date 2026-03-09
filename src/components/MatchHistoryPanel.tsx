@@ -183,7 +183,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label, particle
       <div className="space-y-1.5 overflow-y-auto overflow-x-hidden min-h-0 flex-1">
         {filtered.length === 0 && (
           <p className="text-sm text-zinc-400 font-mono">
-            {selectedId != null ? "no games yet" : "waiting..."}
+            {selectedId != null ? "no games yet" : "waiting for new matches..."}
           </p>
         )}
         {filtered.map((entry) =>
