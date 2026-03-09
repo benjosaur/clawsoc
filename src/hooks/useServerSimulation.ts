@@ -113,7 +113,13 @@ export function useServerSimulation() {
         const a = map.get(ev.a);
         const b = map.get(ev.b);
         const APPROACH_TICKS = 12;
+        // Rewind: the collision happened at ev.tick, but the client kept
+        // advancing the particle. Undo the extra ticks so the approach
+        // animation starts from where the particle visually was at collision time.
+        const rewind = Math.max(0, sim.localTick - ev.tick);
         if (a) {
+          a.x -= a.vx * rewind;
+          a.y -= a.vy * rewind;
           a.tx = ev.ax; a.ty = ev.ay;
           a.tvx = ev.avx; a.tvy = ev.avy;
           a.freezeAt = sim.localTick + APPROACH_TICKS;
@@ -121,6 +127,8 @@ export function useServerSimulation() {
           a.state = 2;
         }
         if (b) {
+          b.x -= b.vx * rewind;
+          b.y -= b.vy * rewind;
           b.tx = ev.bx; b.ty = ev.by;
           b.tvx = ev.bvx; b.tvy = ev.bvy;
           b.freezeAt = sim.localTick + APPROACH_TICKS;
@@ -130,8 +138,12 @@ export function useServerSimulation() {
       } else if (ev.e === "unfreeze" || ev.e === "abort") {
         const a = map.get(ev.a);
         const b = map.get(ev.b);
-        if (a) { a.x = ev.ax; a.y = ev.ay; a.vx = ev.avx; a.vy = ev.avy; a.state = 0; }
-        if (b) { b.x = ev.bx; b.y = ev.by; b.vx = ev.bvx; b.vy = ev.bvy; b.state = 0; }
+        // Fast-forward: the server already advanced the particle for the
+        // remaining batch steps after unfreezing. Compensate so the client
+        // starts from the server's current position.
+        const ff = Math.max(0, frame.tick - ev.tick);
+        if (a) { a.x = ev.ax + ev.avx * ff; a.y = ev.ay + ev.avy * ff; a.vx = ev.avx; a.vy = ev.avy; a.state = 0; }
+        if (b) { b.x = ev.bx + ev.bvx * ff; b.y = ev.by + ev.bvy * ff; b.vx = ev.bvx; b.vy = ev.bvy; b.state = 0; }
       } else if (ev.e === "add") {
         const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius: ev.radius, state: 0, cx: 0, cy: 0, tx: 0, ty: 0, tvx: 0, tvy: 0, freezeAt: 0 };
         sim.particles.push(cp);

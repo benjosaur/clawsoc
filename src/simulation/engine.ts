@@ -228,7 +228,7 @@ export class SimulationEngine {
       }
 
       this.pendingEvents.push({
-        e: "unfreeze", a: a.id, b: b.id,
+        e: "unfreeze", tick: this.tick, a: a.id, b: b.id,
         ax: a.position.x, ay: a.position.y, avx: a.velocity.x, avy: a.velocity.y,
         bx: b.position.x, by: b.position.y, bvx: b.velocity.x, bvy: b.velocity.y,
       });
@@ -259,7 +259,7 @@ export class SimulationEngine {
         b.state = "colliding";
 
         this.pendingEvents.push({
-          e: "freeze", a: a.id, b: b.id,
+          e: "freeze", tick: this.tick, a: a.id, b: b.id,
           ax: a.position.x, ay: a.position.y, avx, avy,
           bx: b.position.x, by: b.position.y, bvx, bvy,
         });
@@ -322,7 +322,7 @@ export class SimulationEngine {
     }
 
     this.pendingEvents.push({
-      e: "abort", a: a.id, b: b.id,
+      e: "abort", tick: this.tick, a: a.id, b: b.id,
       ax: a.position.x, ay: a.position.y, avx: a.velocity.x, avy: a.velocity.y,
       bx: b.position.x, by: b.position.y, bvx: b.velocity.x, bvy: b.velocity.y,
     });
