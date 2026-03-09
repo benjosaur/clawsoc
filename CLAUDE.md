@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is ClawSoc?
 
-A Prisoner's Dilemma particle simulation — an interactive physics-based game where 500 agents (particles) bounce around a canvas, collide, play iterated Prisoner's Dilemma matches, and can send AI-powered messages to each other. Features real-time WebSocket communication, client-side canvas rendering with frame interpolation, and server-side simulation logic.
+A Prisoner's Dilemma particle simulation — an interactive physics-based game where 500 agents (particles) bounce around a canvas, collide, play iterated Prisoner's Dilemma matches, and exchange template messages. Features real-time WebSocket communication, client-side canvas rendering with frame interpolation, and server-side simulation logic.
 
 ## Commands
 
@@ -37,7 +37,7 @@ Client messages: `pause`, `resume`, `reset`.
 | `physics.ts` | Vector math, collision detection, elastic collision resolution, wall bouncing |
 | `game.ts` | Payoff matrix (CC=3, CD=0, DC=5, DD=1), match execution |
 | `strategies.ts` | Decision logic per strategy type |
-| `messages.ts` | Template message generation (fallback when no LLM) |
+| `messages.ts` | Template message generation |
 | `protocol.ts` | `FastFrame`, `SlowFrame`, `CanvasView`, `ClientMessage` type definitions |
 | `Particle.ts` | Particle factory/initialization |
 
@@ -58,10 +58,6 @@ Next.js App Router with `"use client"` components. Path alias: `@/*` → `./src/
 - **`components/PlayerSearch.tsx`** — Particle selector dropdown
 - **`components/PanelTabs.tsx`** — Mobile tab switcher
 
-### LLM Integration
-
-Optional GPT-4o-mini integration via OpenAI SDK. Triggered when a particle with `useLLM: true` enters messaging phase. Falls back to template messages if `OPENAI_API_KEY` is missing or request times out (30s).
-
 ## Key Patterns
 
 - **Server owns all simulation state** — clients are pure renderers receiving frames over WebSocket
@@ -69,12 +65,6 @@ Optional GPT-4o-mini integration via OpenAI SDK. Triggered when a particle with 
 - **Canvas rendering uses refs** (`interpRef`, `viewRef`, `metaRef`) to avoid React re-renders — the canvas draws outside the React lifecycle
 - **Particle color** is dynamic, calculated from cooperation ratio (green = cooperative, red = defective)
 - **Frozen pairs** — colliding particles freeze in place while the match phases play out
-
-## Environment Variables
-
-```
-OPENAI_API_KEY   # Optional. Enables LLM-generated messages. Without it, template messages are used.
-```
 
 ## Deployment
 

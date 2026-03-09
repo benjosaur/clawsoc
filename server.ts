@@ -2,7 +2,6 @@ import { createServer, IncomingMessage, ServerResponse } from "http";
 import next from "next";
 import { parse } from "url";
 import { WebSocketServer, WebSocket } from "ws";
-import OpenAI from "openai";
 import { SimulationEngine } from "./src/simulation/engine";
 import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
 import type { Decision, GameLogEntry, StrategyType } from "./src/simulation/types";
@@ -14,101 +13,10 @@ import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulatio
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
 
-// --- OpenAI setup ---
-
-const STRATEGY_PERSONA: Record<StrategyType, string> = {
-  always_cooperate: "You always cooperate.",
-  always_defect: "You always defect.",
-  tit_for_tat: "You mirror your opponent's last move.",
-  random: "You are unpredictable.",
-  grudger: "You cooperate until betrayed, then always defect.",
-  external: "You are an external agent controlled by an API.",
-};
-
-let openai: OpenAI | null = null;
-function getOpenAI(): OpenAI | null {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key || key === "sk-your-key-here") return null;
-  if (!openai) openai = new OpenAI({ apiKey: key });
-  return openai;
-}
-
 // --- Simulation engine ---
 
 const engine = new SimulationEngine(DEFAULT_CONFIG);
 const agentManager = new AgentManager(process.env.REDIS_URL);
-
-engine.onRequestLLMMessage = (side, self, opponent) => {
-  const client = getOpenAI();
-  if (!client) {
-    // No API key — fall back to template message
-    const text = generateMessage(self, opponent);
-    const aId = side === "a" ? self.id : opponent.id;
-    const bId = side === "a" ? opponent.id : self.id;
-    engine.resolveMessage(aId, bId, side, text);
-    return;
-  }
-
-  const aId = side === "a" ? self.id : opponent.id;
-  const bId = side === "a" ? opponent.id : self.id;
-
-  // Opponent's overall defection %
-  const oppMatches = totalMatches(opponent.matchHistory);
-  let oppDefectPct = 0;
-  if (oppMatches > 0) {
-    let oppDefections = 0;
-    for (const r of Object.values(opponent.matchHistory)) oppDefections += r.dc + r.dd;
-    oppDefectPct = Math.round((oppDefections / oppMatches) * 100);
-  }
-
-  // Your record vs this opponent
-  const record = self.matchHistory[opponent.id];
-  let vsRecord = "No prior meetings.";
-  if (record) {
-    const total = record.cc + record.cd + record.dc + record.dd;
-    vsRecord = `${total} prior games: both cooperated=${record.cc}, you cooperated they defected=${record.cd}, you defected they cooperated=${record.dc}, both defected=${record.dd}`;
-  }
-
-  const systemPrompt = `Prisoner's Dilemma. Payoffs: CC=3/3, CD=0/5, DC=5/0, DD=1/1.
-${STRATEGY_PERSONA[self.strategy]}
-Opponent: ${opponent.id} (defects ${oppDefectPct}% overall). ${vsRecord}`;
-
-  const userPrompt = `Say 1-2 sentences to ${opponent.id} before you both decide. Stay in character.`;
-
-  // 30s timeout via AbortController
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
-
-  client.chat.completions
-    .create(
-      {
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_tokens: 60,
-        temperature: 0.8,
-      },
-      { signal: controller.signal },
-    )
-    .then((completion) => {
-      clearTimeout(timeout);
-      const text = completion.choices[0]?.message?.content?.trim() || generateMessage(self, opponent);
-      engine.resolveMessage(aId, bId, side, text);
-    })
-    .catch((err) => {
-      clearTimeout(timeout);
-      if (err?.name === "AbortError" || controller.signal.aborted) {
-        console.warn(`LLM timeout for ${self.id} ↔ ${opponent.id}, aborting pair`);
-        engine.abortPair(aId, bId);
-      } else {
-        console.error("OpenAI error, falling back:", err?.message);
-        const text = generateMessage(self, opponent);
-        engine.resolveMessage(aId, bId, side, text);
-      }
-    });
-};
 
 // --- External agent decision callback ---
 

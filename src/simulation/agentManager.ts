@@ -107,7 +107,6 @@ export class AgentManager {
       state: "moving",
       score: 0,
       strategy: "external",
-      useLLM: false,
       matchHistory: {},
       isExternal: true,
       externalOwner: username,
@@ -318,7 +317,6 @@ export class AgentManager {
       state: "moving",
       score: 0,
       strategy: agent.displacedStrategy,
-      useLLM: false,
       matchHistory: {},
       isExternal: false,
     };

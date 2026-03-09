@@ -30,17 +30,10 @@ interface FrozenPair {
   messageA: string | null;
   messageB: string | null;
   matchRecord: MatchRecord | null;
-  waitingForLLM: boolean;
   waitingForExternal: boolean;
   externalDecisionA: Decision | null;
   externalDecisionB: Decision | null;
 }
-
-export type LLMRequestCallback = (
-  side: "a" | "b",
-  self: Particle,
-  opponent: Particle,
-) => void;
 
 export type ExternalRequestCallback = (
   side: "a" | "b",
@@ -68,7 +61,6 @@ export class SimulationEngine {
   pendingEvents: SimEvent[] = [];
   pendingMetaUpdates: string[] = [];
   pendingGameLog: GameLogEntry[] = [];
-  onRequestLLMMessage: LLMRequestCallback | null = null;
   onRequestExternalDecision: ExternalRequestCallback | null = null;
   onMatchResolved: MatchResolvedCallback | null = null;
   onParticleParked: ((particleId: string, username: string) => void) | null = null;
@@ -85,8 +77,8 @@ export class SimulationEngine {
   private advanceConversations(): void {
     for (const fp of this.frozenPairs) {
 
-      // If waiting for LLM or external response, freeze phase advancement
-      if (fp.waitingForLLM || fp.waitingForExternal) continue;
+      // If waiting for external response, freeze phase advancement
+      if (fp.waitingForExternal) continue;
 
       const elapsed = this.tick - fp.phaseStartTick;
       const phaseDuration = PHASE_DURATIONS[fp.phase];
@@ -110,9 +102,6 @@ export class SimulationEngine {
           if (this.onRequestExternalDecision && a.isExternal) {
             fp.waitingForExternal = true;
             this.onRequestExternalDecision("a", a, b, fp.aId, fp.bId);
-          } else if (this.onRequestLLMMessage && a.useLLM) {
-            fp.waitingForLLM = true;
-            this.onRequestLLMMessage("a", a, b);
           } else {
             fp.messageA = generateMessage(a, b);
           }
@@ -122,9 +111,6 @@ export class SimulationEngine {
           if (this.onRequestExternalDecision && b.isExternal) {
             fp.waitingForExternal = true;
             this.onRequestExternalDecision("b", b, a, fp.aId, fp.bId);
-          } else if (this.onRequestLLMMessage && b.useLLM) {
-            fp.waitingForLLM = true;
-            this.onRequestLLMMessage("b", b, a);
           } else {
             fp.messageB = generateMessage(b, a);
           }
@@ -288,27 +274,12 @@ export class SimulationEngine {
           messageA: null,
           messageB: null,
           matchRecord: null,
-          waitingForLLM: false,
           waitingForExternal: false,
           externalDecisionA: null,
           externalDecisionB: null,
         });
       }
     }
-  }
-
-  resolveMessage(aId: string, bId: string, side: "a" | "b", text: string): void {
-    const fp = this.frozenPairs.find((f) => f.aId === aId && f.bId === bId);
-    if (!fp) return;
-
-    if (side === "a") {
-      fp.messageA = text;
-    } else {
-      fp.messageB = text;
-    }
-
-    fp.waitingForLLM = false;
-    fp.phaseStartTick = this.tick; // Reset phase timer so full duration plays after resolve
   }
 
   private timeoutCounter = 0;
@@ -363,7 +334,7 @@ export class SimulationEngine {
       tick: this.tick,
       particleA: { id: a.id },
       particleB: { id: b.id },
-      reason: "LLM response timed out",
+      reason: "Response timed out",
       timestamp: Date.now(),
     });
     if (this.gameLog.length > 200) this.gameLog.splice(0, this.gameLog.length - 200);

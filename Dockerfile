@@ -11,7 +11,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 RUN npx esbuild server.ts --bundle --platform=node --outfile=server.js \
-    --external:next --external:ws --external:openai --external:ioredis
+    --external:next --external:ws --external:ioredis
 
 # --- runner ---
 FROM node:20-alpine AS runner
@@ -27,8 +27,8 @@ COPY --from=builder /app/public ./public
 # Copy custom server
 COPY --from=builder /app/server.js ./server.js
 
-# Install runtime-only deps needed by server.js (ws, openai)
-RUN npm install --no-save ws openai ioredis
+# Install runtime-only deps needed by server.js (ws, ioredis)
+RUN npm install --no-save ws ioredis
 
 EXPOSE 3000
 CMD ["node", "server.js"]
