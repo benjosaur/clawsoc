@@ -153,6 +153,8 @@ export default function Home() {
           <span className="hidden sm:inline text-sm text-zinc-400 font-normal tracking-wide">
             We live in a society 🤡
           </span>
+        </div>
+        <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 text-sm font-mono">
             <span className="relative group cursor-default" style={{ color: "#E54D2E" }}>
               🦞 {externalCount}
@@ -167,8 +169,6 @@ export default function Home() {
               </span>
             </span>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
           <span className="hof-rainbow">
             <button
               onClick={() => setShowHallOfFame(true)}
