@@ -563,6 +563,12 @@ async function main() {
 
   wss.on("connection", (ws) => {
     clients.add(ws);
+    (ws as any).isAlive = true;
+
+    ws.on("pong", () => {
+      (ws as any).isAlive = true;
+    });
+
     // Send init frame (positions + velocities + static meta) and slow frame (dynamic data) on connect
     ws.send(buildInitFrame());
     ws.send(buildSlowFrame(true)!); // full=true always returns non-null
@@ -571,6 +577,19 @@ async function main() {
       clients.delete(ws);
     });
   });
+
+  // Ping sweep: detect and terminate dead clients every 15s
+  setInterval(() => {
+    for (const ws of clients) {
+      if (!(ws as any).isAlive) {
+        clients.delete(ws);
+        ws.terminate();
+        continue;
+      }
+      (ws as any).isAlive = false;
+      ws.ping();
+    }
+  }, 15_000);
 
   function broadcastToAll(msg: string) {
     for (const ws of clients) {

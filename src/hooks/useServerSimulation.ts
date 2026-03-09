@@ -75,6 +75,7 @@ export function useServerSimulation() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const retryCount = useRef(0);
+  const lastMessageRef = useRef(0);
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState<ServerSimulationState>({
     particles: [],
@@ -296,9 +297,11 @@ export function useServerSimulation() {
     ws.onopen = () => {
       setConnected(true);
       retryCount.current = 0;
+      lastMessageRef.current = Date.now();
     };
 
     ws.onmessage = (ev) => {
+      lastMessageRef.current = Date.now();
       const frame: ServerFrame = JSON.parse(ev.data);
       if (frame.type === "init") {
         handleInit(frame);
@@ -309,10 +312,19 @@ export function useServerSimulation() {
       }
     };
 
+    // Idle check: reconnect if server goes silent for 8s
+    const idleCheck = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN && Date.now() - lastMessageRef.current > 8_000) {
+        clearInterval(idleCheck);
+        ws.close();
+      }
+    }, 2_000);
+
     ws.onclose = () => {
+      clearInterval(idleCheck);
       setConnected(false);
       wsRef.current = null;
-      const delay = Math.min(500 * 2 ** retryCount.current, 8000);
+      const delay = retryCount.current === 0 ? 0 : Math.min(500 * 2 ** (retryCount.current - 1), 8000);
       retryCount.current++;
       reconnectTimer.current = setTimeout(connect, delay);
     };
@@ -324,7 +336,19 @@ export function useServerSimulation() {
 
   useEffect(() => {
     connect();
+
+    const handleVisibility = () => {
+      if (document.hidden) return;
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (Date.now() - lastMessageRef.current > 3_000) {
+        ws.close(); // triggers onclose → reconnect
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
       clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
     };
