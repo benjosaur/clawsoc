@@ -26,6 +26,12 @@ button {
   inherits: false;
 }
 
+@property --hof-boost {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
 @keyframes hof-spin {
   to { --hof-angle: 360deg; }
 }
@@ -33,15 +39,17 @@ button {
 .hof-rainbow {
   padding: 1px;
   background: #fcd34d;
+  --hof-boost: 0deg;
   box-shadow: 0 0 0 transparent;
   animation: hof-spin 3s linear infinite;
   border-radius: 0.25rem;
-  transition: box-shadow 0.3s;
+  transition: --hof-boost 2s ease-out, box-shadow 0.3s;
   cursor: pointer;
 }
 
 .hof-rainbow:hover {
-  background: conic-gradient(from var(--hof-angle), #f87171, #fb923c, #facc15, #4ade80, #38bdf8, #a78bfa, #f472b6, #f87171);
+  background: conic-gradient(from calc(var(--hof-angle) + var(--hof-boost)), #f87171, #fb923c, #facc15, #4ade80, #38bdf8, #a78bfa, #f472b6, #f87171);
+  --hof-boost: 720deg;
   box-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
 }
 
