@@ -207,8 +207,7 @@ export default function Home() {
           </div>
 
           <div className="flex items-start justify-center gap-2 text-[11px] font-mono">
-            <span className="inline-flex items-center justify-center rounded-full text-sm md:text-lg font-bold text-white leading-none shrink-0 w-5 h-5 md:w-7 md:h-7" style={{ background: "hsl(60,70%,42%)" }}>0</span>
-            <div className="flex flex-col text-zinc-400">
+            <div className="flex flex-wrap gap-x-3 text-zinc-400">
               <span>Colour: Coop %<span className="hidden md:inline"> (R = 0%, Y = 50%, G = 100%)</span></span>
               <span>Number: Avg Score<span className="hidden md:inline"> (Rounded)</span></span>
             </div>
