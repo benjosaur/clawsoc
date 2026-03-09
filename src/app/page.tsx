@@ -273,7 +273,7 @@ export default function Home() {
         </div>
 
         {/* Mobile tabs */}
-        <div className="md:hidden flex flex-col" style={{ minHeight: "40vh" }}>
+        <div className="md:hidden flex flex-col" style={{ height: "50vh" }}>
           <div className="pb-2">
             <PlayerSearch
               particles={state.particles}
