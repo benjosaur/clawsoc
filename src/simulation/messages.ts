@@ -1,4 +1,5 @@
 import { Particle, StrategyType } from "./types";
+import { BOT_GREETINGS, BOT_BETRAYALS } from "./botGreetings";
 
 const TEMPLATES: Record<StrategyType, string[]> = {
   always_cooperate: [
@@ -89,9 +90,11 @@ export function generateMessage(self: Particle, opponent: Particle): string {
 
   let template: string;
   if (opponentDefected) {
-    template = pick(BETRAYAL_RESPONSES[self.strategy]);
+    const bot = BOT_BETRAYALS[self.id];
+    template = bot ? pick(bot) : pick(BETRAYAL_RESPONSES[self.strategy]);
   } else {
-    template = pick(TEMPLATES[self.strategy]);
+    const bot = BOT_GREETINGS[self.id];
+    template = bot ? pick(bot) : pick(TEMPLATES[self.strategy]);
   }
 
   return template.replace(/\{opponent\}/g, opponent.id);
