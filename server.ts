@@ -243,8 +243,19 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     const pending = agentManager.getPendingMatch(username);
     if (pending) {
       return jsonResponse(res, 409, {
-        error: "You have a pending match. Submit your decision via POST /api/agent/decide before requesting a new match.",
-        pendingOpponent: pending.opponentId,
+        error: "You have a pending match. Submit your decision before requesting a new match.",
+        status: "pending_match",
+        pendingMatch: { opponentId: pending.opponentId, opponentGreeting: pending.opponentGreeting, vsRecord: pending.vsRecord },
+        nextAction: "POST /api/agent/decide with { message, decision }",
+      });
+    }
+
+    // Guard: already have a blocking /match call in progress
+    if (agentManager.hasMatchWaiter(username)) {
+      return jsonResponse(res, 409, {
+        error: "Another /match request is already waiting. Only one blocking call at a time.",
+        status: "moving",
+        nextAction: "Wait for your existing GET /api/agent/match call to return",
       });
     }
 
@@ -252,7 +263,9 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     const particle = engine.particles.find((p) => p.id === username);
     if (particle?.state === "colliding") {
       return jsonResponse(res, 409, {
-        error: "Your particle is currently in a match. Wait for it to resolve before calling /match again.",
+        error: "Your particle just collided and a decision will be requested shortly.",
+        status: "colliding",
+        nextAction: "Poll GET /api/agent/status until status becomes pending_match",
       });
     }
 
@@ -275,8 +288,8 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       });
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg === "timeout") return jsonResponse(res, 408, { timeout: true });
-      if (msg === "agent_left") return jsonResponse(res, 410, { error: "Agent removed from arena" });
+      if (msg === "timeout") return jsonResponse(res, 408, { timeout: true, status: "moving", nextAction: "GET /api/agent/match to try again" });
+      if (msg === "agent_left") return jsonResponse(res, 410, { error: "Agent removed from arena", status: "offline", nextAction: "POST /api/agent/register to re-register" });
       return jsonResponse(res, 500, { error: "Internal error" });
     }
   }
@@ -284,11 +297,37 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
   // GET /api/agent/status — non-blocking score/match check
   if (pathname === "/api/agent/status" && method === "GET") {
     const particle = engine.particles.find((p) => p.id === username);
+    const pending = agentManager.getPendingMatch(username);
+
+    let status: string;
+    let nextAction: string;
+
+    if (pending) {
+      status = "pending_match";
+      nextAction = "POST /api/agent/decide with { message, decision }";
+    } else if (!particle) {
+      status = "offline";
+      nextAction = "GET /api/agent/match to rejoin the arena";
+    } else if (particle.state === "colliding") {
+      status = "colliding";
+      nextAction = "Your particle just collided and a decision will be requested shortly. Poll this endpoint until status becomes pending_match.";
+    } else if (particle.state === "parked") {
+      status = "parked";
+      nextAction = "GET /api/agent/match to start moving again and find your next opponent";
+    } else {
+      status = "moving";
+      nextAction = "GET /api/agent/match to wait for a collision, or poll this endpoint";
+    }
 
     return jsonResponse(res, 200, {
       username,
       score: particle?.score ?? 0,
       matches: particle ? totalMatches(particle.matchHistory) : 0,
+      status,
+      pendingMatch: pending
+        ? { opponentId: pending.opponentId, opponentGreeting: pending.opponentGreeting, vsRecord: pending.vsRecord }
+        : null,
+      nextAction,
     });
   }
 
@@ -309,7 +348,14 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
 
     const pending = agentManager.getPendingMatch(username);
     if (!pending) {
-      return jsonResponse(res, 409, { error: "No pending match" });
+      const particle = engine.particles.find((p) => p.id === username);
+      const currentStatus = !particle ? "offline" : particle.state === "parked" ? "parked" : "moving";
+      const na = !particle
+        ? "GET /api/agent/match to rejoin the arena"
+        : particle.state === "parked"
+          ? "GET /api/agent/match to start moving again"
+          : "GET /api/agent/match to wait for a collision";
+      return jsonResponse(res, 409, { error: "No pending match", status: currentStatus, nextAction: na });
     }
 
     // Start waiting for result before submitting decision
@@ -331,7 +377,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       ]);
 
       if (!record) {
-        return jsonResponse(res, 200, { ok: true, result: null });
+        return jsonResponse(res, 200, { ok: true, result: null, status: "moving", nextAction: "GET /api/agent/status to check your current state" });
       }
 
       const isSideA = pending.side === "a";
@@ -344,9 +390,11 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
           yourScore: isSideA ? record.scoreA : record.scoreB,
           theirScore: isSideA ? record.scoreB : record.scoreA,
         },
+        status: "parked",
+        nextAction: "GET /api/agent/match to start moving again and find your next opponent",
       });
     } catch {
-      return jsonResponse(res, 200, { ok: true, result: null });
+      return jsonResponse(res, 200, { ok: true, result: null, status: "moving", nextAction: "GET /api/agent/status to check your current state" });
     }
   }
 
