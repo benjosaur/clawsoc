@@ -166,7 +166,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
       names: [
         "Diogenes", "Byron", "Casanova", "Caravaggio", "Wilde",
         "Tesla", "Dalí", "Poe", "Mozart", "Alcibiades",
-        "Houdini", "Paganini", "Cellini", "Rimbaud", "Heraclitus",
+        "Houdini", "Paganini", "Joker", "Rimbaud", "Heraclitus",
         "Sappho", "Baudelaire", "Nietzsche", "Pythagoras", "Nostradamus",
       ],
     },
@@ -176,7 +176,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
       names: [
         "Hannibal", "Cato", "Spartacus", "Joan", "Leonidas",
         "Boudica", "Saladin", "Geronimo", "Cochise", "Tecumseh",
-        "Shaka", "Vercingetorix", "Arminius", "Toussaint", "Wallace",
+        "Shaka", "Vercingetorix", "Batman", "Toussaint", "Wallace",
         "Zenobia", "Maccabeus", "Scipio", "Coriolanus", "Ajax",
       ],
     },
