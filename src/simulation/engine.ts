@@ -417,6 +417,7 @@ export class SimulationEngine {
       vx: p.velocity.x, vy: p.velocity.y,
       radius: p.radius, strategy: p.strategy,
     });
+    this.pendingMetaUpdates.push(p.id);
   }
 
   removeParticle(id: string): void {
