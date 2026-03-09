@@ -15,11 +15,11 @@ interface WallHit { x: number; y: number; time: number; edge: "l" | "r" | "t" | 
 
 // Grid deformation constants
 const GRID_SPACING = 16;
-const DEFORM_RADIUS = 120;
-const DEFORM_AMOUNT = 3;
+const DEFORM_RADIUS = 360;
+const DEFORM_AMOUNT = 1.5;
 // Particle gravity on grid
 const GRAVITY_RADIUS = 200;
-const GRAVITY_STRENGTH = 1.5;
+const GRAVITY_STRENGTH = 0.75;
 // Padding around game area where grid fades out
 export const WORLD_PAD = 80;
 
@@ -368,7 +368,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       ctx.fillRect(0, 0, worldW, worldH);
 
       // Animate cursor deformation strength (ease in/out)
-      const CURSOR_LERP_IN = 0.08;
+      const CURSOR_LERP_IN = 0.12;
       const CURSOR_LERP_OUT = 0.04;
       const targetStrength = mouseInCanvasRef.current ? 1 : 0;
       const lerpRate = targetStrength > cursorStrengthRef.current ? CURSOR_LERP_IN : CURSOR_LERP_OUT;
