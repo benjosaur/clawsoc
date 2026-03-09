@@ -91,9 +91,9 @@ export default function PlayerSearch({
   }
 
   return (
-    <div ref={wrapperRef} className="relative flex-1 md:flex-none">
+    <div ref={wrapperRef} className="relative w-full">
       {selectedParticle ? (
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-xs font-mono text-zinc-900 w-full md:w-48">
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-xs font-mono text-zinc-900 w-full">
           <span
             className="w-2 h-2 rounded-full flex-shrink-0"
             style={{ backgroundColor: selectedParticle.color }}
@@ -133,12 +133,12 @@ export default function PlayerSearch({
             }}
             onFocus={() => query.length > 0 && setOpen(true)}
             placeholder="Find player…"
-            className="w-full md:w-48 pl-5 pr-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-300 focus:border-amber-300"
+            className="w-full pl-5 pr-2 py-1 bg-zinc-50 border border-zinc-300 rounded text-xs font-mono text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-300 focus:border-amber-300"
           />
         </>
       )}
       {open && query.length > 0 && (
-        <div className="absolute top-full left-0 mt-1 w-56 max-h-48 overflow-y-auto bg-white border border-zinc-200 rounded shadow-lg z-50">
+        <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-zinc-200 rounded shadow-lg z-50">
           {matches.map((p) => (
             <button
               key={p.id}
