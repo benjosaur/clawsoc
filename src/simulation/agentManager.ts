@@ -150,8 +150,9 @@ export class AgentManager {
   async checkUsernameAvailable(username: string): Promise<{ available: boolean; reason?: string }> {
     const invalid = this.validateUsername(username);
     if (invalid) return { available: false, reason: invalid };
-    if (this.bannedUsers.has(username.toLowerCase())) return { available: false, reason: "This username has been banned" };
-    if (this.reservedNames.has(username.toLowerCase())) return { available: false, reason: "Username is reserved" };
+    username = username.toLowerCase();
+    if (this.bannedUsers.has(username)) return { available: false, reason: "This username has been banned" };
+    if (this.reservedNames.has(username)) return { available: false, reason: "Username is reserved" };
     if (this.agents.has(username)) return { available: false, reason: "Username already taken" };
     if (this.redis) {
       const ownerHash = await this.redis.get(`owner:${username}`);
@@ -163,9 +164,10 @@ export class AgentManager {
   async register(username: string, greeting: string, engine: SimulationEngine): Promise<RegisterResult> {
     const invalid = this.validateUsername(username);
     if (invalid) return { error: invalid };
-    if (this.bannedUsers.has(username.toLowerCase())) return { error: "This username has been banned" };
+    username = username.toLowerCase();
+    if (this.bannedUsers.has(username)) return { error: "This username has been banned" };
     if (this.agents.has(username)) return { error: "Username already taken" };
-    if (this.reservedNames.has(username.toLowerCase())) return { error: "Username is reserved (matches a bot name)" };
+    if (this.reservedNames.has(username)) return { error: "Username is reserved (matches a bot name)" };
 
     // If username is already claimed, direct to login
     if (this.redis) {
@@ -202,6 +204,7 @@ export class AgentManager {
 
   async authenticateWithUsername(username: string, authHeader: string | undefined): Promise<string | null> {
     if (!authHeader?.startsWith("Bearer ") || !this.redis) return null;
+    username = username.toLowerCase();
     const h = hashKey(authHeader.slice(7));
     const ownerHash = await this.redis.get(`owner:${username}`);
     if (ownerHash && ownerHash === h) return username;
@@ -277,7 +280,8 @@ export class AgentManager {
   }
 
   async ensureInArena(username: string, apiKeyHash: string, engine: SimulationEngine): Promise<{ error?: string }> {
-    if (this.bannedUsers.has(username.toLowerCase())) return { error: "This username has been banned" };
+    username = username.toLowerCase();
+    if (this.bannedUsers.has(username)) return { error: "This username has been banned" };
     if (this.agents.has(username)) return {};
 
     if (!this.redis) {
