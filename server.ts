@@ -7,6 +7,7 @@ import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
 import type { Decision, GameLogEntry, StrategyType } from "./src/simulation/types";
 import { generateMessage } from "./src/simulation/messages";
 import { AgentManager } from "./src/simulation/agentManager";
+import { censorText } from "./src/simulation/profanity";
 import type { PendingMatch } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulation/protocol";
 
@@ -270,7 +271,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       pending.aId,
       pending.bId,
       pending.side,
-      message || "",
+      censorText(message || ""),
       decision as Decision,
     );
     agentManager.clearPendingMatch(username);
