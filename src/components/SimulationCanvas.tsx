@@ -8,6 +8,10 @@ const TICKS_PER_SEC = 60;
 const MS_PER_TICK = 1000 / TICKS_PER_SEC;
 const MAX_CATCHUP_TICKS = 12; // cap per frame to prevent death spiral
 const POPUP_DURATION_MS = 670;
+const WALL_HIT_DURATION_MS = 800;
+const WALL_HIT_SPREAD = 80;
+
+interface WallHit { x: number; y: number; time: number; edge: "l" | "r" | "t" | "b" }
 
 interface Props {
   simRef: React.RefObject<SimState>;
@@ -24,7 +28,7 @@ interface Props {
 const SYNC_LERP = 0.026;
 const APPROACH_TICKS = 12;
 
-function stepParticles(sim: SimState): void {
+function stepParticles(sim: SimState, wallHits: WallHit[], now: number): void {
   const { canvasWidth, canvasHeight } = sim.config;
   for (const p of sim.particles) {
     if (p.state === 2) {
@@ -55,6 +59,10 @@ function stepParticles(sim: SimState): void {
     p.x += p.vx;
     p.y += p.vy;
     const b = bounceOffWallsXY(p.x, p.y, p.vx, p.vy, p.radius, canvasWidth, canvasHeight);
+    if (p.x - p.radius < 0)                wallHits.push({ x: 0, y: b.y, time: now, edge: "l" });
+    else if (p.x + p.radius > canvasWidth)  wallHits.push({ x: canvasWidth, y: b.y, time: now, edge: "r" });
+    if (p.y - p.radius < 0)                wallHits.push({ x: b.x, y: 0, time: now, edge: "t" });
+    else if (p.y + p.radius > canvasHeight) wallHits.push({ x: b.x, y: canvasHeight, time: now, edge: "b" });
     p.x = b.x; p.y = b.y; p.vx = b.vx; p.vy = b.vy;
   }
   sim.localTick++;
@@ -206,6 +214,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
     ro.observe(container);
 
     let raf: number;
+    const wallHits: WallHit[] = [];
 
     function draw() {
       if (!ctx || !canvas) return;
@@ -235,10 +244,10 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
             p.cx = 0;
             p.cy = 0;
           }
-          for (let i = 0; i < MAX_CATCHUP_TICKS; i++) stepParticles(sim);
+          for (let i = 0; i < MAX_CATCHUP_TICKS; i++) stepParticles(sim, wallHits, now);
           sim.lastAdvanceTime = now;
         } else if (rawTicks > 0) {
-          for (let i = 0; i < rawTicks; i++) stepParticles(sim);
+          for (let i = 0; i < rawTicks; i++) stepParticles(sim, wallHits, now);
           sim.lastAdvanceTime += rawTicks * MS_PER_TICK;
         }
       }
@@ -308,6 +317,37 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
           ctx.arc(gx, gy, 0.5, 0, Math.PI * 2);
           ctx.fill();
         }
+      }
+
+      // Draw game area border
+      ctx.strokeStyle = "#e4e4e7";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(0, 0, worldW, worldH);
+
+      // Draw wall hit glows on the border (spread outward from impact)
+      const S = WALL_HIT_SPREAD;
+      for (let i = wallHits.length - 1; i >= 0; i--) {
+        const hit = wallHits[i];
+        const age = now - hit.time;
+        if (age >= WALL_HIT_DURATION_MS) { wallHits.splice(i, 1); continue; }
+        const t = age / WALL_HIT_DURATION_MS;
+        const spread = S * t;
+        const alpha = 0.7 * (1 - t);
+        const isVert = hit.edge === "l" || hit.edge === "r";
+        const ex = isVert ? hit.x : hit.x - spread;
+        const ey = isVert ? hit.y - spread : hit.y;
+        const ex2 = isVert ? hit.x : hit.x + spread;
+        const ey2 = isVert ? hit.y + spread : hit.y;
+        const grad = ctx.createLinearGradient(ex, ey, ex2, ey2);
+        grad.addColorStop(0, `rgba(239, 68, 68, 0)`);
+        grad.addColorStop(0.5, `rgba(239, 68, 68, ${alpha})`);
+        grad.addColorStop(1, `rgba(239, 68, 68, 0)`);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex2, ey2);
+        ctx.stroke();
       }
 
       // Draw particles
