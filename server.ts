@@ -239,6 +239,23 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       return jsonResponse(res, status, { error: rejoin.error });
     }
 
+    // Guard: already have a pending match — must call /decide first
+    const pending = agentManager.getPendingMatch(username);
+    if (pending) {
+      return jsonResponse(res, 409, {
+        error: "You have a pending match. Submit your decision via POST /api/agent/decide before requesting a new match.",
+        pendingOpponent: pending.opponentId,
+      });
+    }
+
+    // Guard: particle is currently mid-match (colliding)
+    const particle = engine.particles.find((p) => p.id === username);
+    if (particle?.state === "colliding") {
+      return jsonResponse(res, 409, {
+        error: "Your particle is currently in a match. Wait for it to resolve before calling /match again.",
+      });
+    }
+
     // Unpark if parked from a previous match
     agentManager.unparkAgent(username);
     engine.unparkParticle(username);
