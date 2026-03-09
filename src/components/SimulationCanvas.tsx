@@ -206,7 +206,9 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       // Advance physics ticks
       if (sim.particles.length > 0) {
         const elapsed = now - sim.lastAdvanceTime;
-        const rawTicks = Math.floor(elapsed / MS_PER_TICK);
+        // Epsilon avoids floor() rounding down at tick boundaries due to FP error
+        // (e.g. 33.333*60/1000 = 1.9999… should be 2, not 1).
+        const rawTicks = Math.floor(elapsed * TICKS_PER_SEC / 1000 + 1e-9);
         if (rawTicks >= MAX_CATCHUP_TICKS) {
           // Too far behind (e.g. tab was backgrounded) — snap corrections
           for (const p of sim.particles) {
