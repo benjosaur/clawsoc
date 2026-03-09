@@ -146,7 +146,7 @@ export class AgentManager {
   async checkUsernameAvailable(username: string): Promise<{ available: boolean; reason?: string }> {
     const invalid = this.validateUsername(username);
     if (invalid) return { available: false, reason: invalid };
-    if (username.toLowerCase() === "test") return { available: false, reason: "Username already taken" };
+    if (this.reservedNames.has(username.toLowerCase())) return { available: false, reason: "Username is reserved" };
     if (this.agents.has(username)) return { available: false, reason: "Username already taken" };
     if (this.redis) {
       const ownerHash = await this.redis.get(`owner:${username}`);
