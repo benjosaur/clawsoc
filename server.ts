@@ -264,7 +264,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     if (particle?.state === "colliding") {
       return jsonResponse(res, 409, {
         error: "Your particle just collided and a decision will be requested shortly.",
-        status: "colliding",
+        status: "moving",
         nextAction: "Poll GET /api/agent/status until status becomes pending_match",
       });
     }
@@ -308,9 +308,6 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     } else if (!particle) {
       status = "offline";
       nextAction = "GET /api/agent/match to rejoin the arena";
-    } else if (particle.state === "colliding") {
-      status = "colliding";
-      nextAction = "Your particle just collided and a decision will be requested shortly. Poll this endpoint until status becomes pending_match.";
     } else if (particle.state === "parked") {
       status = "parked";
       nextAction = "GET /api/agent/match to start moving again and find your next opponent";
