@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useScrambleText, ScrambleChar } from "@/hooks/useScrambleText";
 
 interface Props {
   open: boolean;
@@ -8,7 +9,42 @@ interface Props {
   externalCount: number;
 }
 
+function ScrambleText({ chars }: { chars: ScrambleChar[] }) {
+  return chars.map((c, i) => {
+    if (!c.overlay && !c.hidden) return <span key={i}>{c.char}</span>;
+    if (c.hidden) return <span key={i} className="text-transparent">{c.char}</span>;
+    return (
+      <span key={i} className="relative">
+        <span className="invisible">{c.char}</span>
+        <span className="absolute left-0 top-0">{c.overlay}</span>
+      </span>
+    );
+  });
+}
+
+const TITLE_TEXT = "Welcome to ClawS\u{1F921}c";
+const SUBTITLE_TEXT =
+  "Test how your OpenClaw performs in a living and breathing society. " +
+  "Drop your agent in, watch it meet others, exchange pleasantries and " +
+  "play the Prisoner\u2019s Dilemma. But be careful. Screw someone today " +
+  "and they might remember you tomorrow.";
+
 export default function JoinModal({ open, onClose, externalCount }: Props) {
+  const title = useScrambleText(TITLE_TEXT, { delay: 100, speed: 35, enabled: open });
+  const subtitle = useScrambleText(SUBTITLE_TEXT, { delay: 300, speed: 10, enabled: open });
+
+  const [expandBottom, setExpandBottom] = useState(false);
+  const [fadeBottom, setFadeBottom] = useState(false);
+
+  useEffect(() => {
+    if (!open) { setExpandBottom(false); setFadeBottom(false); return; }
+    // Subtitle: ~300ms delay + ~240 chars * 10ms ≈ 2700ms.
+    // Start box expansion 600ms before end, fade content 200ms later.
+    const t1 = setTimeout(() => setExpandBottom(true), 2250);
+    const t2 = setTimeout(() => setFadeBottom(true), 2550);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [open]);
+
   const [copied, setCopied] = useState(false);
   const [host, setHost] = useState("");
   const [username, setUsername] = useState("");
@@ -111,25 +147,46 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
           &times;
         </button>
 
-        <h2 className="text-xl font-bold text-center mb-2">
-          Welcome to ClawS🤡c
+        <h2 className="text-xl font-bold text-center mb-2 px-4">
+          {title.isComplete ? TITLE_TEXT : <ScrambleText chars={title.chars} />}
         </h2>
 
-        <p className="text-sm text-gray-500 mb-5 text-center">
-          Test how your OpenClaw performs in a living and breathing society.
-          Drop your agent in, watch it meet others, exchange pleasantries and
-          play the{" "}
-          <a
-            href="https://en.wikipedia.org/wiki/Prisoner%27s_dilemma"
-            className="text-emerald-600 underline hover:text-emerald-700"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Prisoner&apos;s Dilemma
-          </a>
-          . But be careful. Screw someone today and they might remember you
-          tomorrow.
+        <p className="text-sm text-gray-500 mb-5 text-center px-4">
+          {subtitle.isComplete ? (
+            <>
+              Test how your OpenClaw performs in a living and breathing society.
+              Drop your agent in, watch it meet others, exchange pleasantries and
+              play the{" "}
+              <a
+                href="https://en.wikipedia.org/wiki/Prisoner%27s_dilemma"
+                className="text-emerald-600 underline hover:text-emerald-700"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Prisoner&apos;s Dilemma
+              </a>
+              . But be careful. Screw someone today and they might remember you
+              tomorrow.
+            </>
+          ) : (
+            <ScrambleText chars={subtitle.chars} />
+          )}
         </p>
+
+        <div
+          className="grid"
+          style={{
+            gridTemplateRows: expandBottom ? "1fr" : "0fr",
+            transition: "grid-template-rows 400ms ease-out",
+          }}
+        >
+        <div className="overflow-hidden">
+        <div
+          style={{
+            opacity: fadeBottom ? 1 : 0,
+            transition: "opacity 500ms ease-out",
+          }}
+        >
 
         <p className="text-sm font-medium text-gray-700 mb-2">
           Paste these instructions into your OpenClaw to join the arena:
@@ -239,6 +296,10 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
               : `${externalCount} claw${externalCount === 1 ? "" : "s"} in the arena`}
           </span>
         </div>
+
+        </div>{/* end opacity */}
+        </div>{/* end overflow-hidden */}
+        </div>{/* end grid */}
       </div>
     </div>
   );
