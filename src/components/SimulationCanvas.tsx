@@ -13,13 +13,7 @@ const WALL_HIT_SPREAD = 80;
 
 interface WallHit { x: number; y: number; time: number; edge: "l" | "r" | "t" | "b" }
 
-// Grid deformation constants
 const GRID_SPACING = 16;
-const DEFORM_RADIUS = 360;
-const DEFORM_AMOUNT = 1.5;
-// Particle gravity on grid
-const GRAVITY_RADIUS = 200;
-const GRAVITY_STRENGTH = 0.75;
 // Padding around game area where grid fades out
 export const WORLD_PAD = 80;
 // Border bounce on wall hit
@@ -179,9 +173,6 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
   const fadeAlphaRef = useRef<Map<string, number>>(new Map());
   const hoverPosRef = useRef({ x: 0, y: 0 });
   const mousePosRef = useRef<{ x: number; y: number } | null>(null);
-  const lastMousePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 }); // persists after leave
-  const mouseInCanvasRef = useRef(false);
-  const cursorStrengthRef = useRef(0); // animated 0→1 when cursor enters
   const tooltipRef = useRef<HTMLDivElement>(null);
   const scaleRef = useRef(1);
 
@@ -224,7 +215,6 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Track mouse in world coordinates for grid deformation
     const rect = canvas.getBoundingClientRect();
     const dpr = dprRef.current;
     const cx = (e.clientX - rect.left) * dpr;
@@ -232,8 +222,6 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
     const { camX, camY, s } = transformRef.current;
     const wp = { x: (cx - camX) / s, y: (cy - camY) / s };
     mousePosRef.current = wp;
-    lastMousePosRef.current = wp;
-    mouseInCanvasRef.current = true;
 
     const id = hitTest(e.clientX, e.clientY);
     canvas.style.cursor = id != null ? "pointer" : "default";
@@ -265,7 +253,6 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
   }, [hitTest, updateHoveredId]);
 
   const handleMouseLeave = useCallback(() => {
-    mouseInCanvasRef.current = false;
     updateHoveredId(null);
   }, [updateHoveredId]);
 
@@ -412,104 +399,28 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       ctx.fillStyle = "#fafafa";
       ctx.fillRect(0, 0, worldW, worldH);
 
-      // Animate cursor deformation strength (ease in/out)
-      const CURSOR_LERP_IN = 0.12;
-      const CURSOR_LERP_OUT = 0.04;
-      const targetStrength = mouseInCanvasRef.current ? 1 : 0;
-      const lerpRate = targetStrength > cursorStrengthRef.current ? CURSOR_LERP_IN : CURSOR_LERP_OUT;
-      cursorStrengthRef.current += (targetStrength - cursorStrengthRef.current) * lerpRate;
-      const cursorStrength = cursorStrengthRef.current;
-
-      // Deformable line grid — extends into padding area
-      const mouse = lastMousePosRef.current;
+      // Static line grid — extends into padding area
       const gridStartX = -WORLD_PAD;
       const gridStartY = -WORLD_PAD;
-      const cols = Math.floor((worldW + 2 * WORLD_PAD) / GRID_SPACING) + 1;
-      const rows = Math.floor((worldH + 2 * WORLD_PAD) / GRID_SPACING) + 1;
-
-      // Spatial hash for particle gravity (avoids O(particles × gridPoints))
-      const cellSize = GRAVITY_RADIUS;
-      const hashCols = Math.ceil(worldW / cellSize) + 2;
-      const hashRows = Math.ceil(worldH / cellSize) + 2;
-      const spatialHash: number[][] = new Array(hashCols * hashRows);
-      for (let i = 0; i < spatialHash.length; i++) spatialHash[i] = [];
-      for (let i = 0; i < displayParticles.length; i++) {
-        const p = displayParticles[i];
-        if (p.state === 3) continue;
-        const hc = Math.floor(p.x / cellSize);
-        const hr = Math.floor(p.y / cellSize);
-        if (hc >= 0 && hc < hashCols && hr >= 0 && hr < hashRows) {
-          spatialHash[hr * hashCols + hc].push(i);
-        }
-      }
-
-      // Compute displaced grid points
-      const gridPts: { x: number; y: number }[][] = [];
-      for (let r = 0; r < rows; r++) {
-        const row: { x: number; y: number }[] = [];
-        for (let c = 0; c < cols; c++) {
-          let gx = gridStartX + c * GRID_SPACING;
-          let gy = gridStartY + r * GRID_SPACING;
-          // Cursor repulsion (animated strength)
-          if (cursorStrength > 0.001) {
-            const dx = gx - mouse.x;
-            const dy = gy - mouse.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > 0 && dist < DEFORM_RADIUS) {
-              const t = 1 - dist / DEFORM_RADIUS;
-              const strength = t * t * DEFORM_AMOUNT * cursorStrength;
-              gx += (dx / dist) * strength;
-              gy += (dy / dist) * strength;
-            }
-          }
-          // Particle gravity — only check nearby cells
-          const hc = Math.floor(gx / cellSize);
-          const hr = Math.floor(gy / cellSize);
-          for (let dr = -1; dr <= 1; dr++) {
-            for (let dc = -1; dc <= 1; dc++) {
-              const nc = hc + dc;
-              const nr = hr + dr;
-              if (nc < 0 || nc >= hashCols || nr < 0 || nr >= hashRows) continue;
-              const bucket = spatialHash[nr * hashCols + nc];
-              for (let bi = 0; bi < bucket.length; bi++) {
-                const p = displayParticles[bucket[bi]];
-                const dx = p.x - gx;
-                const dy = p.y - gy;
-                const distSq = dx * dx + dy * dy;
-                if (distSq > GRAVITY_RADIUS * GRAVITY_RADIUS || distSq < 1) continue;
-                const dist = Math.sqrt(distSq);
-                const t = 1 - dist / GRAVITY_RADIUS;
-                const pull = t * t * GRAVITY_STRENGTH;
-                gx += (dx / dist) * pull;
-                gy += (dy / dist) * pull;
-              }
-            }
-          }
-          row.push({ x: gx, y: gy });
-        }
-        gridPts.push(row);
-      }
+      const gridEndX = worldW + WORLD_PAD;
+      const gridEndY = worldH + WORLD_PAD;
 
       ctx.strokeStyle = "#e2e2e2";
       ctx.lineWidth = 0.5;
 
       // Horizontal lines
-      for (let r = 0; r < rows; r++) {
+      for (let y = gridStartY; y <= gridEndY; y += GRID_SPACING) {
         ctx.beginPath();
-        ctx.moveTo(gridPts[r][0].x, gridPts[r][0].y);
-        for (let c = 1; c < cols; c++) {
-          ctx.lineTo(gridPts[r][c].x, gridPts[r][c].y);
-        }
+        ctx.moveTo(gridStartX, y);
+        ctx.lineTo(gridEndX, y);
         ctx.stroke();
       }
 
       // Vertical lines
-      for (let c = 0; c < cols; c++) {
+      for (let x = gridStartX; x <= gridEndX; x += GRID_SPACING) {
         ctx.beginPath();
-        ctx.moveTo(gridPts[0][c].x, gridPts[0][c].y);
-        for (let r = 1; r < rows; r++) {
-          ctx.lineTo(gridPts[r][c].x, gridPts[r][c].y);
-        }
+        ctx.moveTo(x, gridStartY);
+        ctx.lineTo(x, gridEndY);
         ctx.stroke();
       }
 
