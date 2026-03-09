@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import type { Decision, MatchRecord, Particle, StrategyType, HallOfFameEntry, HallOfFameResponse } from "./types";
 import type { SimulationEngine } from "./engine";
+import { validateNoProfanity, censorText } from "./profanity";
 
 export interface ExternalAgent {
   apiKeyHash: string;
@@ -119,7 +120,7 @@ export class AgentManager {
       displacedId: npc.id,
       displacedStrategy: npc.strategy,
       joinedAt: Date.now(),
-      greeting: greeting.trim().slice(0, 280),
+      greeting: censorText(greeting.trim().slice(0, 280)),
     };
 
     return { particle, agent };
@@ -128,6 +129,8 @@ export class AgentManager {
   private validateUsername(username: string): string | null {
     if (!username || typeof username !== "string") return "Username is required";
     if (!/^[a-zA-Z0-9_]{1,16}$/.test(username)) return "Username must be 1-16 alphanumeric characters or underscores";
+    const profanityError = validateNoProfanity(username);
+    if (profanityError) return profanityError;
     return null;
   }
 
@@ -260,7 +263,7 @@ export class AgentManager {
     let greeting = "";
     const agentRaw = await this.redis.get(`agent:${username}`);
     if (agentRaw) {
-      try { greeting = JSON.parse(agentRaw).greeting ?? ""; } catch { /* ignore */ }
+      try { greeting = censorText(JSON.parse(agentRaw).greeting ?? ""); } catch { /* ignore */ }
     }
 
     const result = await this.displaceAndSpawn(username, greeting, apiKeyHash, engine);
