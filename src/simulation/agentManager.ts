@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import type { Decision, MatchRecord, Particle, StrategyType, HallOfFameEntry, HallOfFameResponse } from "./types";
+import { DEFAULT_CONFIG, type Decision, type MatchRecord, type Particle, type StrategyType, type HallOfFameEntry, type HallOfFameResponse } from "./types";
 import type { SimulationEngine } from "./engine";
 import { validateNoProfanity, censorText } from "./profanity";
 
@@ -47,6 +47,7 @@ function generateApiKey(): string {
 }
 
 export class AgentManager {
+  private reservedNames: Set<string>;
   private agents = new Map<string, ExternalAgent>();
   private apiKeyToUsername = new Map<string, string>();
   private pendingMatches = new Map<string, PendingMatch>();
@@ -57,6 +58,13 @@ export class AgentManager {
   private redis: Redis | null = null;
 
   constructor(redisUrl?: string) {
+    this.reservedNames = new Set<string>();
+    for (const ac of DEFAULT_CONFIG.agentClasses) {
+      for (const name of ac.names ?? []) {
+        this.reservedNames.add(name.toLowerCase());
+      }
+    }
+
     if (redisUrl) {
       this.initRedis(redisUrl);
     } else {
@@ -138,6 +146,7 @@ export class AgentManager {
     const invalid = this.validateUsername(username);
     if (invalid) return { error: invalid };
     if (this.agents.has(username)) return { error: "Username already taken" };
+    if (this.reservedNames.has(username.toLowerCase())) return { error: "Username is reserved (matches a bot name)" };
 
     // If username is already claimed, direct to login
     if (this.redis) {
