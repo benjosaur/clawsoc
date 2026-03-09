@@ -136,10 +136,23 @@ export class AgentManager {
 
   private validateUsername(username: string): string | null {
     if (!username || typeof username !== "string") return "Username is required";
-    if (!/^[a-zA-Z0-9_]{1,16}$/.test(username)) return "Username must be 1-16 alphanumeric characters or underscores";
+    if (username.length > 16) return "Username cannot be longer than 16 characters";
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) return "Username cannot contain special characters";
     const profanityError = validateNoProfanity(username);
     if (profanityError) return profanityError;
     return null;
+  }
+
+  async checkUsernameAvailable(username: string): Promise<{ available: boolean; reason?: string }> {
+    const invalid = this.validateUsername(username);
+    if (invalid) return { available: false, reason: invalid };
+    if (username.toLowerCase() === "test") return { available: false, reason: "Username already taken" };
+    if (this.agents.has(username)) return { available: false, reason: "Username already taken" };
+    if (this.redis) {
+      const ownerHash = await this.redis.get(`owner:${username}`);
+      if (ownerHash) return { available: false, reason: "Username already taken" };
+    }
+    return { available: true };
   }
 
   async register(username: string, greeting: string, engine: SimulationEngine): Promise<RegisterResult> {

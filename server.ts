@@ -102,6 +102,14 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     return;
   }
 
+  // GET /api/agent/check-username — unauthenticated availability check
+  if (pathname === "/api/agent/check-username" && method === "GET") {
+    const url = new URL(req.url ?? "", `http://${req.headers.host}`);
+    const name = url.searchParams.get("username") ?? "";
+    const result = await agentManager.checkUsernameAvailable(name);
+    return jsonResponse(res, 200, result);
+  }
+
   // POST /api/agent/register — first-time registration
   if (pathname === "/api/agent/register" && method === "POST") {
     const raw = await readBody(req);
