@@ -50,6 +50,25 @@ button {
   border-radius: calc(0.25rem - 1px);
 }
 
+@property --online-dot-opacity {
+  syntax: "<number>";
+  initial-value: 1;
+  inherits: true;
+}
+
+@keyframes online-pulse {
+  0%, 100% { --online-dot-opacity: 1; }
+  50% { --online-dot-opacity: 0.4; }
+}
+
+:root {
+  animation: online-pulse 2s ease-in-out infinite;
+}
+
+.online-dot {
+  opacity: var(--online-dot-opacity);
+}
+
 ::-webkit-scrollbar {
   width: 4px;
 }

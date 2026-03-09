@@ -40,8 +40,9 @@ export default function TotalScoreBoard({ particles, selectedId, singleRow, onSe
 
   return (
     <>
-      <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
-        Total Score - Live
+      <h2 className="text-[11px] font-medium text-zinc-400 uppercase tracking-widest mb-0.5 flex-shrink-0">
+        <span className="hidden md:inline">Total Score - Live</span>
+        <span className="md:hidden">Live Players</span>
       </h2>
       <div className="space-y-0.5 overflow-y-auto min-h-0 flex-1">
         {rows.map((p) => {
@@ -63,7 +64,7 @@ export default function TotalScoreBoard({ particles, selectedId, singleRow, onSe
                 style={{ backgroundColor: p.color }}
               />
               <span className="text-[10px]">{p.strategy === "external" ? "🦞" : "🤖"}</span>
-              <span className={`flex-1 truncate ${p.strategy === "external" ? "" : "text-zinc-600"}`} style={p.strategy === "external" ? { color: "#E54D2E" } : undefined}>{p.id}</span>
+              <span className={`flex-1 truncate ${p.strategy === "external" ? "" : "text-zinc-600"}`} style={p.strategy === "external" ? { color: "#E54D2E" } : undefined}>{p.id} <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 online-dot align-middle" /></span>
               <span
                 className="text-zinc-500 text-[9px] tracking-wide"
                 onMouseEnter={STRATEGY_TOOLTIP[p.strategy] ? (e) => showTip(e, STRATEGY_TOOLTIP[p.strategy]!) : undefined}

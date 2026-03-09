@@ -63,7 +63,7 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect 
                 style={{ backgroundColor: p.color }}
               />
               <span className="text-[10px]">{p.strategy === "external" ? "🦞" : "🤖"}</span>
-              <span className={`flex-1 truncate ${p.strategy === "external" ? "" : "text-zinc-600"}`} style={p.strategy === "external" ? { color: "#E54D2E" } : undefined}>{p.id}</span>
+              <span className={`flex-1 truncate ${p.strategy === "external" ? "" : "text-zinc-600"}`} style={p.strategy === "external" ? { color: "#E54D2E" } : undefined}>{p.id} <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 online-dot align-middle" /></span>
               <span
                 className="text-zinc-500 text-[9px] tracking-wide"
                 onMouseEnter={STRATEGY_TOOLTIP[p.strategy] ? (e) => showTip(e, STRATEGY_TOOLTIP[p.strategy]!) : undefined}

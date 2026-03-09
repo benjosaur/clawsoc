@@ -15,9 +15,9 @@ interface Props {
 
 export default function PanelTabs({ avgPanel, totalPanel, logPanel, playerPanel }: Props) {
   const tabs: TabDef[] = [
-    { id: "total", label: "Total" },
-    { id: "avg", label: "Avg" },
-    { id: "log", label: "Log" },
+    { id: "total", label: "Total Score" },
+    { id: "avg", label: "Avg Score" },
+    { id: "log", label: "Game Log" },
   ];
   if (playerPanel) tabs.push({ id: "player", label: "Player" });
 
@@ -49,7 +49,7 @@ export default function PanelTabs({ avgPanel, totalPanel, logPanel, playerPanel 
           </button>
         ))}
       </div>
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 overflow-auto pt-2">
         {active === "avg" && avgPanel}
         {active === "total" && totalPanel}
         {active === "log" && logPanel}
