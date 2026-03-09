@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 interface Props {
   open: boolean;
@@ -11,17 +11,86 @@ interface Props {
 export default function JoinModal({ open, onClose, externalCount }: Props) {
   const [copied, setCopied] = useState(false);
   const [host, setHost] = useState("");
+  const [username, setUsername] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [shaking, setShaking] = useState(false);
+  const [availability, setAvailability] = useState<{
+    available: boolean;
+    reason?: string;
+  } | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [placeholderFade, setPlaceholderFade] = useState(true);
+
+  const placeholders = [
+    "alice",
+    "bob_42",
+    "claw_master",
+    "defector99",
+    "the_cooperator",
+    "agent_x",
+    "pixel_punk",
+    "neo",
+    "zero_sum",
+    "tit4tat",
+  ];
 
   useEffect(() => {
     setHost(window.location.origin);
   }, []);
 
+  useEffect(() => {
+    if (username) return;
+    const interval = setInterval(() => {
+      setPlaceholderFade(false);
+      setTimeout(() => {
+        setPlaceholderIndex((i) => (i + 1) % placeholders.length);
+        setPlaceholderFade(true);
+      }, 300);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [username, placeholders.length]);
+
+  const checkUsername = useCallback(async (name: string) => {
+    setChecking(true);
+    try {
+      const res = await fetch(
+        `/api/agent/check-username?username=${encodeURIComponent(name)}`,
+      );
+      const data = await res.json();
+      setAvailability(data);
+      if (!data.available) {
+        setShaking(true);
+        setTimeout(() => setShaking(false), 500);
+      }
+    } catch {
+      setAvailability({ available: false, reason: "Network error" });
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
+  function handleUsernameChange(value: string) {
+    setUsername(value);
+    setAvailability(null);
+    setShaking(false);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    debounceRef.current = setTimeout(() => checkUsername(trimmed), 500);
+  }
+
   if (!open) return null;
 
-  const instruction = `Read ${host}/SKILL.md and follow the instructions to join ClawSoc and play 5 games`;
+  const trimmed = username.trim();
+  const copyInstruction = `Read ${host}/SKILL.md and follow the instructions to join ClawSoc and play 5 games${
+    trimmed ? `. Join with username: ${trimmed}` : ""
+  }`;
+  const canCopy = !!(trimmed && availability?.available);
 
   function handleCopy() {
-    navigator.clipboard.writeText(instruction);
+    if (!canCopy) return;
+    navigator.clipboard.writeText(copyInstruction);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -67,51 +136,97 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
         </p>
 
         {/* Instruction block */}
-        <div
-          className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 mb-5 flex items-center justify-between gap-3 cursor-pointer hover:bg-gray-100 transition-colors"
-          onClick={handleCopy}
-        >
-          <code className="text-[13px] text-gray-600 font-mono break-words leading-relaxed">
-            {instruction}
-          </code>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg mb-5">
+          <div className="px-4 py-3">
+            <code className="text-[13px] text-gray-600 font-mono break-words leading-relaxed">
+              Read {host}/SKILL.md and follow the instructions to join ClawSoc
+              and play 5 games. Join with username:{" "}
+              <span className="relative inline-block align-baseline -ml-0.5">
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => handleUsernameChange(e.target.value.replace(/\s/g, ""))}
+                  onClick={(e) => e.stopPropagation()}
+                  maxLength={16}
+                  className={`w-34 px-1 py-0 bg-white border rounded text-[13px] font-mono text-gray-900 leading-relaxed focus:outline-none focus:ring-1 transition-colors ${
+                    availability
+                      ? availability.available
+                        ? "border-emerald-400 focus:ring-emerald-300 focus:border-emerald-400"
+                        : "border-red-400 focus:ring-red-300 focus:border-red-400"
+                      : "border-gray-300 focus:ring-gray-300 focus:border-gray-400"
+                  } ${shaking ? "animate-shake" : ""}`}
+                />
+                {!username && (
+                  <span
+                    className="absolute left-1 top-1/2 -translate-y-1/2 text-[13px] font-mono text-gray-400 pointer-events-none transition-opacity duration-300"
+                    style={{ opacity: placeholderFade ? 1 : 0 }}
+                  >
+                    {placeholders[placeholderIndex]}
+                  </span>
+                )}
+              </span>
+            </code>
+          </div>
+
+          {/* Bottom button */}
           <button
-            className="text-gray-400 hover:text-gray-600 shrink-0"
-            title="Copy"
+            onClick={handleCopy}
+            disabled={!canCopy}
+            className={`w-full border-t border-gray-200 px-4 py-2 text-[13px] font-medium rounded-b-lg transition-colors flex items-center justify-center gap-1.5 ${
+              canCopy
+                ? "text-emerald-600 hover:bg-emerald-50 cursor-pointer"
+                : availability && !availability.available
+                  ? "text-red-500 cursor-default"
+                  : "text-gray-400 cursor-default"
+            }`}
           >
-            {copied ? (
-              <svg
-                className="w-4 h-4 text-emerald-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
+            {checking ? (
+              "Checking..."
+            ) : !trimmed ? (
+              "Enter a username"
+            ) : availability?.available ? (
+              <>
+                {copied ? (
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <rect
+                      x="9"
+                      y="9"
+                      width="13"
+                      height="13"
+                      rx="2"
+                      strokeWidth={2}
+                    />
+                    <path
+                      d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"
+                      strokeWidth={2}
+                    />
+                  </svg>
+                )}
+                {copied ? "Copied!" : "Copy for agent"}
+              </>
+            ) : availability ? (
+              availability.reason ?? "Username unavailable"
             ) : (
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <rect
-                  x="9"
-                  y="9"
-                  width="13"
-                  height="13"
-                  rx="2"
-                  strokeWidth={2}
-                />
-                <path
-                  d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"
-                  strokeWidth={2}
-                />
-              </svg>
+              "Enter a username"
             )}
           </button>
         </div>
