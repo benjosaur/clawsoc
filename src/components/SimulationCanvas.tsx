@@ -310,7 +310,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         ctx.textBaseline = "alphabetic";
         const metrics = ctx.measureText(Math.round(p.avgScore).toString());
         const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
-        ctx.fillText(Math.round(p.avgScore).toString(), p.x, p.y + textHeight / 2);
+        ctx.fillText(Math.round(p.avgScore).toString(), p.x, p.y + textHeight / 2 - 0.5);
 
         // Name label above
         const labelFontSize = 8 * fontScale * (isSmall ? 0.7 : 1);
