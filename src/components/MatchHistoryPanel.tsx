@@ -202,7 +202,7 @@ function EntryModal({ entry, onClose, particleMap }: { entry: GameLogEntry; onCl
 }
 
 export default function MatchHistoryPanel({ entries, selectedId, label, particles = [] }: Props) {
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openEntry, setOpenEntry] = useState<GameLogEntry | null>(null);
   const particleMap = useMemo(() => {
     const map = new Map<string, ParticleMeta>();
     for (const p of particles) map.set(p.id, p);
@@ -216,8 +216,6 @@ export default function MatchHistoryPanel({ entries, selectedId, label, particle
           (e) => e.particleA.id === selectedId || e.particleB.id === selectedId,
         )
       : recent;
-
-  const openEntry = openId ? filtered.find((e) => e.id === openId) : null;
 
   return (
     <>
@@ -235,7 +233,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label, particle
             <div
               key={entry.id}
               className="text-sm font-mono text-zinc-600 flex gap-2 cursor-pointer hover:bg-zinc-50 rounded -mx-1 px-1 transition-colors"
-              onClick={() => setOpenId(entry.id)}
+              onClick={() => setOpenEntry(entry)}
             >
               {/* Left: player A */}
               <div className="flex-1 min-w-0 text-left">
@@ -270,7 +268,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label, particle
             <div
               key={entry.id}
               className="text-sm font-mono text-zinc-500 flex gap-2 cursor-pointer hover:bg-zinc-50 rounded -mx-1 px-1 transition-colors"
-              onClick={() => setOpenId(entry.id)}
+              onClick={() => setOpenEntry(entry)}
             >
               <div className="flex-1 min-w-0 text-left truncate">{entry.particleA.id}</div>
               <span className="text-zinc-400 italic text-xs flex-shrink-0">timed out</span>
@@ -281,7 +279,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label, particle
       </div>
 
       {openEntry && (
-        <EntryModal entry={openEntry} onClose={() => setOpenId(null)} particleMap={particleMap} />
+        <EntryModal entry={openEntry} onClose={() => setOpenEntry(null)} particleMap={particleMap} />
       )}
     </>
   );
