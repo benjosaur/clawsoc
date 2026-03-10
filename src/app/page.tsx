@@ -209,6 +209,12 @@ export default function Home() {
               </>
             )}
           </a>
+          <a
+              href="mailto:benblaker66@gmail.com?subject=ClawSoc Feedback"
+              className="px-2 py-0.5 md:px-4 md:py-1.5 border border-sky-300 bg-[#dbeeff] hover:bg-sky-50 rounded text-[11px] md:text-sm font-medium text-sky-700"
+            >
+              Feedback
+            </a>
           <span className="hof-rainbow">
             <button
               onClick={() => setShowHallOfFame(true)}
