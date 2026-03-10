@@ -175,6 +175,8 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
   const mousePosRef = useRef<{ x: number; y: number } | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const scaleRef = useRef(1);
+  const focusFadeRef = useRef(0);
+  const prevSelectedIdRef = useRef(selectedId);
 
   const updateHoveredId = useCallback((id: string | null) => {
     hoveredIdRef.current = id;
@@ -384,6 +386,19 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
       }
 
       const sel = selectedIdRef.current;
+
+      // Focus fade: dim non-selected particles briefly on selection change
+      if (sel !== prevSelectedIdRef.current) {
+        if (sel != null) focusFadeRef.current = 1;
+        prevSelectedIdRef.current = sel;
+      }
+      if (focusFadeRef.current > 0.01) {
+        focusFadeRef.current *= 0.96;
+      } else {
+        focusFadeRef.current = 0;
+      }
+      const focusFade = focusFadeRef.current;
+
       const s = dpr * scale;
       const padPx = WORLD_PAD * s;
       // Store transform for mouse event coordinate conversion
@@ -589,16 +604,23 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         const pFadeAlpha = fadeAlpha.get(p.id);
 
         // Fade-through alpha wraps both circle and text
-        if (pFadeAlpha != null) ctx.globalAlpha = pFadeAlpha;
+        let alpha = pFadeAlpha ?? 1;
+
+        // Focus fade: dim non-selected particles on selection
+        if (!isSelected && focusFade > 0) {
+          alpha *= 1 - focusFade * 0.85;
+        }
+
+        if (alpha < 1) ctx.globalAlpha = alpha;
 
         ctx.save();
 
         if (isParked) {
-          ctx.globalAlpha = 0.4;
+          ctx.globalAlpha = Math.min(ctx.globalAlpha, 0.4);
         }
         if (p.state === 1 || p.state === 2) {
           ctx.shadowColor = p.color;
-          ctx.shadowBlur = 24;
+          ctx.shadowBlur = focusFade > 0 && !isSelected ? 24 * (1 - focusFade) : 24;
         }
 
         ctx.beginPath();
@@ -638,7 +660,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         ctx.fillText(p.id, p.x, p.y - p.radius - 4);
 
         ctx.restore();
-        if (pFadeAlpha != null) ctx.globalAlpha = 1;
+        if (alpha < 1) ctx.globalAlpha = 1;
       }
 
       // Draw floating popups
