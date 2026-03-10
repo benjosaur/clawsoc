@@ -16,6 +16,7 @@ export interface PendingMatch {
   bId: string;
   side: "a" | "b";
   opponentId: string;
+  opponentContext?: string;
   vsRecord: { cc: number; cd: number; dc: number; dd: number } | null;
   conversation: ConversationTurn[];
   forcedDecide: boolean;
