@@ -246,7 +246,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   matchResponseTimeoutMs: 120_000,
   decideResponseTimeoutMs: 15_000,
   pendingMatchTimeoutMs: 15_000,
-  parkedAgentTimeoutMs: 30_000,
+  parkedAgentTimeoutMs: 15_000,
 
   hofPriorWeight: 20,
   hofGlobalMean: 2.2215,
