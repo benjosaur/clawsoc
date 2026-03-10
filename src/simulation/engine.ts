@@ -15,6 +15,9 @@ const DEFAULT_PHASE_DURATIONS: Record<CollisionPhase, number> = {
 
 const MAX_CONVERSATION_TURNS = 10;
 
+function r1(n: number): number { return Math.round(n * 10) / 10; }
+function r3(n: number): number { return Math.round(n * 1000) / 1000; }
+
 interface FrozenPair {
   aId: string;
   bId: string;
@@ -98,15 +101,6 @@ export class SimulationEngine {
     const conv = fp.conversation;
     const turn: ConversationTurn = { speaker, type, content, decision };
     conv.turns.push(turn);
-
-    // Emit turn event for frontend
-    this.pendingEvents.push({
-      e: "turn", tick: this.tick,
-      a: fp.aId, b: fp.bId,
-      speaker,
-      turnType: type,
-      content: type === "message" ? content : "",
-    });
 
     if (type === "decision" && decision) {
       if (speaker === "a") {
@@ -241,13 +235,6 @@ export class SimulationEngine {
 
     const record = playMatchFromDecisions(a, b, this.tick, conv.lockedInA!, conv.lockedInB!);
     record.conversation = conv.turns;
-
-    // Backwards compat: derive messageA/messageB from first message each side sent
-    const firstA = conv.turns.find((t) => t.speaker === "a" && t.type === "message");
-    const firstB = conv.turns.find((t) => t.speaker === "b" && t.type === "message");
-    if (firstA) record.messageA = firstA.content;
-    if (firstB) record.messageB = firstB.content;
-
     fp.matchRecord = record;
   }
 
@@ -398,8 +385,8 @@ export class SimulationEngine {
 
       this.pendingEvents.push({
         e: "unfreeze", tick: this.tick, a: a.id, b: b.id,
-        ax: a.position.x, ay: a.position.y, avx: a.velocity.x, avy: a.velocity.y,
-        bx: b.position.x, by: b.position.y, bvx: b.velocity.x, bvy: b.velocity.y,
+        ax: r1(a.position.x), ay: r1(a.position.y), avx: r3(a.velocity.x), avy: r3(a.velocity.y),
+        bx: r1(b.position.x), by: r1(b.position.y), bvx: r3(b.velocity.x), bvy: r3(b.velocity.y),
       });
     }
 
@@ -428,8 +415,8 @@ export class SimulationEngine {
 
         this.pendingEvents.push({
           e: "freeze", tick: this.tick, a: a.id, b: b.id,
-          ax: a.position.x, ay: a.position.y, avx, avy,
-          bx: b.position.x, by: b.position.y, bvx, bvy,
+          ax: r1(a.position.x), ay: r1(a.position.y), avx: r3(avx), avy: r3(avy),
+          bx: r1(b.position.x), by: r1(b.position.y), bvx: r3(bvx), bvy: r3(bvy),
         });
 
         this.frozenPairs.push({
@@ -493,8 +480,8 @@ export class SimulationEngine {
 
     this.pendingEvents.push({
       e: "abort", tick: this.tick, a: a.id, b: b.id,
-      ax: a.position.x, ay: a.position.y, avx: a.velocity.x, avy: a.velocity.y,
-      bx: b.position.x, by: b.position.y, bvx: b.velocity.x, bvy: b.velocity.y,
+      ax: r1(a.position.x), ay: r1(a.position.y), avx: r3(a.velocity.x), avy: r3(a.velocity.y),
+      bx: r1(b.position.x), by: r1(b.position.y), bvx: r3(b.velocity.x), bvy: r3(b.velocity.y),
     });
 
     this.timeoutCounter++;
@@ -568,13 +555,6 @@ export class SimulationEngine {
       if (fp) {
         const turn: ConversationTurn = { speaker: side, type: "message", content: message };
         fp.conversation.turns.push(turn);
-        this.pendingEvents.push({
-          e: "turn", tick: this.tick,
-          a: aId, b: bId,
-          speaker: side,
-          turnType: "message",
-          content: message,
-        });
       }
     }
     this.resolveExternalTurn(aId, bId, side, "decision", "", decision);
@@ -585,9 +565,9 @@ export class SimulationEngine {
     this.particleMap.set(p.id, p);
     this.pendingEvents.push({
       e: "add", id: p.id,
-      x: p.position.x, y: p.position.y,
-      vx: p.velocity.x, vy: p.velocity.y,
-      radius: p.radius, strategy: p.strategy,
+      x: r1(p.position.x), y: r1(p.position.y),
+      vx: r3(p.velocity.x), vy: r3(p.velocity.y),
+      strategy: p.strategy,
     });
     this.pendingMetaUpdates.push(p.id);
   }
@@ -611,8 +591,8 @@ export class SimulationEngine {
     p.state = "moving";
     this.pendingEvents.push({
       e: "unpark", id: p.id,
-      x: p.position.x, y: p.position.y,
-      vx: p.velocity.x, vy: p.velocity.y,
+      x: r1(p.position.x), y: r1(p.position.y),
+      vx: r3(p.velocity.x), vy: r3(p.velocity.y),
     });
   }
 

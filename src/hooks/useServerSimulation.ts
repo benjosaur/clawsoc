@@ -1,14 +1,13 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
-import type { GameLogEntry, StrategyType } from "@/simulation/types";
-import type { InitFrame, EventFrame, SlowFrame, ServerFrame } from "@/simulation/protocol";
+import type { ConversationTurn, Decision, GameLogEntry, MatchRecord, StrategyType } from "@/simulation/types";
+import type { InitFrame, EventFrame, SlowFrame, ServerFrame, WireGameLogEntry } from "@/simulation/protocol";
 
 /** Particle metadata from slow frames, keyed by id. */
 export interface ParticleMeta {
   id: string;
   color: string;
-  radius: number;
   score: number;
   avgScore: number;
   r30Total: number;
@@ -48,7 +47,7 @@ export interface ClientParticle {
 /** Simulation state maintained by the hook, advanced by the canvas rAF. */
 export interface SimState {
   particles: ClientParticle[];
-  config: { canvasWidth: number; canvasHeight: number };
+  config: { canvasWidth: number; canvasHeight: number; particleRadius: number };
   localTick: number;
   lastAdvanceTime: number;
 }
@@ -65,15 +64,59 @@ export interface JoinEvent {
 
 const POPUP_DURATION_MS = 670;
 
+/** Derive popup color from score text: +0/+3 = cooperated (green), +1/+5 = defected (red). */
+function popupColor(text: string): string {
+  const n = parseInt(text.replace("+", ""), 10);
+  return n === 0 || n === 3 ? "#16a34a" : "#dc2626";
+}
+
+/** Expand compact wire conversation [speaker, value, speaker, value, ...] back to ConversationTurn[]. */
+function expandConversation(compact: (string | number)[]): ConversationTurn[] {
+  const turns: ConversationTurn[] = [];
+  for (let i = 0; i < compact.length; i += 2) {
+    const speaker = compact[i] as "a" | "b";
+    const val = compact[i + 1];
+    if (typeof val === "string") {
+      turns.push({ speaker, type: "message", content: val });
+    } else {
+      const decision: Decision = val === 0 ? "cooperate" : "defect";
+      turns.push({ speaker, type: "decision", content: "", decision });
+    }
+  }
+  return turns;
+}
+
+/** Expand a compact wire game log entry to the full MatchRecord. */
+function expandWireEntry(wire: WireGameLogEntry): GameLogEntry {
+  const conversation = expandConversation(wire.conversation);
+  const firstA = conversation.find((t) => t.speaker === "a" && t.type === "message");
+  const firstB = conversation.find((t) => t.speaker === "b" && t.type === "message");
+  return {
+    type: "match",
+    id: wire.id,
+    tick: 0,
+    particleA: wire.particleA,
+    particleB: wire.particleB,
+    decisionA: wire.decisionA,
+    decisionB: wire.decisionB,
+    scoreA: wire.scoreA,
+    scoreB: wire.scoreB,
+    conversation,
+    messageA: firstA?.content,
+    messageB: firstB?.content,
+    timestamp: 0,
+  } satisfies MatchRecord;
+}
+
 export function useServerSimulation() {
   const simRef = useRef<SimState>({
     particles: [],
-    config: { canvasWidth: 800, canvasHeight: 600 },
+    config: { canvasWidth: 800, canvasHeight: 600, particleRadius: 5 },
     localTick: 0,
     lastAdvanceTime: 0,
   });
   const particleMapRef = useRef<Map<string, ClientParticle>>(new Map());
-  const staticMetaRef = useRef<Map<string, { id: string; radius: number; strategy: StrategyType }>>(new Map());
+  const staticMetaRef = useRef<Map<string, { id: string; strategy: StrategyType }>>(new Map());
   const metaRef = useRef<Map<string, ParticleMeta>>(new Map());
   const gameLogRef = useRef<GameLogEntry[]>([]);
   const popupsRef = useRef<ClientPopup[]>([]);
@@ -93,10 +136,11 @@ export function useServerSimulation() {
   });
 
   const handleInit = useCallback((frame: InitFrame) => {
+    const radius = frame.config.particleRadius;
     const particles = frame.particles.map((p) => ({
       id: p.id, x: p.x, y: p.y,
       vx: p.vx, vy: p.vy,
-      radius: p.radius, state: p.state,
+      radius, state: p.state,
       cx: 0, cy: 0,
       tx: 0, ty: 0, tvx: 0, tvy: 0, freezeAt: 0,
     }));
@@ -154,12 +198,13 @@ export function useServerSimulation() {
         if (a) { a.x = ev.ax + ev.avx * ff; a.y = ev.ay + ev.avy * ff; a.vx = ev.avx; a.vy = ev.avy; a.state = 0; }
         if (b) { b.x = ev.bx + ev.bvx * ff; b.y = ev.by + ev.bvy * ff; b.vx = ev.bvx; b.vy = ev.bvy; b.state = 0; }
       } else if (ev.e === "add") {
-        const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius: ev.radius, state: 0, cx: 0, cy: 0, tx: 0, ty: 0, tvx: 0, tvy: 0, freezeAt: 0 };
+        const radius = sim.config.particleRadius;
+        const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius, state: 0, cx: 0, cy: 0, tx: 0, ty: 0, tvx: 0, tvy: 0, freezeAt: 0 };
         sim.particles.push(cp);
         map.set(ev.id, cp);
-        staticMetaRef.current.set(ev.id, { id: ev.id, radius: ev.radius, strategy: ev.strategy });
+        staticMetaRef.current.set(ev.id, { id: ev.id, strategy: ev.strategy });
         metaRef.current.set(ev.id, {
-          id: ev.id, radius: ev.radius, strategy: ev.strategy,
+          id: ev.id, strategy: ev.strategy,
           color: "hsl(60,50%,45%)", score: 0, avgScore: 0,
           r30Total: 0, r30Avg: 0,
           cc: 0, cd: 0, dc: 0, dd: 0,
@@ -205,19 +250,19 @@ export function useServerSimulation() {
       }
     }
 
-    // Add popups (dedup by position+text against live popups)
+    // Add popups — derive color from score text
     const now = performance.now();
     if (frame.pop) {
       // Expire old popups first so dedup doesn't match stale entries
       popupsRef.current = popupsRef.current.filter(
         (p) => now - p.spawnTime < POPUP_DURATION_MS,
       );
-      for (const [x, y, text, color] of frame.pop) {
+      for (const [x, y, text] of frame.pop) {
         const exists = popupsRef.current.some(
           (p) => p.x === x && p.y === y && p.text === text,
         );
         if (!exists) {
-          popupsRef.current.push({ key: ++popupIdRef.current, x, y, text, color, spawnTime: now });
+          popupsRef.current.push({ key: ++popupIdRef.current, x, y, text, color: popupColor(text), spawnTime: now });
         }
       }
     }
@@ -244,8 +289,9 @@ export function useServerSimulation() {
     // Process game log entries + derive outcome matrix client-side
     if (frame.log && frame.log.length > 0) {
       const meta = metaRef.current;
+      const expanded = frame.log.map(expandWireEntry);
       const seen = new Set(gameLogRef.current.map((e) => e.id));
-      const fresh = frame.log.filter((e) => !seen.has(e.id));
+      const fresh = expanded.filter((e) => !seen.has(e.id));
       if (fresh.length > 0) {
         gameLogRef.current = [...gameLogRef.current, ...fresh].slice(-50);
         // Update cc/cd/dc/dd from match results
@@ -284,7 +330,6 @@ export function useServerSimulation() {
       const color = p.hue < 0 ? "hsl(60,50%,45%)" : `hsl(${p.hue},70%,42%)`;
       meta.set(p.id, {
         id: p.id,
-        radius: s?.radius ?? 5,
         strategy: s?.strategy ?? "random",
         color,
         score: p.score,
