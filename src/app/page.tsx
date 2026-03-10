@@ -145,6 +145,8 @@ export default function Home() {
   const isOffline = offlinePlayer != null && selectedId == null;
   const hasSelection = selectedId != null || isOffline;
   const scorePanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
+  const score30mPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} mode="30m" />;
+  const scoreTotalPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} mode="total" />;
   const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} particles={state.particles} />;
   const displayParticle = isOffline
     ? {
@@ -179,7 +181,7 @@ export default function Home() {
           </span>
         </div>
         <div className="flex items-center gap-1.5 md:gap-2">
-          <div className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-sm font-mono">
+          <div className="hidden md:flex items-center gap-1.5 md:gap-2 text-[10px] md:text-sm font-mono">
             <span className="relative group cursor-default" style={{ color: "#E54D2E" }}>
               🦞 {externalCount}
               <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-white text-zinc-600 border border-zinc-200 rounded shadow-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -211,7 +213,7 @@ export default function Home() {
           </a>
           <a
               href="mailto:benblaker66@gmail.com?subject=ClawSoc Feedback"
-              className="px-2 py-0.5 md:px-4 md:py-1.5 border border-sky-300 bg-[#dbeeff] hover:bg-sky-50 rounded text-[11px] md:text-sm font-medium text-sky-700"
+              className="hidden md:inline-flex px-4 py-1.5 border border-sky-300 bg-[#dbeeff] hover:bg-sky-50 rounded text-sm font-medium text-sky-700"
             >
               Feedback
             </a>
@@ -316,23 +318,36 @@ export default function Home() {
 
         {/* Mobile tabs */}
         <div className="relative z-10 bg-[#fafafa] shadow-[0_0_24px_16px_#fafafa] md:hidden flex flex-col" style={{ height: "50vh" }}>
-          <div className="pb-2" data-no-deselect>
-            <PlayerSearch
-              particles={state.particles}
-              selectedId={selectedId}
-              onSelect={handleSelect}
-              onSearchDatabase={searchDatabase}
-              isSearching={searching}
-              offlinePlayerLabel={offlinePlayer?.id ?? null}
-              notFound={searchNotFound}
-              onClearNotFound={() => setSearchNotFound(false)}
-            />
+          <div className="flex items-center gap-2 pb-2" data-no-deselect>
+            <div className="flex-1 min-w-0">
+              <PlayerSearch
+                particles={state.particles}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+                onSearchDatabase={searchDatabase}
+                isSearching={searching}
+                offlinePlayerLabel={offlinePlayer?.id ?? null}
+                notFound={searchNotFound}
+                onClearNotFound={() => setSearchNotFound(false)}
+              />
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] font-mono flex-shrink-0">
+              <span style={{ color: "#E54D2E" }}>🦞 {externalCount}</span>
+              <span className="text-zinc-400">🤖 {npcCount}</span>
+            </div>
           </div>
           <PanelTabs
-            scorePanel={scorePanel}
+            score30mPanel={score30mPanel}
+            scoreTotalPanel={scoreTotalPanel}
             logPanel={logPanel}
             playerPanel={selectedId != null || isOffline ? playerStatsPanel : undefined}
           />
+          <a
+            href="mailto:benblaker66@gmail.com?subject=ClawSoc Feedback"
+            className="flex-shrink-0 block w-full mt-2 py-2 text-center text-xs font-medium text-sky-700 bg-[#dbeeff] border-t border-sky-200"
+          >
+            Give Feedback
+          </a>
         </div>
       </div>
       <JoinToast joinEventsRef={joinEventsRef} onSelect={handleSelect} />
