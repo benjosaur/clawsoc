@@ -25,6 +25,7 @@ import type { ConversationTurn, Decision, GameLogEntry } from "./src/simulation/
 import { AgentManager } from "./src/simulation/agentManager";
 import { handleAdminAPI } from "./src/simulation/adminApi";
 import { censorText } from "./src/simulation/profanity";
+import { RegisterBodySchema, DecideBodySchema } from "./src/simulation/schemas";
 import { agentApiLimiter, registerLimiter, adminLimiter, publicApiLimiter } from "./src/simulation/rateLimit";
 import type { PendingMatch } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulation/protocol";
@@ -216,13 +217,17 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       }
       return jsonResponse(res, 400, { error: "Failed to read request body" });
     }
-    let body: { username?: string; greeting?: string };
+    let rawBody: unknown;
     try {
-      body = JSON.parse(raw);
+      rawBody = JSON.parse(raw);
     } catch {
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
-    const result = await agentManager.register(body.username ?? "", clientIp);
+    const parsed = RegisterBodySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return jsonResponse(res, 400, { error: "Invalid request body" });
+    }
+    const result = await agentManager.register(parsed.data.username, clientIp);
     if ("error" in result) {
       return jsonResponse(res, 400, result);
     }
@@ -432,18 +437,18 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       }
       return jsonResponse(res, 400, { error: "Failed to read request body" });
     }
-    let body: { message?: string; decision?: string };
+    let rawBody: unknown;
     try {
-      body = JSON.parse(raw);
+      rawBody = JSON.parse(raw);
     } catch {
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
-
-    const message = body.message?.slice(0, 500);
-    const { decision } = body;
-    if (!decision || (decision !== "cooperate" && decision !== "defect")) {
+    const parsed = DecideBodySchema.safeParse(rawBody);
+    if (!parsed.success) {
       return jsonResponse(res, 400, { error: "decision must be 'cooperate' or 'defect'" });
     }
+    const message = parsed.data.message?.slice(0, 500);
+    const decision = parsed.data.decision;
 
     const pending = agentManager.getPendingMatch(username);
     if (!pending) {

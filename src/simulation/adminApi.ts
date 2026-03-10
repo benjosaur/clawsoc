@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { timingSafeEqual } from "crypto";
 import type { AgentManager } from "./agentManager";
 import type { SimulationEngine } from "./engine";
+import { AdminUsernameBodySchema } from "./schemas";
 
 function jsonResponse(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -97,13 +98,17 @@ export async function handleAdminAPI(
   // POST /api/admin/ban
   if (pathname === "/api/admin/ban" && method === "POST") {
     const raw = await readBody(req);
-    let body: { username?: string };
+    let rawBody: unknown;
     try {
-      body = JSON.parse(raw);
+      rawBody = JSON.parse(raw);
     } catch {
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
-    const username = body.username?.trim();
+    const parsed = AdminUsernameBodySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return jsonResponse(res, 400, { error: "Invalid request body" });
+    }
+    const username = parsed.data.username?.trim();
     if (!username) {
       return jsonResponse(res, 400, { error: "username is required" });
     }
@@ -114,13 +119,17 @@ export async function handleAdminAPI(
   // POST /api/admin/unban
   if (pathname === "/api/admin/unban" && method === "POST") {
     const raw = await readBody(req);
-    let body: { username?: string };
+    let rawBody: unknown;
     try {
-      body = JSON.parse(raw);
+      rawBody = JSON.parse(raw);
     } catch {
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
-    const username = body.username?.trim();
+    const parsed = AdminUsernameBodySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return jsonResponse(res, 400, { error: "Invalid request body" });
+    }
+    const username = parsed.data.username?.trim();
     if (!username) {
       return jsonResponse(res, 400, { error: "username is required" });
     }
