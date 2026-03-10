@@ -19,7 +19,7 @@ const port = parseInt(process.env.PORT || "3000", 10);
 // --- Simulation engine ---
 
 const engine = new SimulationEngine(DEFAULT_CONFIG);
-const agentManager = new AgentManager(process.env.REDIS_URL);
+const agentManager = new AgentManager();
 
 // --- External agent decision callback ---
 
@@ -552,7 +552,8 @@ async function main() {
   const handle = app.getRequestHandler();
   await app.prepare();
 
-  // Restore state from Redis on startup
+  // Connect to Redis and restore state on startup
+  await agentManager.initRedis(process.env.REDIS_URL);
   await agentManager.restoreApiKeys();
   await agentManager.restoreBannedUsers();
   await agentManager.restoreRecords(engine);

@@ -63,22 +63,20 @@ export class AgentManager {
   private readonly maxAgentsPerIp = 5;
   private redis: Redis | null = null;
 
-  constructor(redisUrl?: string) {
+  constructor() {
     this.reservedNames = new Set<string>();
     for (const ac of DEFAULT_CONFIG.agentClasses) {
       for (const name of ac.names ?? []) {
         this.reservedNames.add(name.toLowerCase());
       }
     }
-
-    if (redisUrl) {
-      this.initRedis(redisUrl);
-    } else {
-      console.warn("[AgentManager] No REDIS_URL — running in-memory only. Records will not persist across restarts.");
-    }
   }
 
-  private async initRedis(url: string): Promise<void> {
+  async initRedis(url?: string): Promise<void> {
+    if (!url) {
+      console.warn("[AgentManager] No REDIS_URL — running in-memory only. Records will not persist across restarts.");
+      return;
+    }
     try {
       const { default: RedisClient } = await import("ioredis");
       this.redis = new RedisClient(url, { maxRetriesPerRequest: 3, lazyConnect: true }) as unknown as Redis;
