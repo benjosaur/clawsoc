@@ -1,7 +1,24 @@
+import { readFileSync } from "fs";
 import { createServer, IncomingMessage, ServerResponse } from "http";
 import next from "next";
 import { parse } from "url";
 import { WebSocketServer, WebSocket } from "ws";
+
+// Load .env before anything reads process.env
+try {
+  const envFile = readFileSync(".env", "utf-8");
+  for (const line of envFile.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+    if (!process.env[key]) process.env[key] = val;
+  }
+} catch {
+  // no .env file, that's fine
+}
 import { SimulationEngine } from "./src/simulation/engine";
 import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
 import type { ConversationTurn, Decision, GameLogEntry } from "./src/simulation/types";
@@ -11,6 +28,7 @@ import { censorText } from "./src/simulation/profanity";
 import { agentApiLimiter, registerLimiter, adminLimiter, publicApiLimiter } from "./src/simulation/rateLimit";
 import type { PendingMatch } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulation/protocol";
+import { initLlm, requestLlmMessage } from "./src/simulation/llm";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -76,6 +94,25 @@ engine.onParticleParked = (particleId, username) => {
 engine.onMatchResolved = (record, aId, bId) => {
   agentManager.resolveResultWaiter(aId, bId, record);
 };
+
+// --- LLM bot message callback ---
+
+const llmEnabled = initLlm();
+if (llmEnabled) {
+  console.log("[server] LLM enabled — bot messages will use gpt-4o-mini");
+  engine.onRequestBotLlmMessage = (aId, bId, side, self, opponent, conversationSoFar) => {
+    requestLlmMessage(self, opponent, side, conversationSoFar)
+      .then((content) => {
+        engine.resolveExternalTurn(aId, bId, side, "message", content);
+      })
+      .catch((err) => {
+        console.error(`[llm] Failed for ${self.id}:`, err);
+        engine.resolveExternalTurn(aId, bId, side, "message", "...");
+      });
+  };
+} else {
+  console.log("[server] LLM disabled — no OPENAI_API_KEY, using template messages");
+}
 
 // --- Agent HTTP API ---
 

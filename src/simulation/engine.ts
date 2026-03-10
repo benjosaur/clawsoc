@@ -34,6 +34,15 @@ export type ExternalTurnCallback = (
   forcedDecide: boolean,
 ) => void;
 
+export type BotLlmMessageCallback = (
+  aId: string,
+  bId: string,
+  side: "a" | "b",
+  self: Particle,
+  opponent: Particle,
+  conversationSoFar: ConversationTurn[],
+) => void;
+
 export type MatchResolvedCallback = (
   record: MatchRecord,
   aId: string,
@@ -54,6 +63,7 @@ export class SimulationEngine {
   pendingMetaUpdates: string[] = [];
   pendingGameLog: GameLogEntry[] = [];
   onRequestExternalTurn: ExternalTurnCallback | null = null;
+  onRequestBotLlmMessage: BotLlmMessageCallback | null = null;
   onMatchResolved: MatchResolvedCallback | null = null;
   onParticleParked: ((particleId: string, username: string) => void) | null = null;
 
@@ -180,6 +190,11 @@ export class SimulationEngine {
     const action = botChooseTurnAction(self, opponent, conv);
     if (action.type === "decision") {
       this.recordTurn(fp, speaker, "decision", "", action.decision);
+    } else if (this.onRequestBotLlmMessage) {
+      // LLM mode: yield and wait for async response
+      conv.waitingForExternal = true;
+      this.onRequestBotLlmMessage(fp.aId, fp.bId, speaker, self, opponent, conv.turns);
+      return false;
     } else {
       this.recordTurn(fp, speaker, "message", action.content);
     }

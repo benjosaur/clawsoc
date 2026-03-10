@@ -25,10 +25,17 @@ export function botChooseTurnAction(
     return { type: "decision", content: "", decision: myDecision };
   }
 
+  // Ensure every bot sends at least 1 message before deciding
+  const mySide = conv.currentSpeaker;
+  const myMessageCount = conv.turns.filter(
+    (t) => t.speaker === mySide && t.type === "message",
+  ).length;
+  const mustMessage = myMessageCount === 0;
+
   switch (self.strategy) {
     case "always_defect": {
       // Curt: 70% chance to decide on turn 0-1, always by turn 2
-      if (turnNumber >= 2 || Math.random() < 0.7) {
+      if (!mustMessage && (turnNumber >= 2 || Math.random() < 0.7)) {
         return { type: "decision", content: "", decision: myDecision };
       }
       return { type: "message", content: generateConversationMessage(self, opponent, conv) };
@@ -39,17 +46,23 @@ export function botChooseTurnAction(
       if (turnNumber < 3 || (turnNumber < 5 && Math.random() < 0.6)) {
         return { type: "message", content: generateConversationMessage(self, opponent, conv) };
       }
+      if (mustMessage) {
+        return { type: "message", content: generateConversationMessage(self, opponent, conv) };
+      }
       return { type: "decision", content: "", decision: myDecision };
     }
 
     case "tit_for_tat": {
       // Mirrors opponent pace: if opponent decided, decide immediately
       const opponentDecided = conv.lockedInA !== null || conv.lockedInB !== null;
-      if (opponentDecided) {
+      if (!mustMessage && opponentDecided) {
         return { type: "decision", content: "", decision: myDecision };
       }
       // Chat for 2-3 turns then decide
       if (turnNumber < 2 || (turnNumber < 4 && Math.random() < 0.5)) {
+        return { type: "message", content: generateConversationMessage(self, opponent, conv) };
+      }
+      if (mustMessage) {
         return { type: "message", content: generateConversationMessage(self, opponent, conv) };
       }
       return { type: "decision", content: "", decision: myDecision };
@@ -58,7 +71,7 @@ export function botChooseTurnAction(
     case "random": {
       // Chaotic: increasing probability of deciding each turn
       const decideChance = 0.25 + turnNumber * 0.1;
-      if (Math.random() < decideChance) {
+      if (!mustMessage && Math.random() < decideChance) {
         return { type: "decision", content: "", decision: myDecision };
       }
       return { type: "message", content: generateConversationMessage(self, opponent, conv) };
@@ -69,13 +82,16 @@ export function botChooseTurnAction(
       const record = self.matchHistory[opponent.id];
       const everBetrayed = record ? record.cd + record.dd > 0 : false;
       if (everBetrayed) {
-        if (turnNumber >= 1 || Math.random() < 0.5) {
+        if (!mustMessage && (turnNumber >= 1 || Math.random() < 0.5)) {
           return { type: "decision", content: "", decision: myDecision };
         }
         return { type: "message", content: generateConversationMessage(self, opponent, conv) };
       }
       // Not betrayed: friendly, chat 2-3 turns
       if (turnNumber < 2 || (turnNumber < 4 && Math.random() < 0.5)) {
+        return { type: "message", content: generateConversationMessage(self, opponent, conv) };
+      }
+      if (mustMessage) {
         return { type: "message", content: generateConversationMessage(self, opponent, conv) };
       }
       return { type: "decision", content: "", decision: myDecision };
