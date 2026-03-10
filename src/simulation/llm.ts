@@ -1,6 +1,7 @@
 import OpenAI from "openai";
-import type { Particle, ConversationTurn, StrategyType } from "./types";
+import type { Particle, ConversationTurn, StrategyType, Decision } from "./types";
 import { totalMatches } from "./types";
+import { decide } from "./strategies";
 import { generateConversationMessage } from "./messages";
 import { CHARACTER_BLURBS } from "./characterBlurbs";
 
@@ -136,6 +137,156 @@ function templateFallback(
     lockedInB: null,
     waitingForExternal: false,
   });
+}
+
+const DECISION_SCHEMA = {
+  name: "decision_response",
+  strict: true,
+  schema: {
+    type: "object" as const,
+    properties: {
+      reasoning: { type: "string" as const },
+      decision: { type: "string" as const, enum: ["cooperate", "defect"] },
+    },
+    required: ["reasoning", "decision"],
+    additionalProperties: false,
+  },
+};
+
+function buildDecisionSystemPrompt(
+  self: Particle,
+  opponent: Particle,
+  selfSide: "a" | "b",
+  turns: ConversationTurn[],
+): string {
+  const history = self.matchHistory[opponent.id];
+  const totalGames = totalMatches(self.matchHistory);
+
+  let totalCoops = 0, totalAll = 0;
+  for (const r of Object.values(self.matchHistory)) {
+    totalCoops += r.cc + r.cd;
+    totalAll += r.cc + r.cd + r.dc + r.dd;
+  }
+  const coopRate = totalAll > 0 ? Math.round((totalCoops / totalAll) * 100) : 50;
+  const avgScore = totalAll > 0 ? Math.round((self.score / totalAll) * 10) / 10 : 0;
+
+  let historySection: string;
+  if (history) {
+    const vsTotal = history.cc + history.cd + history.dc + history.dd;
+    historySection =
+      `You have played ${vsTotal} match(es) against ${opponent.id} before.\n` +
+      `- Both cooperated: ${history.cc} times\n` +
+      `- You cooperated, they defected: ${history.cd} times\n` +
+      `- You defected, they cooperated: ${history.dc} times\n` +
+      `- Both defected: ${history.dd} times\n` +
+      `Their last decision against you: ${history.lastTheirDecision}`;
+  } else {
+    historySection = `This is your first encounter with ${opponent.id}. You have no history together.`;
+  }
+
+  const blurb = CHARACTER_BLURBS[self.id];
+  const opponentBlurb = CHARACTER_BLURBS[opponent.id];
+
+  // Format conversation transcript inline
+  let transcript = "";
+  if (turns.length > 0) {
+    const lines: string[] = [];
+    for (const turn of turns) {
+      const who = turn.speaker === selfSide ? "You" : opponent.id;
+      if (turn.type === "decision") {
+        lines.push(`${who}: [locked in their decision]`);
+      } else {
+        lines.push(`${who}: ${turn.content}`);
+      }
+    }
+    transcript = lines.join("\n");
+  }
+
+  return [
+    `You are ${self.id}, deciding whether to COOPERATE or DEFECT against ${opponent.id} in a Prisoner's Dilemma.`,
+    blurb ? `WHO YOU ARE: ${blurb}` : "",
+    opponentBlurb ? `YOUR OPPONENT: ${opponent.id} — ${opponentBlurb}` : "",
+    ``,
+    `PERSONALITY:`,
+    STRATEGY_PERSONALITY[self.strategy],
+    ``,
+    `GAME RULES (Prisoner's Dilemma):`,
+    `- Both cooperate: 3 points each`,
+    `- You cooperate, they defect: you get 0, they get 5`,
+    `- You defect, they cooperate: you get 5, they get 0`,
+    `- Both defect: 1 point each`,
+    ``,
+    `YOUR STATS:`,
+    `- Total score: ${self.score} points across ${totalGames} matches`,
+    `- Average score per match: ${avgScore}`,
+    `- Cooperation rate: ${coopRate}%`,
+    ``,
+    `HISTORY WITH ${opponent.id.toUpperCase()}:`,
+    historySection,
+    ``,
+    ...(transcript ? [`CONVERSATION THIS MATCH:`, transcript, ``] : []),
+    `INSTRUCTIONS:`,
+    `- Decide as ${self.id} would, staying true to your personality and strategy.`,
+    `- Consider the conversation, your history with this opponent, and your overall stats.`,
+    `- Respond with JSON: {"reasoning": "your brief reasoning", "decision": "cooperate" or "defect"}`,
+  ].join("\n");
+}
+
+export async function requestLlmDecision(
+  self: Particle,
+  opponent: Particle,
+  selfSide: "a" | "b",
+  turns: ConversationTurn[],
+): Promise<Decision> {
+  if (!client) {
+    return decide(self, opponent);
+  }
+
+  // Circuit breaker: skip API when open
+  if (Date.now() < circuitOpenUntil) {
+    return decide(self, opponent);
+  }
+
+  const systemPrompt = buildDecisionSystemPrompt(self, opponent, selfSide, turns);
+
+  try {
+    const response = await Promise.race([
+      client.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "system", content: systemPrompt }],
+        max_tokens: 150,
+        temperature: 0.7,
+        response_format: {
+          type: "json_schema" as const,
+          json_schema: DECISION_SCHEMA,
+        },
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("LLM decision timeout")), 5000),
+      ),
+    ]);
+
+    const content = response.choices[0]?.message?.content?.trim();
+    if (!content) throw new Error("Empty LLM decision response");
+
+    const parsed = JSON.parse(content);
+    const decision = parsed.decision;
+    if (decision !== "cooperate" && decision !== "defect") {
+      throw new Error(`Invalid decision: ${decision}`);
+    }
+
+    consecutiveFailures = 0;
+    console.log(`[llm-decision] ${self.id} vs ${opponent.id}: ${decision} (${parsed.reasoning?.slice(0, 80)})`);
+    return decision;
+  } catch (err) {
+    consecutiveFailures++;
+    if (consecutiveFailures >= FAILURE_THRESHOLD) {
+      circuitOpenUntil = Date.now() + COOLDOWN_MS;
+      console.warn(`[llm-decision] Circuit open — ${consecutiveFailures} consecutive failures, falling back to strategies for 10m`);
+    }
+    console.error(`[llm-decision] Error for ${self.id} vs ${opponent.id}:`, err instanceof Error ? err.message : err);
+    return decide(self, opponent);
+  }
 }
 
 export async function requestLlmMessage(
