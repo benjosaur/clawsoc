@@ -110,11 +110,11 @@ const llmCallback = (aId: string, bId: string, side: "a" | "b", self: import("./
     });
 };
 
-if (llmAvailable) {
+if (llmAvailable && !dev) {
   console.log("[server] LLM enabled — bot messages will use gpt-4o-mini");
   engine.onRequestBotLlmMessage = llmCallback;
 } else {
-  console.log("[server] LLM disabled — no OPENAI_API_KEY, using template messages");
+  console.log(`[server] LLM ${llmAvailable ? "available but defaulting to templates (dev mode)" : "disabled — no OPENAI_API_KEY"}`);
 }
 
 export function getLlmStatus() {
