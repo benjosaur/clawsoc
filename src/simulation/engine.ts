@@ -4,6 +4,7 @@ import { createParticles } from "./Particle";
 import { playMatchFromDecisions, applyMatchResult } from "./game";
 import type { SimEvent } from "./protocol";
 import { botChooseTurnAction } from "./conversation";
+import { decide } from "./strategies";
 
 const DEFAULT_PHASE_DURATIONS: Record<CollisionPhase, number> = {
   greeting: 15,
@@ -171,27 +172,30 @@ export class SimulationEngine {
       return true; // both decided now
     }
 
-    // Check: did opponent lock in on the PREVIOUS turn?
-    // If so, this is the speaker's one extra turn. After this, they'll be forced.
+    // If opponent already decided, force current speaker to decide immediately (no extra message)
     const opponentLocked = speaker === "a" ? conv.lockedInB : conv.lockedInA;
-    const willForceAfterThis = opponentLocked !== null;
+    if (opponentLocked !== null) {
+      if (self.isExternal && this.onRequestExternalTurn) {
+        conv.waitingForExternal = true;
+        this.onRequestExternalTurn(fp.aId, fp.bId, speaker, self, opponent, conv.turns, true);
+        return false;
+      }
+      const decision = decide(self, opponent);
+      this.recordTurn(fp, speaker, "decision", "", decision);
+      return true; // both decided
+    }
 
+    // Normal turn (no one has decided yet)
     if (self.isExternal && this.onRequestExternalTurn) {
       conv.waitingForExternal = true;
       this.onRequestExternalTurn(fp.aId, fp.bId, speaker, self, opponent, conv.turns, false);
-      // After this turn resolves, if opponent already locked in, next turn is forced
-      if (willForceAfterThis) {
-        // Will be set when resolveExternalTurn processes the response
-      }
-      return false; // yielding
+      return false;
     }
 
-    // Bot turn
     const action = botChooseTurnAction(self, opponent, conv);
     if (action.type === "decision") {
       this.recordTurn(fp, speaker, "decision", "", action.decision);
     } else if (this.onRequestBotLlmMessage) {
-      // LLM mode: yield and wait for async response
       conv.waitingForExternal = true;
       this.onRequestBotLlmMessage(fp.aId, fp.bId, speaker, self, opponent, conv.turns);
       return false;
@@ -199,19 +203,12 @@ export class SimulationEngine {
       this.recordTurn(fp, speaker, "message", action.content);
     }
 
-    // If opponent was already locked in and this speaker sent a message (not a decision),
-    // they must decide on their NEXT turn. Override currentSpeaker back to this speaker.
-    if (willForceAfterThis && action.type !== "decision") {
-      conv.forcedDecideNext = true;
-      conv.currentSpeaker = speaker; // keep pointing at the undecided player
-    }
-
     // Check if both decided
     if (conv.lockedInA !== null && conv.lockedInB !== null) {
-      return true; // conversation complete
+      return true;
     }
 
-    return false; // more turns needed
+    return false;
   }
 
   private runBotConversation(fp: FrozenPair): void {
@@ -552,13 +549,6 @@ export class SimulationEngine {
       this.recordTurn(fp, side, "decision", "", decision ?? "defect");
     } else {
       this.recordTurn(fp, side, turnType, content, decision);
-    }
-
-    // If opponent was already locked in and this was a message, force decide next
-    const opponentLocked = side === "a" ? conv.lockedInB : conv.lockedInA;
-    if (opponentLocked !== null && turnType === "message") {
-      conv.forcedDecideNext = true;
-      conv.currentSpeaker = side; // keep pointing at the undecided player
     }
 
     conv.waitingForExternal = false;
