@@ -6,7 +6,6 @@ import type { GameLogEntry, StrategyType } from "@/simulation/types";
 import { useServerSimulation } from "@/hooks/useServerSimulation";
 import SimulationCanvas, { WORLD_PAD } from "@/components/SimulationCanvas";
 import ScoreBoard from "@/components/ScoreBoard";
-import TotalScoreBoard from "@/components/TotalScoreBoard";
 import MatchHistoryPanel from "@/components/MatchHistoryPanel";
 import PlayerSearch from "@/components/PlayerSearch";
 import PanelTabs from "@/components/PanelTabs";
@@ -117,8 +116,7 @@ export default function Home() {
     : undefined;
   const isOffline = offlinePlayer != null && selectedId == null;
   const hasSelection = selectedId != null || isOffline;
-  const avgPanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
-  const totalPanel = <TotalScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
+  const scorePanel = <ScoreBoard particles={state.particles} selectedId={selectedId} singleRow={hasSelection} onSelect={handleSelect} />;
   const logPanel = <MatchHistoryPanel entries={state.gameLog} selectedId={selectedId} particles={state.particles} />;
   const displayParticle = isOffline
     ? {
@@ -245,12 +243,7 @@ export default function Home() {
           {hasSelection ? (
             <>
               {!isOffline && (
-                <div className="flex-shrink-0 flex flex-col">{totalPanel}</div>
-              )}
-              {!isOffline && (
-                <div className="flex-shrink-0 flex flex-col border-t border-zinc-100 pt-1">
-                  {avgPanel}
-                </div>
+                <div className="flex-shrink-0 flex flex-col">{scorePanel}</div>
               )}
               <div className="flex-[3] min-h-0 flex flex-col border-t border-zinc-100 pt-1">
                 {playerStatsPanel}
@@ -263,10 +256,7 @@ export default function Home() {
             </>
           ) : (
             <>
-              <div className="flex-1 min-h-0 flex flex-col">{totalPanel}</div>
-              <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
-                {avgPanel}
-              </div>
+              <div className="flex-1 min-h-0 flex flex-col">{scorePanel}</div>
               <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100 pt-1">
                 {logPanel}
               </div>
@@ -289,8 +279,7 @@ export default function Home() {
             />
           </div>
           <PanelTabs
-            avgPanel={avgPanel}
-            totalPanel={totalPanel}
+            scorePanel={scorePanel}
             logPanel={logPanel}
             playerPanel={selectedId != null || isOffline ? playerStatsPanel : undefined}
           />

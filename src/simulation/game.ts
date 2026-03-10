@@ -52,8 +52,11 @@ export function playMatchWithOverrides(
 }
 
 export function applyMatchResult(a: Particle, b: Particle, record: MatchRecord): void {
+  const now = Date.now();
   a.score += record.scoreA;
+  a.scoreLog.push({ ts: now, pts: record.scoreA });
   b.score += record.scoreB;
+  b.scoreLog.push({ ts: now, pts: record.scoreB });
 
   const arec = a.matchHistory[b.id] ??= { lastTheirDecision: record.decisionB, cc: 0, cd: 0, dc: 0, dd: 0 };
   const aKey = (record.decisionA === "cooperate" ? "c" : "d") + (record.decisionB === "cooperate" ? "c" : "d") as "cc" | "cd" | "dc" | "dd";

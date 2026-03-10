@@ -50,7 +50,7 @@ export interface EventFrame {
   events: SimEvent[];
   pop?: [number, number, string, string][]; // [x, y, text, color]
   pos?: { id: string; x: number; y: number; vx: number; vy: number }[];
-  pmu?: [string, number, number, number][]; // [id, hue, avgScore, score]
+  pmu?: [string, number, number, number, number, number][]; // [id, hue, avgScore, score, r30Total, r30Avg]
   log?: GameLogEntry[];
 }
 
@@ -67,6 +67,8 @@ export interface SlowFrame {
     cd: number;
     dc: number;
     dd: number;
+    r30Total: number;
+    r30Avg: number;
   }[];
   totalC: number;
   totalD: number;

@@ -387,7 +387,7 @@ function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: st
   }
 
   // Inline particle meta updates (score/hue) — primary update path
-  let pmu: [string, number, number, number][] | undefined;
+  let pmu: [string, number, number, number, number, number][] | undefined;
   if (metaUpdatedIds.length > 0) {
     pmu = [];
     const seen = new Set<string>();
@@ -399,13 +399,14 @@ function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: st
       const hue = coopHue(p);
       const matches = totalMatches(p.matchHistory);
       const avgScore = matches > 0 ? Math.round((p.score / matches) * 10) / 10 : 0;
-      pmu.push([id, hue, avgScore, p.score]);
+      const r30 = rolling30(p);
+      pmu.push([id, hue, avgScore, p.score, r30.total, r30.avg]);
       // Sync lastSlowState so next delta SlowFrame skips these particles
       let cc = 0, cd = 0, dc = 0, dd = 0;
       for (const r of Object.values(p.matchHistory)) {
         cc += r.cc; cd += r.cd; dc += r.dc; dd += r.dd;
       }
-      lastSlowState.set(id, { hue, score: p.score, cc, cd, dc, dd });
+      lastSlowState.set(id, { hue, score: p.score, cc, cd, dc, dd, r30Total: r30.total });
     }
   }
 
@@ -430,9 +431,30 @@ function coopHue(particle: typeof engine.particles[number]): number {
   return Math.round(ratio * 120); // 0° red → 120° green
 }
 
-const lastSlowState = new Map<string, { hue: number; score: number; cc: number; cd: number; dc: number; dd: number }>();
+function rolling30(p: typeof engine.particles[number]): { total: number; avg: number } {
+  const cutoff = Date.now() - 30 * 60_000;
+  let sum = 0, count = 0;
+  for (const e of p.scoreLog) {
+    if (e.ts >= cutoff) { sum += e.pts; count++; }
+  }
+  return { total: sum, avg: count > 0 ? Math.round((sum / count) * 10) / 10 : 0 };
+}
+
+const lastSlowState = new Map<string, { hue: number; score: number; cc: number; cd: number; dc: number; dd: number; r30Total: number }>();
+
+function pruneScoreLogs(): void {
+  const cutoff = Date.now() - 30 * 60_000;
+  for (const p of engine.particles) {
+    if (p.scoreLog.length > 0 && p.scoreLog[0].ts < cutoff) {
+      let i = 0;
+      while (i < p.scoreLog.length && p.scoreLog[i].ts < cutoff) i++;
+      p.scoreLog.splice(0, i);
+    }
+  }
+}
 
 function buildSlowFrame(full = false): string | null {
+  pruneScoreLogs();
   const particles: SlowFrame["particles"] = [];
   for (const p of engine.particles) {
     const matches = totalMatches(p.matchHistory);
@@ -443,17 +465,19 @@ function buildSlowFrame(full = false): string | null {
     const hue = coopHue(p);
     const score = p.score;
     const avgScore = matches > 0 ? Math.round((score / matches) * 10) / 10 : 0;
+    const r30 = rolling30(p);
 
     if (!full) {
       const prev = lastSlowState.get(p.id);
       if (prev && prev.hue === hue && prev.score === score &&
-          prev.cc === cc && prev.cd === cd && prev.dc === dc && prev.dd === dd) {
+          prev.cc === cc && prev.cd === cd && prev.dc === dc && prev.dd === dd &&
+          prev.r30Total === r30.total) {
         continue; // unchanged — skip
       }
     }
 
-    lastSlowState.set(p.id, { hue, score, cc, cd, dc, dd });
-    particles.push({ id: p.id, hue, score, avgScore, cc, cd, dc, dd });
+    lastSlowState.set(p.id, { hue, score, cc, cd, dc, dd, r30Total: r30.total });
+    particles.push({ id: p.id, hue, score, avgScore, cc, cd, dc, dd, r30Total: r30.total, r30Avg: r30.avg });
   }
 
   // Skip if nothing changed (delta mode only)

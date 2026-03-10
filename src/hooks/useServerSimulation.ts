@@ -11,6 +11,8 @@ export interface ParticleMeta {
   radius: number;
   score: number;
   avgScore: number;
+  r30Total: number;
+  r30Avg: number;
   strategy: StrategyType;
   cc: number;
   cd: number;
@@ -153,6 +155,7 @@ export function useServerSimulation() {
         metaRef.current.set(ev.id, {
           id: ev.id, radius: ev.radius, strategy: ev.strategy,
           color: "hsl(60,50%,45%)", score: 0, avgScore: 0,
+          r30Total: 0, r30Avg: 0,
           cc: 0, cd: 0, dc: 0, dd: 0, greeting: ev.greeting,
         });
         metaChanged = true;
@@ -213,12 +216,14 @@ export function useServerSimulation() {
     // Apply inline meta updates (score/color sync with popups)
     if (frame.pmu) {
       const meta = metaRef.current;
-      for (const [id, hue, avgScore, score] of frame.pmu) {
+      for (const [id, hue, avgScore, score, r30Total = 0, r30Avg = 0] of frame.pmu) {
         const existing = meta.get(id);
         if (existing) {
           existing.color = hue < 0 ? "hsl(60,50%,45%)" : `hsl(${hue},70%,42%)`;
           existing.avgScore = avgScore;
           existing.score = score;
+          existing.r30Total = r30Total;
+          existing.r30Avg = r30Avg;
         }
       }
       // Re-render if no game log entries will trigger setState
@@ -275,6 +280,8 @@ export function useServerSimulation() {
         color,
         score: p.score,
         avgScore: p.avgScore,
+        r30Total: p.r30Total ?? 0,
+        r30Avg: p.r30Avg ?? 0,
         cc: p.cc, cd: p.cd, dc: p.dc, dd: p.dd,
         greeting: s?.greeting,
       });

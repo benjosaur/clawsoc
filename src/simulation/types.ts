@@ -38,6 +38,7 @@ export interface Particle {
   color: string;
   state: ParticleState;
   score: number;
+  scoreLog: { ts: number; pts: number }[];
   strategy: StrategyType;
   matchHistory: Record<string, OpponentRecord>;
   isExternal: boolean;
