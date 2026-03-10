@@ -511,6 +511,10 @@ async function main() {
   await agentManager.restoreRecords(engine);
 
   const server = createServer(async (req, res) => {
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+
     const parsed = parse(req.url || "/", true);
     const pathname = parsed.pathname;
     if (pathname?.startsWith("/api/agent/")) {
