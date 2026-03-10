@@ -1,25 +1,18 @@
-import { CollisionPhase, Decision, GameLogEntry, MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG, FloatingPopup } from "./types";
+import { CollisionPhase, ConversationState, ConversationTurn, Decision, GameLogEntry, MatchRecord, Particle, SimulationConfig, DEFAULT_CONFIG, FloatingPopup } from "./types";
 import { areColliding, resolveElasticCollision, separateParticles, bounceOffWalls, vecAdd } from "./physics";
 import { createParticles } from "./Particle";
-import { playMatchWithOverrides, applyMatchResult } from "./game";
-import { generateMessage } from "./messages";
+import { playMatchFromDecisions, applyMatchResult } from "./game";
 import type { SimEvent } from "./protocol";
+import { botChooseTurnAction } from "./conversation";
 
 const DEFAULT_PHASE_DURATIONS: Record<CollisionPhase, number> = {
   greeting: 15,
-  messaging_a: 40,
-  messaging_b: 40,
-  deciding: 25,
+  conversation: 0, // not tick-based — driven by turn logic
+  deciding: 20,
   resolved: 40,
 };
 
-const PHASE_ORDER: CollisionPhase[] = [
-  "greeting",
-  "messaging_a",
-  "messaging_b",
-  "deciding",
-  "resolved",
-];
+const MAX_CONVERSATION_TURNS = 10;
 
 interface FrozenPair {
   aId: string;
@@ -27,20 +20,18 @@ interface FrozenPair {
   phase: CollisionPhase;
   phaseStartTick: number;
   unfreezeAtTick: number;
-  messageA: string | null;
-  messageB: string | null;
+  conversation: ConversationState;
   matchRecord: MatchRecord | null;
-  waitingForExternal: boolean;
-  externalDecisionA: Decision | null;
-  externalDecisionB: Decision | null;
 }
 
-export type ExternalRequestCallback = (
+export type ExternalTurnCallback = (
+  aId: string,
+  bId: string,
   side: "a" | "b",
   self: Particle,
   opponent: Particle,
-  aId: string,
-  bId: string,
+  conversationSoFar: ConversationTurn[],
+  forcedDecide: boolean,
 ) => void;
 
 export type MatchResolvedCallback = (
@@ -62,7 +53,7 @@ export class SimulationEngine {
   pendingEvents: SimEvent[] = [];
   pendingMetaUpdates: string[] = [];
   pendingGameLog: GameLogEntry[] = [];
-  onRequestExternalDecision: ExternalRequestCallback | null = null;
+  onRequestExternalTurn: ExternalTurnCallback | null = null;
   onMatchResolved: MatchResolvedCallback | null = null;
   onParticleParked: ((particleId: string, username: string) => void) | null = null;
 
@@ -84,98 +75,254 @@ export class SimulationEngine {
     return this.frozenPairs.some((fp) => fp.aId === particleId || fp.bId === particleId);
   }
 
+  // --- Conversation turn helpers ---
+
+  private recordTurn(
+    fp: FrozenPair,
+    speaker: "a" | "b",
+    type: "message" | "decision",
+    content: string,
+    decision?: Decision,
+  ): void {
+    const conv = fp.conversation;
+    const turn: ConversationTurn = { speaker, type, content, decision };
+    conv.turns.push(turn);
+
+    // Emit turn event for frontend
+    this.pendingEvents.push({
+      e: "turn", tick: this.tick,
+      a: fp.aId, b: fp.bId,
+      speaker,
+      turnType: type,
+      content: type === "message" ? content : "",
+    });
+
+    if (type === "decision" && decision) {
+      if (speaker === "a") {
+        conv.lockedInA = decision;
+      } else {
+        conv.lockedInB = decision;
+      }
+
+      // If opponent hasn't decided yet, give them one more turn then force
+      const opponentLocked = speaker === "a" ? conv.lockedInB : conv.lockedInA;
+      if (opponentLocked === null) {
+        // Opponent gets one more turn, then forcedDecideNext kicks in
+        // (forcedDecideNext is set AFTER the opponent's extra turn — see requestTurn)
+      }
+    }
+
+    // Switch speaker
+    conv.currentSpeaker = speaker === "a" ? "b" : "a";
+  }
+
+  private requestTurn(fp: FrozenPair): boolean {
+    const conv = fp.conversation;
+    const speaker = conv.currentSpeaker;
+    const speakerId = speaker === "a" ? fp.aId : fp.bId;
+    const opponentId = speaker === "a" ? fp.bId : fp.aId;
+
+    const self = this.getParticle(speakerId);
+    const opponent = this.getParticle(opponentId);
+    if (!self || !opponent) return true; // done — particles gone
+
+    // If both already decided (e.g. external resolved the forced turn), just finish
+    if (conv.lockedInA !== null && conv.lockedInB !== null) {
+      return true;
+    }
+
+    // Turn limit reached — force any undecided players to cooperate
+    if (conv.turns.length >= MAX_CONVERSATION_TURNS) {
+      if (conv.lockedInA === null) conv.lockedInA = "cooperate";
+      if (conv.lockedInB === null) conv.lockedInB = "cooperate";
+      return true;
+    }
+
+    // Check: is this speaker forced to decide?
+    if (conv.forcedDecideNext) {
+      // Determine who hasn't decided — force THAT player, regardless of currentSpeaker
+      const undecided: "a" | "b" = conv.lockedInA === null ? "a" : "b";
+      const undecidedId = undecided === "a" ? fp.aId : fp.bId;
+      const undecidedOppId = undecided === "a" ? fp.bId : fp.aId;
+      const selfP = this.getParticle(undecidedId);
+      const oppP = this.getParticle(undecidedOppId);
+      if (!selfP || !oppP) return true;
+
+      if (selfP.isExternal && this.onRequestExternalTurn) {
+        conv.currentSpeaker = undecided;
+        conv.waitingForExternal = true;
+        this.onRequestExternalTurn(fp.aId, fp.bId, undecided, selfP, oppP, conv.turns, true);
+        return false; // yielding, waiting for external
+      }
+      // Bot: forced decision
+      const action = botChooseTurnAction(selfP, oppP, conv);
+      const decision = action.decision ?? (selfP.strategy === "always_defect" ? "defect" : "cooperate");
+      this.recordTurn(fp, undecided, "decision", "", decision);
+      return true; // both decided now
+    }
+
+    // Check: did opponent lock in on the PREVIOUS turn?
+    // If so, this is the speaker's one extra turn. After this, they'll be forced.
+    const opponentLocked = speaker === "a" ? conv.lockedInB : conv.lockedInA;
+    const willForceAfterThis = opponentLocked !== null;
+
+    if (self.isExternal && this.onRequestExternalTurn) {
+      conv.waitingForExternal = true;
+      this.onRequestExternalTurn(fp.aId, fp.bId, speaker, self, opponent, conv.turns, false);
+      // After this turn resolves, if opponent already locked in, next turn is forced
+      if (willForceAfterThis) {
+        // Will be set when resolveExternalTurn processes the response
+      }
+      return false; // yielding
+    }
+
+    // Bot turn
+    const action = botChooseTurnAction(self, opponent, conv);
+    if (action.type === "decision") {
+      this.recordTurn(fp, speaker, "decision", "", action.decision);
+    } else {
+      this.recordTurn(fp, speaker, "message", action.content);
+    }
+
+    // If opponent was already locked in and this speaker sent a message (not a decision),
+    // they must decide on their NEXT turn. Override currentSpeaker back to this speaker.
+    if (willForceAfterThis && action.type !== "decision") {
+      conv.forcedDecideNext = true;
+      conv.currentSpeaker = speaker; // keep pointing at the undecided player
+    }
+
+    // Check if both decided
+    if (conv.lockedInA !== null && conv.lockedInB !== null) {
+      return true; // conversation complete
+    }
+
+    return false; // more turns needed
+  }
+
+  private runBotConversation(fp: FrozenPair): void {
+    // Loop through turns instantly until both lock in or we hit an external agent
+    for (let safety = 0; safety < MAX_CONVERSATION_TURNS + 5; safety++) {
+      const done = this.requestTurn(fp);
+      if (done) {
+        this.transitionToDeciding(fp);
+        return;
+      }
+      if (fp.conversation.waitingForExternal) {
+        return; // will resume when external responds
+      }
+    }
+    // Safety valve: force both to decide if somehow stuck
+    const conv = fp.conversation;
+    if (conv.lockedInA === null) conv.lockedInA = "cooperate";
+    if (conv.lockedInB === null) conv.lockedInB = "cooperate";
+    this.transitionToDeciding(fp);
+  }
+
+  private transitionToDeciding(fp: FrozenPair): void {
+    const conv = fp.conversation;
+    const a = this.getParticle(fp.aId);
+    const b = this.getParticle(fp.bId);
+    if (!a || !b) return;
+
+    fp.phase = "deciding";
+    fp.phaseStartTick = this.tick;
+
+    const record = playMatchFromDecisions(a, b, this.tick, conv.lockedInA!, conv.lockedInB!);
+    record.conversation = conv.turns;
+
+    // Backwards compat: derive messageA/messageB from first message each side sent
+    const firstA = conv.turns.find((t) => t.speaker === "a" && t.type === "message");
+    const firstB = conv.turns.find((t) => t.speaker === "b" && t.type === "message");
+    if (firstA) record.messageA = firstA.content;
+    if (firstB) record.messageB = firstB.content;
+
+    fp.matchRecord = record;
+  }
+
+  private transitionToResolved(fp: FrozenPair): void {
+    const a = this.getParticle(fp.aId);
+    const b = this.getParticle(fp.bId);
+    if (!a || !b) return;
+
+    const record = fp.matchRecord;
+    if (!record) return;
+
+    fp.phase = "resolved";
+    fp.phaseStartTick = this.tick;
+
+    applyMatchResult(a, b, record);
+    this.pendingMetaUpdates.push(a.id, b.id);
+
+    this.gameLog.push(record);
+    if (this.gameLog.length > 200) this.gameLog.splice(0, this.gameLog.length - 200);
+    this.pendingGameLog.push(record);
+
+    this.totalCooperations += (record.decisionA === "cooperate" ? 1 : 0) + (record.decisionB === "cooperate" ? 1 : 0);
+    this.totalDefections += (record.decisionA === "defect" ? 1 : 0) + (record.decisionB === "defect" ? 1 : 0);
+
+    // Spawn score popups
+    const midX = (a.position.x + b.position.x) / 2;
+    const midY = (a.position.y + b.position.y) / 2;
+    const offset = 14;
+    const dx = a.position.x - b.position.x;
+    const sign = dx >= 0 ? 1 : -1;
+
+    this.popups.push({
+      x: midX + sign * offset,
+      y: midY - 16,
+      text: "+" + record.scoreA,
+      color: record.decisionA === "cooperate" ? "#16a34a" : "#dc2626",
+      spawnTick: this.tick,
+      delayTicks: 0,
+      durationTicks: this.phaseDurations.resolved,
+    });
+    this.popups.push({
+      x: midX - sign * offset,
+      y: midY - 16,
+      text: "+" + record.scoreB,
+      color: record.decisionB === "cooperate" ? "#16a34a" : "#dc2626",
+      spawnTick: this.tick,
+      delayTicks: 0,
+      durationTicks: this.phaseDurations.resolved,
+    });
+
+    this.onMatchResolved?.(record, fp.aId, fp.bId);
+    fp.unfreezeAtTick = this.tick + this.phaseDurations.resolved;
+  }
+
+  // --- Main conversation state machine ---
+
   private advanceConversations(): void {
     for (const fp of this.frozenPairs) {
-
-      // If waiting for external response, freeze phase advancement
-      if (fp.waitingForExternal) continue;
+      if (fp.conversation.waitingForExternal) continue;
 
       const elapsed = this.tick - fp.phaseStartTick;
-      const phaseDuration = this.phaseDurations[fp.phase];
 
-      if (elapsed < phaseDuration) continue;
-
-      // Advance to next phase
-      const currentIndex = PHASE_ORDER.indexOf(fp.phase);
-      if (currentIndex >= PHASE_ORDER.length - 1) continue; // already resolved, wait for unfreeze
-
-      const nextPhase = PHASE_ORDER[currentIndex + 1];
-      fp.phase = nextPhase;
-      fp.phaseStartTick = this.tick;
-
-      const a = this.getParticle(fp.aId);
-      const b = this.getParticle(fp.bId);
-      if (!a || !b) continue;
-
-      switch (nextPhase) {
-        case "messaging_a": {
-          if (this.onRequestExternalDecision && a.isExternal) {
-            fp.waitingForExternal = true;
-            this.onRequestExternalDecision("a", a, b, fp.aId, fp.bId);
-          } else {
-            fp.messageA = generateMessage(a, b);
-          }
+      switch (fp.phase) {
+        case "greeting": {
+          if (elapsed < this.phaseDurations.greeting) continue;
+          // Transition to conversation
+          fp.phase = "conversation";
+          fp.phaseStartTick = this.tick;
+          fp.conversation.currentSpeaker = Math.random() < 0.5 ? "a" : "b";
+          this.runBotConversation(fp);
           break;
         }
-        case "messaging_b": {
-          if (this.onRequestExternalDecision && b.isExternal) {
-            fp.waitingForExternal = true;
-            this.onRequestExternalDecision("b", b, a, fp.aId, fp.bId);
-          } else {
-            fp.messageB = generateMessage(b, a);
-          }
+
+        case "conversation": {
+          // Only reached if we resumed after an external agent responded
+          this.runBotConversation(fp);
           break;
         }
+
         case "deciding": {
-          // Play the match now, using any external overrides
-          const record = playMatchWithOverrides(a, b, this.tick, fp.externalDecisionA, fp.externalDecisionB);
-          if (fp.messageA) record.messageA = fp.messageA;
-          if (fp.messageB) record.messageB = fp.messageB;
-          fp.matchRecord = record;
+          if (elapsed < this.phaseDurations.deciding) continue;
+          this.transitionToResolved(fp);
           break;
         }
+
         case "resolved": {
-          // Apply all deferred mutations at popup time
-          const record = fp.matchRecord;
-          if (!record) break;
-          applyMatchResult(a, b, record);
-          this.pendingMetaUpdates.push(a.id, b.id);
-
-          this.gameLog.push(record);
-          if (this.gameLog.length > 200) this.gameLog.splice(0, this.gameLog.length - 200);
-          this.pendingGameLog.push(record);
-
-          this.totalCooperations += (record.decisionA === "cooperate" ? 1 : 0) + (record.decisionB === "cooperate" ? 1 : 0);
-          this.totalDefections += (record.decisionA === "defect" ? 1 : 0) + (record.decisionB === "defect" ? 1 : 0);
-
-          // Spawn score popups and set unfreeze time
-          const midX = (a.position.x + b.position.x) / 2;
-          const midY = (a.position.y + b.position.y) / 2;
-          const offset = 14;
-          const dx = a.position.x - b.position.x;
-          const sign = dx >= 0 ? 1 : -1;
-
-          this.popups.push({
-            x: midX + sign * offset,
-            y: midY - 16,
-            text: "+" + record.scoreA,
-            color: record.decisionA === "cooperate" ? "#16a34a" : "#dc2626",
-            spawnTick: this.tick,
-            delayTicks: 0,
-            durationTicks: this.phaseDurations.resolved,
-          });
-          this.popups.push({
-            x: midX - sign * offset,
-            y: midY - 16,
-            text: "+" + record.scoreB,
-            color: record.decisionB === "cooperate" ? "#16a34a" : "#dc2626",
-            spawnTick: this.tick,
-            delayTicks: 0,
-            durationTicks: this.phaseDurations.resolved,
-          });
-
-          this.onMatchResolved?.(record, fp.aId, fp.bId);
-          fp.unfreezeAtTick = this.tick + this.phaseDurations.resolved;
+          // Handled by unfreeze logic in step()
           break;
         }
       }
@@ -261,7 +408,6 @@ export class SimulationEngine {
         if (!areColliding(a, b)) continue;
 
         separateParticles(a, b);
-        // Capture entry velocities before freezing
         const avx = a.velocity.x, avy = a.velocity.y;
         const bvx = b.velocity.x, bvy = b.velocity.y;
 
@@ -274,19 +420,21 @@ export class SimulationEngine {
           bx: b.position.x, by: b.position.y, bvx, bvy,
         });
 
-        // Create frozen pair in greeting phase — match resolved later
         this.frozenPairs.push({
           aId: a.id,
           bId: b.id,
           phase: "greeting",
           phaseStartTick: this.tick,
           unfreezeAtTick: Infinity,
-          messageA: null,
-          messageB: null,
+          conversation: {
+            turns: [],
+            currentSpeaker: "a",
+            lockedInA: null,
+            lockedInB: null,
+            forcedDecideNext: false,
+            waitingForExternal: false,
+          },
           matchRecord: null,
-          waitingForExternal: false,
-          externalDecisionA: null,
-          externalDecisionB: null,
         });
       }
     }
@@ -368,6 +516,40 @@ export class SimulationEngine {
     return entries;
   }
 
+  resolveExternalTurn(
+    aId: string,
+    bId: string,
+    side: "a" | "b",
+    turnType: "message" | "decision",
+    content: string,
+    decision?: Decision,
+  ): void {
+    const fp = this.frozenPairs.find((f) => f.aId === aId && f.bId === bId);
+    if (!fp) return;
+
+    const conv = fp.conversation;
+
+    // Idempotency guard: if turn was already resolved (e.g. by timeout sweep), skip
+    if (!conv.waitingForExternal) return;
+
+    // If forced to decide but they sent a message, force decision instead
+    if (conv.forcedDecideNext && turnType !== "decision") {
+      this.recordTurn(fp, side, "decision", "", decision ?? "cooperate");
+    } else {
+      this.recordTurn(fp, side, turnType, content, decision);
+    }
+
+    // If opponent was already locked in and this was a message, force decide next
+    const opponentLocked = side === "a" ? conv.lockedInB : conv.lockedInA;
+    if (opponentLocked !== null && turnType === "message") {
+      conv.forcedDecideNext = true;
+      conv.currentSpeaker = side; // keep pointing at the undecided player
+    }
+
+    conv.waitingForExternal = false;
+  }
+
+  // Keep old method signature as a shim for backwards compatibility
   resolveExternalDecision(
     aId: string,
     bId: string,
@@ -375,19 +557,22 @@ export class SimulationEngine {
     message: string,
     decision: Decision,
   ): void {
-    const fp = this.frozenPairs.find((f) => f.aId === aId && f.bId === bId);
-    if (!fp) return;
-
-    if (side === "a") {
-      fp.messageA = message;
-      fp.externalDecisionA = decision;
-    } else {
-      fp.messageB = message;
-      fp.externalDecisionB = decision;
+    // Record the message first if provided
+    if (message) {
+      const fp = this.frozenPairs.find((f) => f.aId === aId && f.bId === bId);
+      if (fp) {
+        const turn: ConversationTurn = { speaker: side, type: "message", content: message };
+        fp.conversation.turns.push(turn);
+        this.pendingEvents.push({
+          e: "turn", tick: this.tick,
+          a: aId, b: bId,
+          speaker: side,
+          turnType: "message",
+          content: message,
+        });
+      }
     }
-
-    fp.waitingForExternal = false;
-    fp.phaseStartTick = this.tick;
+    this.resolveExternalTurn(aId, bId, side, "decision", "", decision);
   }
 
   addParticle(p: Particle): void {
@@ -403,7 +588,6 @@ export class SimulationEngine {
   }
 
   removeParticle(id: string): void {
-    // Abort any frozen pairs involving this particle
     const pairsToAbort = this.frozenPairs.filter(
       (fp) => fp.aId === id || fp.bId === id,
     );

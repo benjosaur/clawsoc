@@ -4,7 +4,7 @@ import { parse } from "url";
 import { WebSocketServer, WebSocket } from "ws";
 import { SimulationEngine } from "./src/simulation/engine";
 import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
-import type { Decision, GameLogEntry, StrategyType } from "./src/simulation/types";
+import type { ConversationTurn, Decision, GameLogEntry, StrategyType } from "./src/simulation/types";
 import { generateMessage } from "./src/simulation/messages";
 import { AgentManager } from "./src/simulation/agentManager";
 import { handleAdminAPI } from "./src/simulation/adminApi";
@@ -22,25 +22,31 @@ const config = DEFAULT_CONFIG;
 const engine = new SimulationEngine(config);
 const agentManager = new AgentManager(config);
 
-// --- External agent decision callback ---
+// --- External agent turn callback ---
 
-engine.onRequestExternalDecision = (side, self, opponent, aId, bId) => {
+engine.onRequestExternalTurn = (aId, bId, side, self, opponent, conversationSoFar, forcedDecide) => {
   const username = self.externalOwner;
   if (!username) return;
 
-  // Per-pair match history from the external agent's perspective
   const rec = self.matchHistory[opponent.id];
   const vsRecord = rec
     ? { cc: rec.cc, cd: rec.cd, dc: rec.dc, dd: rec.dd }
     : null;
 
-  // Opponent greeting: stored greeting for externals, generated template for bots
   let opponentGreeting: string;
   if (opponent.isExternal && opponent.externalOwner) {
     opponentGreeting = agentManager.getAgentByUsername(opponent.externalOwner)?.greeting ?? "";
   } else {
     opponentGreeting = generateMessage(opponent, self);
   }
+
+  // Filter conversation: hide actual decision values (blind lock-in)
+  const sanitizedConversation: ConversationTurn[] = conversationSoFar.map((t) => {
+    if (t.type === "decision") {
+      return { speaker: t.speaker, type: "decision" as const, content: "" };
+    }
+    return t;
+  });
 
   const match: PendingMatch = {
     aId,
@@ -49,11 +55,15 @@ engine.onRequestExternalDecision = (side, self, opponent, aId, bId) => {
     opponentId: opponent.id,
     opponentGreeting,
     vsRecord,
+    conversation: sanitizedConversation,
+    forcedDecide,
     createdAt: Date.now(),
   };
 
   agentManager.setPendingMatch(username, match);
+  // Resolve whichever waiter is active: GET /match or POST /turn
   agentManager.resolveMatchWaiter(username, match);
+  agentManager.resolveTurnWaiter(username, match);
 };
 
 // --- Park callback (external particles freeze after match until next /match) ---
@@ -195,14 +205,14 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       return jsonResponse(res, status, { error: rejoin.error });
     }
 
-    // Guard: already have a pending match — must call /decide first
+    // Guard: already have a pending match — must call /turn or /decide first
     const pending = agentManager.getPendingMatch(username);
     if (pending) {
       return jsonResponse(res, 409, {
-        error: "You have a pending match. Submit your decision before requesting a new match.",
+        error: "You have a pending match. Submit your action before requesting a new match.",
         status: "pending_match",
-        pendingMatch: { opponentId: pending.opponentId, opponentGreeting: pending.opponentGreeting, vsRecord: pending.vsRecord },
-        nextAction: "POST /api/agent/decide with { message, decision }",
+        pendingMatch: { opponentId: pending.opponentId, opponentGreeting: pending.opponentGreeting, vsRecord: pending.vsRecord, conversation: pending.conversation, forcedDecide: pending.forcedDecide },
+        nextAction: "POST /api/agent/turn with { type, content?, decision? }",
       });
     }
 
@@ -241,6 +251,8 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
         opponentId: match.opponentId,
         opponentGreeting: match.opponentGreeting,
         vsRecord: match.vsRecord,
+        conversation: match.conversation,
+        forcedDecide: match.forcedDecide,
       });
     } catch (err) {
       const msg = (err as Error).message;
@@ -261,7 +273,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
 
     if (pending) {
       status = "pending_match";
-      nextAction = "POST /api/agent/decide with { message, decision }";
+      nextAction = "POST /api/agent/turn with { type, content?, decision? }";
     } else if (!particle && agent && agent.displacedId === null) {
       status = "registered";
       nextAction = "GET /api/agent/match to enter the arena";
@@ -282,13 +294,93 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       matches: particle ? totalMatches(particle.matchHistory) : 0,
       status,
       pendingMatch: pending
-        ? { opponentId: pending.opponentId, opponentGreeting: pending.opponentGreeting, vsRecord: pending.vsRecord }
+        ? { opponentId: pending.opponentId, opponentGreeting: pending.opponentGreeting, vsRecord: pending.vsRecord, conversation: pending.conversation, forcedDecide: pending.forcedDecide }
         : null,
       nextAction,
     });
   }
 
-  // POST /api/agent/decide — blocks until match resolves, returns result
+  // POST /api/agent/turn — submit a message or decision, blocks for opponent's response
+  if (pathname === "/api/agent/turn" && method === "POST") {
+    const raw = await readBody(req);
+    let body: { type?: string; content?: string; decision?: string };
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return jsonResponse(res, 400, { error: "Invalid JSON" });
+    }
+
+    const turnType = body.type;
+    if (turnType !== "message" && turnType !== "decision") {
+      return jsonResponse(res, 400, { error: "type must be 'message' or 'decision'" });
+    }
+    if (turnType === "decision" && body.decision !== "cooperate" && body.decision !== "defect") {
+      return jsonResponse(res, 400, { error: "decision must be 'cooperate' or 'defect'" });
+    }
+
+    const pending = agentManager.getPendingMatch(username);
+    if (!pending) {
+      const particle = engine.particles.find((p) => p.id === username);
+      const currentStatus = !particle ? "offline" : particle.state === "parked" ? "parked" : "moving";
+      const na = !particle
+        ? "GET /api/agent/match to rejoin the arena"
+        : particle.state === "parked"
+          ? "GET /api/agent/match to start moving again"
+          : "GET /api/agent/match to wait for a collision";
+      return jsonResponse(res, 409, { error: "No pending match — it's not your turn", status: currentStatus, nextAction: na });
+    }
+
+    // Set up result waiter before submitting action
+    const resultPromise = agentManager.waitForResult(username, pending.aId, pending.bId);
+    agentManager.clearPendingMatch(username);
+
+    // Submit the turn to the engine
+    const content = turnType === "message" ? censorText(body.content || "") : "";
+    const decision = turnType === "decision" ? (body.decision as Decision) : undefined;
+    engine.resolveExternalTurn(pending.aId, pending.bId, pending.side, turnType, content, decision);
+
+    // Wait for either: next turn (opponent responded) or match result (both decided)
+    try {
+      const turnOrResult = await Promise.race([
+        agentManager.waitForTurn(username).then((turn) => ({ kind: "turn" as const, turn })),
+        resultPromise.then((record) => ({ kind: "result" as const, record })),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 15_000)),
+      ]);
+
+      if (turnOrResult.kind === "turn") {
+        const nextTurn = turnOrResult.turn;
+        return jsonResponse(res, 200, {
+          ok: true,
+          conversation: nextTurn.conversation,
+          forcedDecide: nextTurn.forcedDecide,
+          nextAction: "POST /api/agent/turn",
+        });
+      } else {
+        const record = turnOrResult.record;
+        if (!record) {
+          return jsonResponse(res, 200, { ok: true, result: null, status: "moving", nextAction: "GET /api/agent/status" });
+        }
+        const isSideA = pending.side === "a";
+        return jsonResponse(res, 200, {
+          ok: true,
+          result: {
+            opponent: isSideA ? record.particleB.id : record.particleA.id,
+            yourDecision: isSideA ? record.decisionA : record.decisionB,
+            theirDecision: isSideA ? record.decisionB : record.decisionA,
+            yourScore: isSideA ? record.scoreA : record.scoreB,
+            theirScore: isSideA ? record.scoreB : record.scoreA,
+            conversation: record.conversation,
+          },
+          status: "parked",
+          nextAction: "GET /api/agent/match",
+        });
+      }
+    } catch {
+      return jsonResponse(res, 200, { ok: true, result: null, status: "moving", nextAction: "GET /api/agent/status" });
+    }
+  }
+
+  // POST /api/agent/decide — backwards-compatible shim (immediately locks in decision)
   if (pathname === "/api/agent/decide" && method === "POST") {
     let raw: string;
     try {
@@ -769,14 +861,11 @@ async function main() {
       consecutiveErrors = 0;
       lastTickTime = Date.now();
 
-      // Timeout sweep: kick external agents that haven't responded
+      // Per-turn timeout: force cooperate if agent hasn't responded
       const now = Date.now();
       for (const [username, match] of agentManager.getAllPendingMatches()) {
-        if (now - match.createdAt > (config.pendingMatchTimeoutMs ?? 60_000)) {
-          engine.abortPair(match.aId, match.bId);
-          agentManager.removeAgent(username, engine).catch((err) =>
-            console.error(`[server] removeAgent failed for ${username}:`, err)
-          );
+        if (now - match.createdAt > (config.pendingMatchTimeoutMs ?? 15_000)) {
+          engine.resolveExternalTurn(match.aId, match.bId, match.side, "decision", "", "cooperate");
         }
       }
 

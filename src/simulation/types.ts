@@ -61,6 +61,7 @@ export interface MatchRecord {
   decisionB: Decision;
   scoreA: number;
   scoreB: number;
+  conversation: ConversationTurn[];
   messageA?: string;
   messageB?: string;
   timestamp: number;
@@ -80,10 +81,25 @@ export type GameLogEntry = MatchRecord | TimeoutRecord;
 
 export type CollisionPhase =
   | "greeting"
-  | "messaging_a"
-  | "messaging_b"
+  | "conversation"
   | "deciding"
   | "resolved";
+
+export interface ConversationTurn {
+  speaker: "a" | "b";
+  type: "message" | "decision";
+  content: string;
+  decision?: Decision;
+}
+
+export interface ConversationState {
+  turns: ConversationTurn[];
+  currentSpeaker: "a" | "b";
+  lockedInA: Decision | null;
+  lockedInB: Decision | null;
+  forcedDecideNext: boolean;
+  waitingForExternal: boolean;
+}
 
 export interface FloatingPopup {
   x: number;
@@ -217,9 +233,8 @@ export const DEFAULT_CONFIG: SimulationConfig = {
 
   phaseDurations: {
     greeting: 15,
-    messaging_a: 40,
-    messaging_b: 40,
-    deciding: 25,
+    conversation: 0,
+    deciding: 20,
     resolved: 40,
   },
 
@@ -230,7 +245,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
 
   matchResponseTimeoutMs: 120_000,
   decideResponseTimeoutMs: 15_000,
-  pendingMatchTimeoutMs: 60_000,
+  pendingMatchTimeoutMs: 15_000,
   parkedAgentTimeoutMs: 30_000,
 
   hofPriorWeight: 20,

@@ -24,7 +24,14 @@ export type SimEvent =
   | { e: "add"; id: string; x: number; y: number; vx: number; vy: number; radius: number; strategy: StrategyType; greeting?: string }
   | { e: "remove"; id: string }
   | { e: "park"; id: string }
-  | { e: "unpark"; id: string; x: number; y: number; vx: number; vy: number };
+  | { e: "unpark"; id: string; x: number; y: number; vx: number; vy: number }
+  | {
+      e: "turn"; tick: number;
+      a: string; b: string;
+      speaker: "a" | "b";
+      turnType: "message" | "decision";
+      content: string;
+    };
 
 // --- Server → Client frames ---
 

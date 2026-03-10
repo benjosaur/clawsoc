@@ -1,4 +1,4 @@
-import { Particle, StrategyType } from "./types";
+import { Particle, StrategyType, ConversationState } from "./types";
 import { BOT_GREETINGS, BOT_BETRAYALS } from "./botGreetings";
 
 const TEMPLATES: Record<StrategyType, string[]> = {
@@ -98,4 +98,86 @@ export function generateMessage(self: Particle, opponent: Particle): string {
   }
 
   return template.replace(/\{opponent\}/g, opponent.id);
+}
+
+const MID_CONVERSATION: Record<StrategyType, string[]> = {
+  always_cooperate: [
+    "I meant what I said — cooperation benefits us both, {opponent}.",
+    "Think about it. Mutual cooperation gives us 3 each, {opponent}.",
+    "We can both walk away better off, {opponent}.",
+    "I won't betray you, {opponent}. Will you do the same?",
+  ],
+  always_defect: [
+    "Still here, {opponent}? Doesn't change anything.",
+    "Talk all you want. I know what I'm doing.",
+    "You're wasting your breath, {opponent}.",
+  ],
+  tit_for_tat: [
+    "Whatever you do, I'll mirror, {opponent}.",
+    "Cooperate and I cooperate. Simple, {opponent}.",
+    "The ball is in your court, {opponent}.",
+  ],
+  random: [
+    "I'm still deciding, {opponent}. Or am I?",
+    "Don't try to read me, {opponent}.",
+    "The dice haven't been cast yet, {opponent}.",
+  ],
+  grudger: [
+    "I keep my word, {opponent}. Do you?",
+    "One wrong move and we're done, {opponent}.",
+    "So far so good, {opponent}. Let's keep it that way.",
+  ],
+  external: [
+    "Processing the situation, {opponent}.",
+    "Let me think about this, {opponent}.",
+    "An interesting conversation, {opponent}.",
+  ],
+};
+
+const AFTER_OPPONENT_DECIDED: Record<StrategyType, string[]> = {
+  always_cooperate: [
+    "You've made your choice. I'll stick to my principles, {opponent}.",
+    "No matter what you chose, I'll cooperate, {opponent}.",
+  ],
+  always_defect: [
+    "Smart to decide early, {opponent}. But it won't help you.",
+    "Locked in already? Fine by me, {opponent}.",
+  ],
+  tit_for_tat: [
+    "You've committed. I'll respond accordingly, {opponent}.",
+    "Your decision is made. Now I'll match it, {opponent}.",
+  ],
+  random: [
+    "You decided? Let me flip my coin then, {opponent}.",
+    "Your commitment means nothing to my randomness, {opponent}.",
+  ],
+  grudger: [
+    "You've chosen. I hope it was wise, {opponent}.",
+    "Locked in? Then so am I, {opponent}.",
+  ],
+  external: [
+    "Noted. Calculating response, {opponent}.",
+    "Your decision has been registered, {opponent}.",
+  ],
+};
+
+export function generateConversationMessage(
+  self: Particle,
+  opponent: Particle,
+  conv: ConversationState,
+): string {
+  const turnNumber = conv.turns.length;
+  const opponentDecided = conv.lockedInA !== null || conv.lockedInB !== null;
+
+  let pool: string[];
+  if (opponentDecided) {
+    pool = AFTER_OPPONENT_DECIDED[self.strategy];
+  } else if (turnNumber <= 1) {
+    // Opening: reuse existing greeting system (includes per-character templates)
+    return generateMessage(self, opponent);
+  } else {
+    pool = MID_CONVERSATION[self.strategy];
+  }
+
+  return pick(pool).replace(/\{opponent\}/g, opponent.id);
 }

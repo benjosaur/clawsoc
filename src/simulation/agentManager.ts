@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import { DEFAULT_CONFIG, type Decision, type MatchRecord, type Particle, type SimulationConfig, type StrategyType, type HallOfFameEntry, type HallOfFameResponse } from "./types";
+import { DEFAULT_CONFIG, type ConversationTurn, type Decision, type MatchRecord, type Particle, type SimulationConfig, type StrategyType, type HallOfFameEntry, type HallOfFameResponse } from "./types";
 import type { SimulationEngine } from "./engine";
 import { validateNoProfanity, censorText } from "./profanity";
 
@@ -18,6 +18,8 @@ export interface PendingMatch {
   opponentId: string;
   opponentGreeting: string;
   vsRecord: { cc: number; cd: number; dc: number; dd: number } | null;
+  conversation: ConversationTurn[];
+  forcedDecide: boolean;
   createdAt: number;
 }
 
@@ -59,6 +61,7 @@ export class AgentManager {
   private matchWaiters = new Map<string, { resolve: (match: PendingMatch) => void; reject: (err: Error) => void }>();
   private resultWaiters = new Map<string, { resolve: (record: MatchRecord | null) => void }>();
   private activeResultKeys = new Map<string, string>(); // username → "aId|bId"
+  private turnWaiters = new Map<string, { resolve: (match: PendingMatch) => void }>();
   private parkedAt = new Map<string, number>(); // username → Date.now() when parked
   private bannedUsers = new Set<string>();
   private agentIps = new Map<string, string>(); // username → client IP
@@ -302,6 +305,26 @@ export class AgentManager {
     }
   }
 
+  waitForTurn(username: string): Promise<PendingMatch> {
+    const existing = this.pendingMatches.get(username);
+    if (existing) return Promise.resolve(existing);
+    return new Promise((resolve) => {
+      this.turnWaiters.set(username, { resolve });
+    });
+  }
+
+  resolveTurnWaiter(username: string, match: PendingMatch): void {
+    const waiter = this.turnWaiters.get(username);
+    if (waiter) {
+      this.turnWaiters.delete(username);
+      waiter.resolve(match);
+    }
+  }
+
+  hasTurnWaiter(username: string): boolean {
+    return this.turnWaiters.has(username);
+  }
+
   waitForResult(username: string, aId: string, bId: string): Promise<MatchRecord | null> {
     const key = `${aId}|${bId}`;
     this.activeResultKeys.set(username, key);
@@ -474,6 +497,7 @@ export class AgentManager {
       this.matchWaiters.delete(username);
       matchWaiter.reject(new Error("agent_left"));
     }
+    this.turnWaiters.delete(username);
     const resultKey = this.activeResultKeys.get(username);
     if (resultKey) {
       this.activeResultKeys.delete(username);

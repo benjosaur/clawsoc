@@ -31,6 +31,7 @@ function executeMatch(
     decisionB,
     scoreA,
     scoreB,
+    conversation: [],
     timestamp: Date.now(),
   };
 }
@@ -48,6 +49,16 @@ export function playMatchWithOverrides(
 ): MatchRecord {
   const decisionA = overrideA ?? decide(a, b);
   const decisionB = overrideB ?? decide(b, a);
+  return executeMatch(a, b, tick, decisionA, decisionB);
+}
+
+export function playMatchFromDecisions(
+  a: Particle,
+  b: Particle,
+  tick: number,
+  decisionA: Decision,
+  decisionB: Decision,
+): MatchRecord {
   return executeMatch(a, b, tick, decisionA, decisionB);
 }
 

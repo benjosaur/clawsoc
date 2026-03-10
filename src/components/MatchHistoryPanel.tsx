@@ -88,26 +88,70 @@ function ParticipantRow({
 }
 
 function MatchModalContent({ entry, particleMap }: { entry: MatchRecord; particleMap: Map<string, ParticleMeta> }) {
+  const hasConversation = entry.conversation && entry.conversation.length > 0;
   return (
     <>
-      <div className="mb-3">
-        <ParticipantRow
-          participant={entry.particleA}
-          decision={entry.decisionA}
-          score={entry.scoreA}
-          message={entry.messageA}
-          lookup={particleMap.get(entry.particleA.id)}
-        />
+      {/* Participants header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: particleMap.get(entry.particleA.id)?.color ?? "hsl(60,50%,45%)" }} />
+          <span className="font-medium text-zinc-900 text-sm">{entry.particleA.id}</span>
+          <DecisionBadge decision={entry.decisionA} />
+          <span className={entry.decisionA === "cooperate" ? "text-emerald-600 text-sm" : "text-red-500 text-sm"}>+{entry.scoreA}</span>
+        </div>
+        <span className="text-zinc-300 text-xs">vs</span>
+        <div className="flex items-center gap-1.5">
+          <span className={entry.decisionB === "cooperate" ? "text-emerald-600 text-sm" : "text-red-500 text-sm"}>+{entry.scoreB}</span>
+          <DecisionBadge decision={entry.decisionB} />
+          <span className="font-medium text-zinc-900 text-sm">{entry.particleB.id}</span>
+          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: particleMap.get(entry.particleB.id)?.color ?? "hsl(60,50%,45%)" }} />
+        </div>
       </div>
-      <div className="border-t border-zinc-100 pt-3">
-        <ParticipantRow
-          participant={entry.particleB}
-          decision={entry.decisionB}
-          score={entry.scoreB}
-          message={entry.messageB}
-          lookup={particleMap.get(entry.particleB.id)}
-        />
-      </div>
+
+      {/* Conversation transcript */}
+      {hasConversation ? (
+        <div className="border-t border-zinc-100 pt-3 space-y-1.5 max-h-60 overflow-y-auto">
+          {entry.conversation.map((turn, i) => {
+            const isA = turn.speaker === "a";
+            const name = isA ? entry.particleA.id : entry.particleB.id;
+            return (
+              <div key={i} className={`flex ${isA ? "justify-start" : "justify-end"}`}>
+                <div className={`max-w-[80%] rounded-lg px-2.5 py-1.5 text-xs ${isA ? "bg-zinc-50 text-zinc-700" : "bg-blue-50 text-blue-800"}`}>
+                  <span className="font-medium">{name}</span>
+                  {turn.type === "message" ? (
+                    <p className="mt-0.5 italic">&ldquo;{turn.content}&rdquo;</p>
+                  ) : (
+                    <p className="mt-0.5 font-semibold">
+                      Locked in: <DecisionBadge decision={turn.decision!} />
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          <div className="mb-3">
+            <ParticipantRow
+              participant={entry.particleA}
+              decision={entry.decisionA}
+              score={entry.scoreA}
+              message={entry.messageA}
+              lookup={particleMap.get(entry.particleA.id)}
+            />
+          </div>
+          <div className="border-t border-zinc-100 pt-3">
+            <ParticipantRow
+              participant={entry.particleB}
+              decision={entry.decisionB}
+              score={entry.scoreB}
+              message={entry.messageB}
+              lookup={particleMap.get(entry.particleB.id)}
+            />
+          </div>
+        </>
+      )}
     </>
   );
 }
