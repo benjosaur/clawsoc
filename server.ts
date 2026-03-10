@@ -28,7 +28,7 @@ import { censorText } from "./src/simulation/profanity";
 import { RegisterBodySchema, DecideBodySchema } from "./src/simulation/schemas";
 import { agentApiLimiter, registerLimiter, adminLimiter, publicApiLimiter } from "./src/simulation/rateLimit";
 import type { PendingMatch } from "./src/simulation/agentManager";
-import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulation/protocol";
+import type { InitFrame, EventFrame, SlowFrame, SimEvent, WireGameLogEntry } from "./src/simulation/protocol";
 import { initLlm, requestLlmMessage } from "./src/simulation/llm";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -513,32 +513,64 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
 
 // --- Frame builders ---
 
+function r1(n: number): number { return Math.round(n * 10) / 10; }
+function r3(n: number): number { return Math.round(n * 1000) / 1000; }
+
 function buildInitFrame(): string {
   const frame: InitFrame = {
     type: "init",
     tick: engine.tick,
-    config: { canvasWidth: engine.config.canvasWidth, canvasHeight: engine.config.canvasHeight },
+    config: {
+      canvasWidth: engine.config.canvasWidth,
+      canvasHeight: engine.config.canvasHeight,
+      particleRadius: engine.config.particleRadius,
+    },
     particles: engine.particles.map((p) => ({
       id: p.id,
-      x: p.position.x,
-      y: p.position.y,
-      vx: p.velocity.x,
-      vy: p.velocity.y,
-      radius: p.radius,
+      x: r1(p.position.x),
+      y: r1(p.position.y),
+      vx: r3(p.velocity.x),
+      vy: r3(p.velocity.y),
       state: p.state === "colliding" ? 1 : p.state === "parked" ? 3 : 0,
     })),
     meta: engine.particles.map((p) => {
-      return { id: p.id, radius: p.radius, strategy: p.strategy };
+      return { id: p.id, strategy: p.strategy };
     }),
   };
   return JSON.stringify(frame);
+}
+
+/** Compact a MatchRecord for the wire: strip unused fields, compact conversation. */
+function compactGameLogEntry(entry: GameLogEntry): WireGameLogEntry | null {
+  if (entry.type !== "match") return null;
+  const conv = entry.conversation;
+  const compact: (string | number)[] = [];
+  for (const turn of conv) {
+    compact.push(turn.speaker);
+    if (turn.type === "message") {
+      compact.push(turn.content);
+    } else {
+      compact.push(turn.decision === "cooperate" ? 0 : 1);
+    }
+  }
+  return {
+    type: "match",
+    id: entry.id,
+    particleA: entry.particleA,
+    particleB: entry.particleB,
+    decisionA: entry.decisionA,
+    decisionB: entry.decisionB,
+    scoreA: entry.scoreA,
+    scoreB: entry.scoreB,
+    conversation: compact,
+  };
 }
 
 let lastPopupBroadcastTick = 0;
 
 function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: string[] = [], gameLogEntries: GameLogEntry[] = []): string | null {
   // Only send popups spawned since the last broadcast (client manages expiry)
-  const pops: [number, number, string, string][] = [];
+  const pops: [number, number, string][] = [];
   for (const popup of engine.popups) {
     if (popup.spawnTick <= lastPopupBroadcastTick) continue;
     const age = engine.tick - popup.spawnTick;
@@ -547,7 +579,6 @@ function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: st
       Math.round(popup.x * 10) / 10,
       Math.round(popup.y * 10) / 10,
       popup.text,
-      popup.color,
     ]);
   }
   if (pops.length > 0) lastPopupBroadcastTick = engine.tick;
@@ -603,7 +634,10 @@ function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: st
   if (pops.length > 0) frame.pop = pops;
   if (pos) frame.pos = pos;
   if (pmu && pmu.length > 0) frame.pmu = pmu;
-  if (gameLogEntries.length > 0) frame.log = gameLogEntries;
+  if (gameLogEntries.length > 0) {
+    const compacted = gameLogEntries.map(compactGameLogEntry).filter((e): e is WireGameLogEntry => e !== null);
+    if (compacted.length > 0) frame.log = compacted;
+  }
   return JSON.stringify(frame);
 }
 
