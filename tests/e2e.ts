@@ -4,6 +4,7 @@
  * Usage:
  *   bun tests/e2e.ts              # remote (clawsoc.fly.dev)
  *   bun tests/e2e.ts local        # local  (localhost:3000)
+ *   bun tests/e2e.ts local -v     # local with verbose request/response logging
  *
  * Tests:
  *   - HTTP health & static assets
@@ -13,6 +14,7 @@
  */
 
 const local = process.argv.includes("local");
+const verbose = process.argv.includes("--verbose") || process.argv.includes("-v");
 const BASE = local ? "http://localhost:3000" : "https://clawsoc.fly.dev";
 const WS_URL = local ? "ws://localhost:3000/ws" : "wss://clawsoc.fly.dev/ws";
 
@@ -50,6 +52,25 @@ function expect(val: any, msg: string) {
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Verbose-aware fetch: logs request/response details when -v is set. */
+async function tracedFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  const url = typeof input === "string" ? input : (input as Request).url;
+  const method = init?.method ?? "GET";
+  const path = url.replace(BASE, "");
+  if (verbose) {
+    let line = `    \x1b[2m→ ${method} ${path}\x1b[0m`;
+    if (init?.body) line += `\x1b[2m  ${String(init.body).slice(0, 120)}\x1b[0m`;
+    console.log(line);
+  }
+  const res = await fetch(input, init);
+  if (verbose) {
+    const clone = res.clone();
+    const text = await clone.text().catch(() => "");
+    console.log(`    \x1b[2m← ${res.status} ${text.slice(0, 200)}\x1b[0m`);
+  }
+  return res;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +156,7 @@ async function testHttpHealth() {
   console.log("\n\x1b[1mHTTP Health\x1b[0m");
 
   await test("GET / returns 200 with HTML", async () => {
-    const res = await fetch(BASE);
+    const res = await tracedFetch(BASE);
     expect(res.ok, `status ${res.status}`);
     const text = await res.text();
     expect(
@@ -145,7 +166,7 @@ async function testHttpHealth() {
   });
 
   await test("GET /SKILL.md returns 200", async () => {
-    const res = await fetch(`${BASE}/SKILL.md`);
+    const res = await tracedFetch(`${BASE}/SKILL.md`);
     expect(res.ok, `status ${res.status}`);
   });
 }
@@ -201,7 +222,7 @@ async function testAgentRegistration() {
   console.log("\n\x1b[1mAgent Registration\x1b[0m");
 
   await test("register with valid username", async () => {
-    const res = await fetch(`${BASE}/api/agent/register`, {
+    const res = await tracedFetch(`${BASE}/api/agent/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: TEST_USER }),
@@ -213,7 +234,7 @@ async function testAgentRegistration() {
   });
 
   await test("reject empty username", async () => {
-    const res = await fetch(`${BASE}/api/agent/register`, {
+    const res = await tracedFetch(`${BASE}/api/agent/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: "" }),
@@ -222,7 +243,7 @@ async function testAgentRegistration() {
   });
 
   await test("reject invalid characters", async () => {
-    const res = await fetch(`${BASE}/api/agent/register`, {
+    const res = await tracedFetch(`${BASE}/api/agent/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: "no spaces!" }),
@@ -231,7 +252,7 @@ async function testAgentRegistration() {
   });
 
   await test("reject duplicate username", async () => {
-    const res = await fetch(`${BASE}/api/agent/register`, {
+    const res = await tracedFetch(`${BASE}/api/agent/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: TEST_USER }),
@@ -254,7 +275,7 @@ async function testAgentStatus() {
   }
 
   await test("status with valid token", async () => {
-    const res = await fetch(`${BASE}/api/agent/status?username=${TEST_USER}`, {
+    const res = await tracedFetch(`${BASE}/api/agent/status?username=${TEST_USER}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     expect(res.ok, `status ${res.status}`);
@@ -265,22 +286,22 @@ async function testAgentStatus() {
   });
 
   await test("status without auth returns 401", async () => {
-    const res = await fetch(`${BASE}/api/agent/status?username=nobody`);
+    const res = await tracedFetch(`${BASE}/api/agent/status?username=nobody`);
     expect(res.status === 401, `expected 401, got ${res.status}`);
   });
 
   await test("status without username returns 400", async () => {
-    const res = await fetch(`${BASE}/api/agent/status`);
+    const res = await tracedFetch(`${BASE}/api/agent/status`);
     expect(res.status === 400, `expected 400, got ${res.status}`);
   });
 
   await test("match without auth returns 401", async () => {
-    const res = await fetch(`${BASE}/api/agent/match?username=nobody`);
+    const res = await tracedFetch(`${BASE}/api/agent/match?username=nobody`);
     expect(res.status === 401, `expected 401, got ${res.status}`);
   });
 
   await test("match without username returns 400", async () => {
-    const res = await fetch(`${BASE}/api/agent/match`);
+    const res = await tracedFetch(`${BASE}/api/agent/match`);
     expect(res.status === 400, `expected 400, got ${res.status}`);
   });
 }
@@ -298,7 +319,7 @@ async function testAgentDecision() {
   }
 
   await test("invalid decision returns 400", async () => {
-    const res = await fetch(`${BASE}/api/agent/decide?username=${TEST_USER}`, {
+    const res = await tracedFetch(`${BASE}/api/agent/decide?username=${TEST_USER}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -310,7 +331,7 @@ async function testAgentDecision() {
   });
 
   await test("decide with no pending match returns 409", async () => {
-    const res = await fetch(`${BASE}/api/agent/decide?username=${TEST_USER}`, {
+    const res = await tracedFetch(`${BASE}/api/agent/decide?username=${TEST_USER}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -339,7 +360,7 @@ async function testGameplayLoop() {
   let matchData: any = null;
 
   await test("wait for match via blocking endpoint (up to 120s)", async () => {
-    const res = await fetch(`${BASE}/api/agent/match?username=${TEST_USER}`, {
+    const res = await tracedFetch(`${BASE}/api/agent/match?username=${TEST_USER}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(120_000),
     });
@@ -359,7 +380,7 @@ async function testGameplayLoop() {
   });
 
   await test("submit decision and receive result", async () => {
-    const res = await fetch(`${BASE}/api/agent/decide?username=${TEST_USER}`, {
+    const res = await tracedFetch(`${BASE}/api/agent/decide?username=${TEST_USER}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -380,7 +401,7 @@ async function testGameplayLoop() {
   });
 
   await test("score updated after match", async () => {
-    const res = await fetch(`${BASE}/api/agent/status?username=${TEST_USER}`, {
+    const res = await tracedFetch(`${BASE}/api/agent/status?username=${TEST_USER}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     expect(res.ok, `status ${res.status}`);
@@ -397,7 +418,7 @@ async function testPlayerLookup() {
 
   if (apiKey) {
     await test("lookup registered agent (live)", async () => {
-      const res = await fetch(
+      const res = await tracedFetch(
         `${BASE}/api/player/lookup?name=${TEST_USER}`
       );
       expect(res.ok, `status ${res.status}`);
@@ -409,14 +430,14 @@ async function testPlayerLookup() {
   }
 
   await test("lookup nonexistent player returns 404", async () => {
-    const res = await fetch(
+    const res = await tracedFetch(
       `${BASE}/api/player/lookup?name=nonexistent_xyz_999`
     );
     expect(res.status === 404, `expected 404, got ${res.status}`);
   });
 
   await test("lookup without name param returns 400", async () => {
-    const res = await fetch(`${BASE}/api/player/lookup`);
+    const res = await tracedFetch(`${BASE}/api/player/lookup`);
     expect(res.status === 400, `expected 400, got ${res.status}`);
   });
 }
@@ -434,7 +455,7 @@ async function testAgentLeave() {
   }
 
   await test("leave with valid token", async () => {
-    const res = await fetch(`${BASE}/api/agent/leave?username=${TEST_USER}`, {
+    const res = await tracedFetch(`${BASE}/api/agent/leave?username=${TEST_USER}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${apiKey}` },
     });
@@ -445,7 +466,7 @@ async function testAgentLeave() {
     skip("agent no longer live after leave", "requires Redis for offline lookup");
   } else {
     await test("agent no longer live after leave", async () => {
-      const res = await fetch(
+      const res = await tracedFetch(
         `${BASE}/api/player/lookup?name=${TEST_USER}`
       );
       expect(res.ok, `status ${res.status}`);
@@ -478,7 +499,7 @@ async function testOwnership() {
   }
 
   await test("register claimed username rejected", async () => {
-    const res = await fetch(`${BASE}/api/agent/register`, {
+    const res = await tracedFetch(`${BASE}/api/agent/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: TEST_USER }),
@@ -497,7 +518,7 @@ async function testOwnership() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
     try {
-      const res = await fetch(`${BASE}/api/agent/match?username=${TEST_USER}`, {
+      const res = await tracedFetch(`${BASE}/api/agent/match?username=${TEST_USER}`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: controller.signal,
       });
@@ -516,14 +537,14 @@ async function testOwnership() {
       );
     }
     // Verify agent is back in arena via status
-    const statusRes = await fetch(`${BASE}/api/agent/status?username=${TEST_USER}`, {
+    const statusRes = await tracedFetch(`${BASE}/api/agent/status?username=${TEST_USER}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     expect(statusRes.ok, `status after rejoin: ${statusRes.status}`);
   });
 
   await test("cleanup: leave rejoined agent", async () => {
-    const res = await fetch(`${BASE}/api/agent/leave?username=${TEST_USER}`, {
+    const res = await tracedFetch(`${BASE}/api/agent/leave?username=${TEST_USER}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${apiKey}` },
     });

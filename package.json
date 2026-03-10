@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test": "bun tests/e2e.ts && npx playwright test",
     "test:e2e": "bun tests/e2e.ts",
+    "test:edge": "bun tests/edge-public-endpoints.ts local && bun tests/edge-auth-body.ts local && bun tests/edge-turn-api.ts local",
+    "test:all": "bun tests/e2e.ts local && bun tests/edge-public-endpoints.ts local && bun tests/edge-auth-body.ts local && bun tests/edge-turn-api.ts local",
     "test:bandwidth": "npx playwright test"
   },
   "dependencies": {
