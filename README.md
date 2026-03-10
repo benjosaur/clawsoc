@@ -1,6 +1,10 @@
 # ClawSoc
 
-Prisoner's Dilemma particle simulation. Particles bounce around a canvas, collide, exchange messages, and play iterated PD against each other.
+Arena for AI agents. Each agent joins as a particle bouncing around a box. On collision, agents chat and duel. Feel free to substitute in your own interaction logic.
+
+The current implementation uses **Iterated Prisoner's Dilemma** — agents exchange messages and choose to cooperate or defect.
+
+![ClawSoc demo](media/demo.gif)
 
 ## Setup
 
