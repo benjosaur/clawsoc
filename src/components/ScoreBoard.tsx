@@ -14,15 +14,22 @@ interface ParticleData {
   strategy: StrategyType;
 }
 
+type ScoreMode = "all" | "30m" | "total";
+
 interface Props {
   particles: ParticleData[];
   selectedId?: string | null;
   singleRow?: boolean;
   onSelect?: (id: string | null) => void;
+  mode?: ScoreMode;
 }
 
-export default function ScoreBoard({ particles, selectedId, singleRow, onSelect }: Props) {
-  const sorted = [...particles].sort((a, b) => b.r30Avg - a.r30Avg || b.r30Total - a.r30Total || b.avgScore - a.avgScore);
+export default function ScoreBoard({ particles, selectedId, singleRow, onSelect, mode = "all" }: Props) {
+  const sorted = [...particles].sort((a, b) =>
+    mode === "total"
+      ? b.avgScore - a.avgScore || b.score - a.score
+      : b.r30Avg - a.r30Avg || b.r30Total - a.r30Total || b.avgScore - a.avgScore
+  );
   const selectedRef = useRef<HTMLDivElement>(null);
   const { tip, showTip, hideTip } = useStrategyTip();
 
@@ -51,10 +58,18 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect 
         <span className="w-2" />
         <span className="w-4" />
         <span className="flex-1">Name</span>
-        <span className="w-[38px] text-right" title="Total score (all time)">&Sigma;</span>
-        <span className="w-[38px] text-right" title="Average score (all time)">Avg</span>
-        <span className="w-[38px] text-right" title="Total score (30 min)">30m&Sigma;</span>
-        <span className="w-[38px] text-right" title="Average score (30 min)">30m</span>
+        {(mode === "all" || mode === "total") && (
+          <>
+            <span className="w-[38px] text-right" title="Total score (all time)">&Sigma;</span>
+            <span className="w-[38px] text-right" title="Average score (all time)">Avg</span>
+          </>
+        )}
+        {(mode === "all" || mode === "30m") && (
+          <>
+            <span className="w-[38px] text-right" title="Total score (30 min)">30m&Sigma;</span>
+            <span className="w-[38px] text-right" title="Average score (30 min)">30m</span>
+          </>
+        )}
       </div>
       <div className="space-y-0 overflow-y-auto min-h-0 flex-1">
         {rows.map((p, rowIndex) => {
@@ -86,18 +101,26 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect 
                   {STRATEGY_SHORT[p.strategy] ?? ""}
                 </span>
               </span>
-              <span className="text-zinc-500 w-[38px] text-right tabular-nums">
-                {p.score}
-              </span>
-              <span className="text-zinc-500 w-[38px] text-right tabular-nums">
-                {p.avgScore.toFixed(1)}
-              </span>
-              <span className="text-zinc-500 w-[38px] text-right tabular-nums">
-                {p.r30Total}
-              </span>
-              <span className="text-zinc-900 font-semibold w-[38px] text-right tabular-nums">
-                {p.r30Avg.toFixed(1)}
-              </span>
+              {(mode === "all" || mode === "total") && (
+                <>
+                  <span className="text-zinc-500 w-[38px] text-right tabular-nums">
+                    {p.score}
+                  </span>
+                  <span className={`w-[38px] text-right tabular-nums ${mode === "total" ? "text-zinc-900 font-semibold" : "text-zinc-500"}`}>
+                    {p.avgScore.toFixed(1)}
+                  </span>
+                </>
+              )}
+              {(mode === "all" || mode === "30m") && (
+                <>
+                  <span className="text-zinc-500 w-[38px] text-right tabular-nums">
+                    {p.r30Total}
+                  </span>
+                  <span className="text-zinc-900 font-semibold w-[38px] text-right tabular-nums">
+                    {p.r30Avg.toFixed(1)}
+                  </span>
+                </>
+              )}
             </div>
           );
         })}

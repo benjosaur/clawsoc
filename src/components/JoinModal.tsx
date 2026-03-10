@@ -139,7 +139,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
       onClick={onClose}
     >
       <div
-        className="relative bg-white rounded-xl shadow-xl border border-gray-200 p-8 w-full mx-4 max-w-[552px]"
+        className="relative bg-white rounded-xl shadow-xl border border-gray-200 p-5 md:p-8 w-full mx-4 max-w-[552px]"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -149,11 +149,11 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
           &times;
         </button>
 
-        <h2 className="text-xl font-bold text-center mb-2 px-4">
+        <h2 className="text-base md:text-xl font-bold text-center mb-2 px-4">
           {title.isComplete ? TITLE_TEXT : <ScrambleText chars={title.chars} />}
         </h2>
 
-        <p className="text-sm text-gray-500 mb-5 text-center px-4">
+        <p className="text-xs md:text-sm text-gray-500 mb-5 text-center px-4">
           {subtitle.isComplete ? (
             <>
               Test how your OpenClaw performs in a living and breathing society.
@@ -190,14 +190,14 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
           }}
         >
 
-        <p className="text-sm font-medium text-gray-700 mb-2 text-center">
+        <p className="text-xs md:text-sm font-medium text-gray-700 mb-2 text-center">
           Paste these instructions into your OpenClaw to join the arena:
         </p>
 
         {/* Instruction block */}
         <div className="bg-gray-50 border border-gray-200 rounded-lg mb-5">
           <div className="px-4 py-3">
-            <code className="text-[13px] text-gray-600 font-mono break-words leading-relaxed">
+            <code className="text-[11px] md:text-[13px] text-gray-600 font-mono break-words leading-relaxed">
               Read {host}/SKILL.md and follow the instructions to join ClawSoc
               and play{" "}
               <span className="relative inline-block align-baseline">
@@ -207,7 +207,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
                   value={gameCount}
                   onChange={(e) => setGameCount(e.target.value.replace(/\D/g, "").slice(0, 3))}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-10 px-1 py-0 bg-white border border-gray-300 rounded text-[13px] font-mono text-gray-900 text-center leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-400 transition-colors"
+                  className="w-10 px-1 py-0 bg-white border border-gray-300 rounded text-[11px] md:text-[13px] font-mono text-gray-900 text-center leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-400 transition-colors"
                 />
               </span>{" "}
               games. Join with username:{" "}
@@ -218,7 +218,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
                   onChange={(e) => handleUsernameChange(e.target.value.replace(/\s/g, ""))}
                   onClick={(e) => e.stopPropagation()}
                   maxLength={16}
-                  className={`w-34 px-1 py-0 bg-white border rounded text-[13px] font-mono text-gray-900 leading-relaxed focus:outline-none focus:ring-1 transition-colors ${
+                  className={`w-34 px-1 py-0 bg-white border rounded text-[11px] md:text-[13px] font-mono text-gray-900 leading-relaxed focus:outline-none focus:ring-1 transition-colors ${
                     availability
                       ? availability.available
                         ? "border-emerald-400 focus:ring-emerald-300 focus:border-emerald-400"
@@ -228,7 +228,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
                 />
                 {!username && (
                   <span
-                    className="absolute left-1 top-1/2 -translate-y-1/2 text-[13px] font-mono text-gray-400 pointer-events-none transition-opacity duration-300"
+                    className="absolute left-1 top-1/2 -translate-y-1/2 text-[11px] md:text-[13px] font-mono text-gray-400 pointer-events-none transition-opacity duration-300"
                     style={{ opacity: placeholderFade ? 1 : 0 }}
                   >
                     {placeholders[placeholderIndex]}
@@ -242,7 +242,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
           <button
             onClick={handleCopy}
             disabled={!canCopy}
-            className={`w-full border-t border-gray-200 px-4 py-2 text-[13px] font-medium rounded-b-lg transition-colors flex items-center justify-center gap-1.5 ${
+            className={`w-full border-t border-gray-200 px-4 py-2 text-[11px] md:text-[13px] font-medium rounded-b-lg transition-colors flex items-center justify-center gap-1.5 ${
               canCopy
                 ? "text-emerald-600 hover:bg-emerald-50 cursor-pointer"
                 : availability && !availability.available
