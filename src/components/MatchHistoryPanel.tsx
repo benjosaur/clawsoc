@@ -134,7 +134,7 @@ function EntryModal({ entry, onClose, particleMap }: { entry: GameLogEntry; onCl
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center" data-no-deselect onClick={onClose}>
       <div className="absolute inset-0 bg-black/20" />
       <div
         className="relative w-80 p-4 rounded-xl bg-white text-sm shadow-xl border border-zinc-200"
@@ -180,7 +180,7 @@ export default function MatchHistoryPanel({ entries, selectedId, label, particle
       <h2 className="hidden md:block text-xs font-medium text-zinc-400 uppercase tracking-widest mb-1 flex-shrink-0">
         {label ?? "Game Log"}
       </h2>
-      <div className="space-y-1.5 overflow-y-auto overflow-x-hidden min-h-0 flex-1">
+      <div className="space-y-1.5 overflow-y-auto overflow-x-hidden min-h-0 flex-1" data-no-deselect>
         {filtered.length === 0 && (
           <p className="text-sm text-zinc-400 font-mono">
             {selectedId != null ? "no games yet" : "waiting for new matches..."}
