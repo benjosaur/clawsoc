@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { timingSafeEqual } from "crypto";
 import type { AgentManager } from "./agentManager";
 import type { SimulationEngine } from "./engine";
-import { AdminUsernameBodySchema } from "./schemas";
+import { AdminUsernameBodySchema, AdminLlmToggleSchema } from "./schemas";
 
 function jsonResponse(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -58,12 +58,18 @@ function checkBasicAuth(req: IncomingMessage): boolean {
   return timingSafeEqual(a, b);
 }
 
+export interface AdminAPIOptions {
+  getLlmStatus: () => { available: boolean; enabled: boolean };
+  setLlmEnabled: (enabled: boolean) => void;
+}
+
 export async function handleAdminAPI(
   req: IncomingMessage,
   res: ServerResponse,
   pathname: string,
   agentManager: AgentManager,
   engine: SimulationEngine,
+  options: AdminAPIOptions,
 ): Promise<void> {
   const method = req.method ?? "GET";
 
@@ -140,6 +146,31 @@ export async function handleAdminAPI(
   // GET /api/admin/banned
   if (pathname === "/api/admin/banned" && method === "GET") {
     return jsonResponse(res, 200, { banned: agentManager.getBannedUsers() });
+  }
+
+  // GET /api/admin/llm
+  if (pathname === "/api/admin/llm" && method === "GET") {
+    return jsonResponse(res, 200, options.getLlmStatus());
+  }
+
+  // POST /api/admin/llm
+  if (pathname === "/api/admin/llm" && method === "POST") {
+    if (!options.getLlmStatus().available) {
+      return jsonResponse(res, 400, { error: "LLM not available — no OPENAI_API_KEY configured" });
+    }
+    const raw = await readBody(req);
+    let rawBody: unknown;
+    try {
+      rawBody = JSON.parse(raw);
+    } catch {
+      return jsonResponse(res, 400, { error: "Invalid JSON" });
+    }
+    const parsed = AdminLlmToggleSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return jsonResponse(res, 400, { error: "Body must include { enabled: boolean }" });
+    }
+    options.setLlmEnabled(parsed.data.enabled);
+    return jsonResponse(res, 200, { ok: true, enabled: parsed.data.enabled });
   }
 
   return jsonResponse(res, 404, { error: "Not found" });

@@ -32,6 +32,11 @@ export const AdminUsernameBodySchema = z.object({
   username: z.string().optional(),
 });
 
+/** POST /api/admin/llm */
+export const AdminLlmToggleSchema = z.object({
+  enabled: z.boolean(),
+});
+
 // --- Redis data schemas ---
 
 const OpponentRecordSchema = z.object({
