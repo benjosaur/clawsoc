@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "crypto";
 import { DEFAULT_CONFIG, type ConversationTurn, type Decision, type MatchRecord, type Particle, type SimulationConfig, type StrategyType, type HallOfFameEntry, type HallOfFameResponse } from "./types";
 import type { SimulationEngine } from "./engine";
 import { validateNoProfanity } from "./profanity";
+import { ParticleRecordSchema, GlobalStatsSchema, HofStatsSchema, HofMetaSchema, safeJsonParse } from "./schemas";
 
 export interface ExternalAgent {
   apiKeyHash: string;
@@ -363,11 +364,13 @@ export class AgentManager {
         if (this.redis) {
           const raw = await this.redis.get(`record:${username}`);
           if (raw) {
-            try {
-              const rec = JSON.parse(raw);
-              result.particle.score = rec.score ?? 0;
-              result.particle.matchHistory = rec.matchHistory ?? {};
-            } catch (err) { console.error(`[AgentManager] Failed to parse record for ${username}:`, err); }
+            const parsed = ParticleRecordSchema.safeParse(safeJsonParse(raw));
+            if (parsed.success) {
+              result.particle.score = parsed.data.score;
+              result.particle.matchHistory = parsed.data.matchHistory;
+            } else {
+              console.error(`[AgentManager] Failed to parse record for ${username}:`, parsed.error.message);
+            }
           }
           await this.redis.set(`agent:${username}`, JSON.stringify(existingAgent));
         }
@@ -410,11 +413,13 @@ export class AgentManager {
       // Restore prior record from Redis
       const raw = await this.redis.get(`record:${username}`);
       if (raw) {
-        try {
-          const rec = JSON.parse(raw);
-          result.particle.score = rec.score ?? 0;
-          result.particle.matchHistory = rec.matchHistory ?? {};
-        } catch (err) { console.error(`[AgentManager] Failed to parse record for ${username}:`, err); }
+        const parsed = ParticleRecordSchema.safeParse(safeJsonParse(raw));
+        if (parsed.success) {
+          result.particle.score = parsed.data.score;
+          result.particle.matchHistory = parsed.data.matchHistory;
+        } else {
+          console.error(`[AgentManager] Failed to parse record for ${username}:`, parsed.error.message);
+        }
       }
 
       await this.redis.set(`agent:${username}`, JSON.stringify(agent));
@@ -467,11 +472,11 @@ export class AgentManager {
       if (this.redis) {
         const raw = await this.redis.get(`record:${agent.displacedId}`);
         if (raw) {
-          try {
-            const rec = JSON.parse(raw);
-            npc.score = rec.score ?? 0;
-            npc.matchHistory = rec.matchHistory ?? {};
-          } catch { /* ignore parse errors */ }
+          const parsed = ParticleRecordSchema.safeParse(safeJsonParse(raw));
+          if (parsed.success) {
+            npc.score = parsed.data.score;
+            npc.matchHistory = parsed.data.matchHistory;
+          }
         }
       }
 
@@ -552,13 +557,13 @@ export class AgentManager {
     // Restore global stats
     const statsRaw = await this.redis.get("global:stats");
     if (statsRaw) {
-      try {
-        const stats = JSON.parse(statsRaw);
-        engine.tick = stats.tick ?? 0;
-        engine.totalCooperations = stats.totalCooperations ?? 0;
-        engine.totalDefections = stats.totalDefections ?? 0;
+      const parsed = GlobalStatsSchema.safeParse(safeJsonParse(statsRaw));
+      if (parsed.success) {
+        engine.tick = parsed.data.tick;
+        engine.totalCooperations = parsed.data.totalCooperations;
+        engine.totalDefections = parsed.data.totalDefections;
         console.log(`[AgentManager] Restored global stats: tick=${engine.tick}, cooperations=${engine.totalCooperations}, defections=${engine.totalDefections}`);
-      } catch { /* ignore parse errors */ }
+      }
     }
 
     // Restore particle records
@@ -569,11 +574,11 @@ export class AgentManager {
       if (!particle) continue;
       const raw = await this.redis.get(key);
       if (!raw) continue;
-      try {
-        const rec = JSON.parse(raw);
-        particle.score = rec.score ?? 0;
-        particle.matchHistory = rec.matchHistory ?? {};
-      } catch { /* ignore parse errors */ }
+      const parsed = ParticleRecordSchema.safeParse(safeJsonParse(raw));
+      if (parsed.success) {
+        particle.score = parsed.data.score;
+        particle.matchHistory = parsed.data.matchHistory;
+      }
     }
   }
 
@@ -599,11 +604,8 @@ export class AgentManager {
     if (!this.redis) { this.warnIfNoRedis("lookupRecord"); return null; }
     const raw = await this.redis.get(`record:${id}`);
     if (!raw) return null;
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
+    const parsed = ParticleRecordSchema.safeParse(safeJsonParse(raw));
+    return parsed.success ? parsed.data : null;
   }
 
   // --- Hall of Fame ---
@@ -703,16 +705,18 @@ export class AgentManager {
       ratings.push(parseFloat(raw[i + 1]));
     }
 
+    const defaultStats = { globalMean: C, updatedAt: 0, priorWeight: m };
+
     if (labels.length === 0) {
       const statsRaw = await this.redis.get("halloffame:stats");
-      const stats = statsRaw ? JSON.parse(statsRaw) : { globalMean: C, updatedAt: 0, priorWeight: m };
+      const stats = statsRaw ? (HofStatsSchema.safeParse(safeJsonParse(statsRaw)).data ?? defaultStats) : defaultStats;
       return { entries: [], globalMean: stats.globalMean, updatedAt: stats.updatedAt, priorWeight: stats.priorWeight, totalEntries, page, pageSize };
     }
 
     // Fetch metadata for these labels
     const metaRaw = await this.redis.hmget("halloffame:meta", ...labels);
     const statsRaw = await this.redis.get("halloffame:stats");
-    const stats = statsRaw ? JSON.parse(statsRaw) : { globalMean: C, updatedAt: 0, priorWeight: m };
+    const stats = statsRaw ? (HofStatsSchema.safeParse(safeJsonParse(statsRaw)).data ?? defaultStats) : defaultStats;
 
     const liveLabels = new Set(engine.particles.map(p => p.id));
     const entries: HallOfFameEntry[] = [];
@@ -722,20 +726,20 @@ export class AgentManager {
       const rating = ratings[i];
       const metaStr = metaRaw[i];
       if (!metaStr) continue;
-      try {
-        const meta = JSON.parse(metaStr);
-        entries.push({
-          label,
-          strategy: meta.strategy,
-          totalScore: meta.totalScore,
-          avgScore: meta.avgScore,
-          bayesianRating: Math.round(rating * 10000) / 10000,
-          games: meta.games,
-          coopPct: meta.coopPct,
-          isLive: liveLabels.has(label),
-          isExternal: meta.isExternal,
-        });
-      } catch { /* skip bad meta */ }
+      const parsed = HofMetaSchema.safeParse(safeJsonParse(metaStr));
+      if (!parsed.success) continue;
+      const meta = parsed.data;
+      entries.push({
+        label,
+        strategy: meta.strategy,
+        totalScore: meta.totalScore,
+        avgScore: meta.avgScore,
+        bayesianRating: Math.round(rating * 10000) / 10000,
+        games: meta.games,
+        coopPct: meta.coopPct,
+        isLive: liveLabels.has(label),
+        isExternal: meta.isExternal,
+      });
     }
 
     return {
