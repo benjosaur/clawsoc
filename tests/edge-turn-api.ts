@@ -165,12 +165,12 @@ async function testCheckUsername() {
     expect(body.available === false, `expected available: false, got ${JSON.stringify(body)}`);
   });
 
-  await test("17-char name returns {available: false}", async () => {
-    const res = await fetchRetry(`${BASE}/api/agent/check-username?username=${"a".repeat(17)}`);
+  await test("9-char name returns {available: false}", async () => {
+    const res = await fetchRetry(`${BASE}/api/agent/check-username?username=${"a".repeat(9)}`);
     expect(res.ok, `status ${res.status}`);
     const body = await res.json();
     expect(body.available === false, `expected available: false, got ${JSON.stringify(body)}`);
-    expect(body.reason?.includes("16"), `expected length reason, got '${body.reason}'`);
+    expect(body.reason?.includes("8"), `expected length reason, got '${body.reason}'`);
   });
 
   // fetchRetry handles 429s automatically
@@ -182,26 +182,26 @@ async function testCheckUsername() {
 async function testUsernameBoundaries() {
   console.log("\n\x1b[1mUsername Validation Boundaries\x1b[0m");
 
-  const sixteenCharName = `b${Date.now().toString(36)}`.slice(0, 16).padEnd(16, "x");
-  let sixteenKey = "";
+  const eightCharName = `b${Date.now().toString(36)}`.slice(0, 8).padEnd(8, "x");
+  let eightKey = "";
 
-  await test("register with exactly 16-char username succeeds", async () => {
+  await test("register with exactly 8-char username succeeds", async () => {
     const res = await fetchRetry(`${BASE}/api/agent/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: sixteenCharName }),
+      body: JSON.stringify({ username: eightCharName }),
     });
     const body = await res.json();
     expect(res.ok, `status ${res.status}: ${JSON.stringify(body)}`);
-    sixteenKey = body.apiKey;
+    eightKey = body.apiKey;
   });
 
-  // Clean up the 16-char user
-  if (sixteenKey) {
-    await test("cleanup: leave 16-char agent", async () => {
-      const res = await tracedFetch(`${BASE}/api/agent/leave?username=${sixteenCharName.toLowerCase()}`, {
+  // Clean up the 8-char user
+  if (eightKey) {
+    await test("cleanup: leave 8-char agent", async () => {
+      const res = await tracedFetch(`${BASE}/api/agent/leave?username=${eightCharName.toLowerCase()}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${sixteenKey}` },
+        headers: { Authorization: `Bearer ${eightKey}` },
       });
       expect(res.ok, `status ${res.status}`);
     });

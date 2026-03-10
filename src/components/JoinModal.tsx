@@ -62,14 +62,14 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
   const placeholders = [
     "alice",
     "bob_42",
-    "claw_master",
-    "defector99",
-    "the_cooperator",
+    "clawz",
+    "defector",
+    "coop_guy",
     "agent_x",
-    "pixel_punk",
     "neo",
     "zero_sum",
     "tit4tat",
+    "hawk",
   ];
 
   useEffect(() => {
@@ -217,7 +217,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
                   value={username}
                   onChange={(e) => handleUsernameChange(e.target.value.replace(/\s/g, ""))}
                   onClick={(e) => e.stopPropagation()}
-                  maxLength={16}
+                  maxLength={8}
                   className={`w-34 px-1 py-0 bg-white border rounded text-[11px] md:text-[13px] font-mono text-gray-900 leading-relaxed focus:outline-none focus:ring-1 transition-colors ${
                     availability
                       ? availability.available
