@@ -57,6 +57,12 @@ export interface ClientPopup {
   x: number; y: number; text: string; color: string; spawnTime: number;
 }
 
+export interface JoinEvent {
+  id: string;
+  greeting?: string;
+  time: number;
+}
+
 const POPUP_DURATION_MS = 670;
 
 export function useServerSimulation() {
@@ -72,6 +78,7 @@ export function useServerSimulation() {
   const gameLogRef = useRef<GameLogEntry[]>([]);
   const popupsRef = useRef<ClientPopup[]>([]);
   const popupIdRef = useRef(0);
+  const joinEventsRef = useRef<JoinEvent[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const retryCount = useRef(0);
@@ -102,6 +109,7 @@ export function useServerSimulation() {
     particleMapRef.current = new Map(particles.map((p) => [p.id, p]));
     staticMetaRef.current = new Map(frame.meta.map((m) => [m.id, m]));
     gameLogRef.current = [];
+    joinEventsRef.current = [];
   }, []);
 
   const handleEvent = useCallback((frame: EventFrame) => {
@@ -156,6 +164,9 @@ export function useServerSimulation() {
           cc: 0, cd: 0, dc: 0, dd: 0, greeting: ev.greeting,
         });
         metaChanged = true;
+        if (ev.strategy === "external") {
+          joinEventsRef.current.push({ id: ev.id, greeting: ev.greeting, time: performance.now() });
+        }
       } else if (ev.e === "park") {
         const p = map.get(ev.id);
         if (p) { p.state = 3; p.vx = 0; p.vy = 0; }
@@ -366,5 +377,5 @@ export function useServerSimulation() {
     };
   }, [connect]);
 
-  return { state, simRef, metaRef, popupsRef, connected };
+  return { state, simRef, metaRef, popupsRef, joinEventsRef, connected };
 }
