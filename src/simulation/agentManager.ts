@@ -61,6 +61,7 @@ export class AgentManager {
   private bannedUsers = new Set<string>();
   private agentIps = new Map<string, string>(); // username → client IP
   private readonly maxAgentsPerIp = 5;
+  private spawningUsers = new Set<string>();
   private redis: Redis | null = null;
 
   constructor() {
@@ -297,46 +298,52 @@ export class AgentManager {
     username = username.toLowerCase();
     if (this.bannedUsers.has(username)) return { error: "This username has been banned" };
     if (this.agents.has(username)) return {};
+    if (this.spawningUsers.has(username)) return { error: "Spawn already in progress, please retry" };
 
     if (!this.redis) {
       return { error: "Not registered. Use POST /api/agent/register first." };
     }
 
-    const ownerHash = await this.redis.get(`owner:${username}`);
-    if (!ownerHash) return { error: "Not registered. Use POST /api/agent/register first." };
-    if (apiKeyHash !== ownerHash) return { error: "Invalid API key" };
+    this.spawningUsers.add(username);
+    try {
+      const ownerHash = await this.redis.get(`owner:${username}`);
+      if (!ownerHash) return { error: "Not registered. Use POST /api/agent/register first." };
+      if (apiKeyHash !== ownerHash) return { error: "Invalid API key" };
 
-    if (clientIp && this.countAgentsForIp(clientIp) >= this.maxAgentsPerIp) {
-      return { error: `Too many agents from this IP (max ${this.maxAgentsPerIp})` };
+      if (clientIp && this.countAgentsForIp(clientIp) >= this.maxAgentsPerIp) {
+        return { error: `Too many agents from this IP (max ${this.maxAgentsPerIp})` };
+      }
+
+      // Restore greeting from prior agent record
+      let greeting = "";
+      const agentRaw = await this.redis.get(`agent:${username}`);
+      if (agentRaw) {
+        try { greeting = censorText(JSON.parse(agentRaw).greeting ?? ""); } catch { /* ignore */ }
+      }
+
+      const result = await this.displaceAndSpawn(username, greeting, apiKeyHash, engine);
+      if ("error" in result) return result;
+
+      const { particle, agent } = result;
+      this.agents.set(username, agent);
+      this.apiKeyToUsername.set(apiKeyHash, username);
+      if (clientIp) this.agentIps.set(username, clientIp);
+
+      // Restore prior record from Redis
+      const raw = await this.redis.get(`record:${username}`);
+      if (raw) {
+        try {
+          const rec = JSON.parse(raw);
+          particle.score = rec.score ?? 0;
+          particle.matchHistory = rec.matchHistory ?? {};
+        } catch (err) { console.error(`[AgentManager] Failed to parse record for ${username}:`, err); }
+      }
+
+      await this.redis.set(`agent:${username}`, JSON.stringify(agent));
+      return {};
+    } finally {
+      this.spawningUsers.delete(username);
     }
-
-    // Restore greeting from prior agent record
-    let greeting = "";
-    const agentRaw = await this.redis.get(`agent:${username}`);
-    if (agentRaw) {
-      try { greeting = censorText(JSON.parse(agentRaw).greeting ?? ""); } catch { /* ignore */ }
-    }
-
-    const result = await this.displaceAndSpawn(username, greeting, apiKeyHash, engine);
-    if ("error" in result) return result;
-
-    const { particle, agent } = result;
-    this.agents.set(username, agent);
-    this.apiKeyToUsername.set(apiKeyHash, username);
-    if (clientIp) this.agentIps.set(username, clientIp);
-
-    // Restore prior record from Redis
-    const raw = await this.redis.get(`record:${username}`);
-    if (raw) {
-      try {
-        const rec = JSON.parse(raw);
-        particle.score = rec.score ?? 0;
-        particle.matchHistory = rec.matchHistory ?? {};
-      } catch (err) { console.error(`[AgentManager] Failed to parse record for ${username}:`, err); }
-    }
-
-    await this.redis.set(`agent:${username}`, JSON.stringify(agent));
-    return {};
   }
 
   async removeAgent(username: string, engine: SimulationEngine): Promise<void> {
@@ -344,7 +351,7 @@ export class AgentManager {
     if (!agent) return;
 
     // Snapshot agent record + upsert hall of fame before removal
-    const particle = engine.particles.find(p => p.id === username);
+    const particle = engine.getParticle(username);
     if (particle) {
       await this.snapshotRecord(particle);
       await this.upsertHallOfFameEntry(particle);
@@ -481,7 +488,7 @@ export class AgentManager {
     const keys = await this.redis.keys("record:*");
     for (const key of keys) {
       const id = key.slice("record:".length);
-      const particle = engine.particles.find((p) => p.id === id);
+      const particle = engine.getParticle(id);
       if (!particle) continue;
       const raw = await this.redis.get(key);
       if (!raw) continue;

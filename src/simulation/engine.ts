@@ -51,6 +51,7 @@ export type MatchResolvedCallback = (
 
 export class SimulationEngine {
   particles: Particle[];
+  private particleMap = new Map<string, Particle>();
   config: SimulationConfig;
   tick: number = 0;
   gameLog: GameLogEntry[] = [];
@@ -68,6 +69,11 @@ export class SimulationEngine {
   constructor(config: SimulationConfig = DEFAULT_CONFIG) {
     this.config = config;
     this.particles = createParticles(config);
+    for (const p of this.particles) this.particleMap.set(p.id, p);
+  }
+
+  getParticle(id: string): Particle | undefined {
+    return this.particleMap.get(id);
   }
 
   private isFrozen(particleId: string): boolean {
@@ -93,8 +99,8 @@ export class SimulationEngine {
       fp.phase = nextPhase;
       fp.phaseStartTick = this.tick;
 
-      const a = this.particles.find((p) => p.id === fp.aId);
-      const b = this.particles.find((p) => p.id === fp.bId);
+      const a = this.getParticle(fp.aId);
+      const b = this.getParticle(fp.bId);
       if (!a || !b) continue;
 
       switch (nextPhase) {
@@ -194,8 +200,8 @@ export class SimulationEngine {
     });
 
     for (const fp of toUnfreeze) {
-      const a = this.particles.find((p) => p.id === fp.aId);
-      const b = this.particles.find((p) => p.id === fp.bId);
+      const a = this.getParticle(fp.aId);
+      const b = this.getParticle(fp.bId);
       if (!a || !b) continue;
 
       const aStillFrozen = this.isFrozen(a.id);
@@ -291,8 +297,8 @@ export class SimulationEngine {
     const fp = this.frozenPairs[idx];
     this.frozenPairs.splice(idx, 1);
 
-    const a = this.particles.find((p) => p.id === fp.aId);
-    const b = this.particles.find((p) => p.id === fp.bId);
+    const a = this.getParticle(fp.aId);
+    const b = this.getParticle(fp.bId);
     if (!a || !b) return;
 
     const { va, vb } = resolveElasticCollision(a, b);
@@ -382,6 +388,7 @@ export class SimulationEngine {
 
   addParticle(p: Particle): void {
     this.particles.push(p);
+    this.particleMap.set(p.id, p);
     this.pendingEvents.push({
       e: "add", id: p.id,
       x: p.position.x, y: p.position.y,
@@ -401,11 +408,12 @@ export class SimulationEngine {
     }
     const idx = this.particles.findIndex((p) => p.id === id);
     if (idx !== -1) this.particles.splice(idx, 1);
+    this.particleMap.delete(id);
     this.pendingEvents.push({ e: "remove", id });
   }
 
   unparkParticle(id: string): void {
-    const p = this.particles.find((pp) => pp.id === id);
+    const p = this.getParticle(id);
     if (!p || p.state !== "parked") return;
     p.state = "moving";
     this.pendingEvents.push({
