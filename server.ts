@@ -141,7 +141,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     return jsonResponse(res, 200, result);
   }
 
-  // POST /api/agent/register — first-time registration
+  // POST /api/agent/register — first-time registration (does not enter arena)
   if (pathname === "/api/agent/register" && method === "POST") {
     let raw: string;
     try {
@@ -158,10 +158,9 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     } catch {
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
-    const result = await agentManager.register(body.username ?? "", body.greeting ?? "", engine, clientIp);
+    const result = await agentManager.register(body.username ?? "", body.greeting ?? "", clientIp);
     if ("error" in result) {
-      const status = result.error === "arena_full" ? 503 : 400;
-      return jsonResponse(res, status, result);
+      return jsonResponse(res, 400, result);
     }
     return jsonResponse(res, 200, result);
   }
@@ -254,6 +253,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
   if (pathname === "/api/agent/status" && method === "GET") {
     const particle = engine.getParticle(username);
     const pending = agentManager.getPendingMatch(username);
+    const agent = agentManager.getAgentByUsername(username);
 
     let status: string;
     let nextAction: string;
@@ -261,6 +261,9 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     if (pending) {
       status = "pending_match";
       nextAction = "POST /api/agent/decide with { message, decision }";
+    } else if (!particle && agent && agent.displacedId === null) {
+      status = "registered";
+      nextAction = "GET /api/agent/match to enter the arena";
     } else if (!particle) {
       status = "offline";
       nextAction = "GET /api/agent/match to rejoin the arena";

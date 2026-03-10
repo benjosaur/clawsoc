@@ -89,6 +89,7 @@ export async function handleAdminAPI(
       username,
       joinedAt: agent.joinedAt,
       isLive: liveIds.has(username),
+      hasEnteredArena: agent.displacedId !== null,
     }));
     return jsonResponse(res, 200, { users });
   }

@@ -5,8 +5,8 @@ import { validateNoProfanity, censorText } from "./profanity";
 
 export interface ExternalAgent {
   apiKeyHash: string;
-  displacedId: string;
-  displacedStrategy: StrategyType;
+  displacedId: string | null;
+  displacedStrategy: StrategyType | null;
   joinedAt: number;
   greeting: string;
 }
@@ -100,9 +100,8 @@ export class AgentManager {
   private async displaceAndSpawn(
     username: string,
     greeting: string,
-    apiKeyHash: string,
     engine: SimulationEngine,
-  ): Promise<{ particle: Particle; agent: ExternalAgent } | { error: string }> {
+  ): Promise<{ particle: Particle; displacedId: string; displacedStrategy: StrategyType } | { error: string }> {
     const npcs = engine.particles.filter((p) => !p.isExternal);
     if (npcs.length === 0) return { error: "arena_full" };
 
@@ -137,15 +136,7 @@ export class AgentManager {
 
     engine.addParticle(particle);
 
-    const agent: ExternalAgent = {
-      apiKeyHash,
-      displacedId: npc.id,
-      displacedStrategy: npc.strategy,
-      joinedAt: Date.now(),
-      greeting: censorText(greeting.trim().slice(0, 280)),
-    };
-
-    return { particle, agent };
+    return { particle, displacedId: npc.id, displacedStrategy: npc.strategy };
   }
 
   private validateUsername(username: string): string | null {
@@ -171,7 +162,7 @@ export class AgentManager {
     return { available: true };
   }
 
-  async register(username: string, greeting: string, engine: SimulationEngine, clientIp?: string): Promise<RegisterResult> {
+  async register(username: string, greeting: string, clientIp?: string): Promise<RegisterResult> {
     const invalid = this.validateUsername(username);
     if (invalid) return { error: invalid };
     username = username.toLowerCase();
@@ -194,10 +185,14 @@ export class AgentManager {
     const apiKey = generateApiKey();
     const apiKeyH = hashKey(apiKey);
 
-    const result = await this.displaceAndSpawn(username, greeting, apiKeyH, engine);
-    if ("error" in result) return result;
+    const agent: ExternalAgent = {
+      apiKeyHash: apiKeyH,
+      displacedId: null,
+      displacedStrategy: null,
+      joinedAt: Date.now(),
+      greeting: censorText(greeting.trim().slice(0, 280)),
+    };
 
-    const { agent } = result;
     this.agents.set(username, agent);
     this.apiKeyToUsername.set(apiKeyH, username);
     if (clientIp) this.agentIps.set(username, clientIp);
@@ -297,9 +292,44 @@ export class AgentManager {
   async ensureInArena(username: string, apiKeyHash: string, engine: SimulationEngine, clientIp?: string): Promise<{ error?: string }> {
     username = username.toLowerCase();
     if (this.bannedUsers.has(username)) return { error: "This username has been banned" };
-    if (this.agents.has(username)) return {};
     if (this.spawningUsers.has(username)) return { error: "Spawn already in progress, please retry" };
 
+    // Case 1: Agent in memory — check if particle actually exists in arena
+    const existingAgent = this.agents.get(username);
+    if (existingAgent) {
+      const particleExists = !!engine.getParticle(username);
+      if (particleExists) return {}; // Already in arena
+
+      // Registered but no particle — spawn into arena
+      this.spawningUsers.add(username);
+      try {
+        const result = await this.displaceAndSpawn(username, existingAgent.greeting, engine);
+        if ("error" in result) return result;
+
+        existingAgent.displacedId = result.displacedId;
+        existingAgent.displacedStrategy = result.displacedStrategy;
+        existingAgent.joinedAt = Date.now();
+
+        // Restore prior record from Redis
+        if (this.redis) {
+          const raw = await this.redis.get(`record:${username}`);
+          if (raw) {
+            try {
+              const rec = JSON.parse(raw);
+              result.particle.score = rec.score ?? 0;
+              result.particle.matchHistory = rec.matchHistory ?? {};
+            } catch (err) { console.error(`[AgentManager] Failed to parse record for ${username}:`, err); }
+          }
+          await this.redis.set(`agent:${username}`, JSON.stringify(existingAgent));
+        }
+
+        return {};
+      } finally {
+        this.spawningUsers.delete(username);
+      }
+    }
+
+    // Case 2: Not in memory — try Redis (server restart recovery)
     if (!this.redis) {
       return { error: "Not registered. Use POST /api/agent/register first." };
     }
@@ -321,10 +351,17 @@ export class AgentManager {
         try { greeting = censorText(JSON.parse(agentRaw).greeting ?? ""); } catch { /* ignore */ }
       }
 
-      const result = await this.displaceAndSpawn(username, greeting, apiKeyHash, engine);
+      const result = await this.displaceAndSpawn(username, greeting, engine);
       if ("error" in result) return result;
 
-      const { particle, agent } = result;
+      const agent: ExternalAgent = {
+        apiKeyHash,
+        displacedId: result.displacedId,
+        displacedStrategy: result.displacedStrategy,
+        joinedAt: Date.now(),
+        greeting,
+      };
+
       this.agents.set(username, agent);
       this.apiKeyToUsername.set(apiKeyHash, username);
       if (clientIp) this.agentIps.set(username, clientIp);
@@ -334,8 +371,8 @@ export class AgentManager {
       if (raw) {
         try {
           const rec = JSON.parse(raw);
-          particle.score = rec.score ?? 0;
-          particle.matchHistory = rec.matchHistory ?? {};
+          result.particle.score = rec.score ?? 0;
+          result.particle.matchHistory = rec.matchHistory ?? {};
         } catch (err) { console.error(`[AgentManager] Failed to parse record for ${username}:`, err); }
       }
 
@@ -360,43 +397,45 @@ export class AgentManager {
     // Remove external particle
     engine.removeParticle(username);
 
-    // Respawn the displaced NPC
-    const config = engine.config;
-    const margin = config.particleRadius * 3;
-    const angle = Math.random() * Math.PI * 2;
-    const speed = config.minSpeed + Math.random() * (config.maxSpeed - config.minSpeed);
+    // Respawn the displaced NPC (only if one was displaced)
+    if (agent.displacedId && agent.displacedStrategy) {
+      const config = engine.config;
+      const margin = config.particleRadius * 3;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = config.minSpeed + Math.random() * (config.maxSpeed - config.minSpeed);
 
-    const npc: Particle = {
-      id: agent.displacedId,
-      position: {
-        x: margin + Math.random() * (config.canvasWidth - margin * 2),
-        y: margin + Math.random() * (config.canvasHeight - margin * 2),
-      },
-      velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
-      radius: config.particleRadius,
-      mass: 1,
-      color: `hsl(60,50%,45%)`,
-      state: "moving",
-      score: 0,
-      scoreLog: [],
-      strategy: agent.displacedStrategy,
-      matchHistory: {},
-      isExternal: false,
-    };
+      const npc: Particle = {
+        id: agent.displacedId,
+        position: {
+          x: margin + Math.random() * (config.canvasWidth - margin * 2),
+          y: margin + Math.random() * (config.canvasHeight - margin * 2),
+        },
+        velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+        radius: config.particleRadius,
+        mass: 1,
+        color: `hsl(60,50%,45%)`,
+        state: "moving",
+        score: 0,
+        scoreLog: [],
+        strategy: agent.displacedStrategy,
+        matchHistory: {},
+        isExternal: false,
+      };
 
-    // Restore NPC record from Redis if available
-    if (this.redis) {
-      const raw = await this.redis.get(`record:${agent.displacedId}`);
-      if (raw) {
-        try {
-          const rec = JSON.parse(raw);
-          npc.score = rec.score ?? 0;
-          npc.matchHistory = rec.matchHistory ?? {};
-        } catch { /* ignore parse errors */ }
+      // Restore NPC record from Redis if available
+      if (this.redis) {
+        const raw = await this.redis.get(`record:${agent.displacedId}`);
+        if (raw) {
+          try {
+            const rec = JSON.parse(raw);
+            npc.score = rec.score ?? 0;
+            npc.matchHistory = rec.matchHistory ?? {};
+          } catch { /* ignore parse errors */ }
+        }
       }
-    }
 
-    engine.addParticle(npc);
+      engine.addParticle(npc);
+    }
 
     // Clean up agent records and waiters
     this.pendingMatches.delete(username);
@@ -418,10 +457,7 @@ export class AgentManager {
     this.agentIps.delete(username);
     this.apiKeyToUsername.delete(agent.apiKeyHash);
     this.agents.delete(username);
-
-    if (this.redis) {
-      await this.redis.del(`agent:${username}`);
-    }
+    // Keep agent:${username} in Redis so greeting persists for re-entry via /match
 
   }
 
