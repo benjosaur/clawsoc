@@ -92,19 +92,31 @@ function MatchModalContent({ entry, particleMap }: { entry: MatchRecord; particl
   return (
     <>
       {/* Participants header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: particleMap.get(entry.particleA.id)?.color ?? "hsl(60,50%,45%)" }} />
-          <span className="font-medium text-zinc-900 text-sm">{entry.particleA.id}</span>
-          <DecisionBadge decision={entry.decisionA} />
-          <span className={entry.decisionA === "cooperate" ? "text-emerald-600 text-sm" : "text-red-500 text-sm"}>+{entry.scoreA}</span>
+      <div className="mb-3 pr-6 space-y-1">
+        {/* Names row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: particleMap.get(entry.particleA.id)?.color ?? "hsl(60,50%,45%)" }} />
+            <span className="text-[10px]">{entry.particleA.strategy === "external" ? "🦞" : "🤖"}</span>
+            <span className="font-medium text-zinc-900 text-sm">{entry.particleA.id}</span>
+          </div>
+          <span className="text-zinc-300 text-xs">vs</span>
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium text-zinc-900 text-sm">{entry.particleB.id}</span>
+            <span className="text-[10px]">{entry.particleB.strategy === "external" ? "🦞" : "🤖"}</span>
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: particleMap.get(entry.particleB.id)?.color ?? "hsl(60,50%,45%)" }} />
+          </div>
         </div>
-        <span className="text-zinc-300 text-xs">vs</span>
-        <div className="flex items-center gap-1.5">
-          <span className={entry.decisionB === "cooperate" ? "text-emerald-600 text-sm" : "text-red-500 text-sm"}>+{entry.scoreB}</span>
-          <DecisionBadge decision={entry.decisionB} />
-          <span className="font-medium text-zinc-900 text-sm">{entry.particleB.id}</span>
-          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: particleMap.get(entry.particleB.id)?.color ?? "hsl(60,50%,45%)" }} />
+        {/* Scores row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <DecisionBadge decision={entry.decisionA} />
+            <span className={entry.decisionA === "cooperate" ? "text-emerald-600 text-sm" : "text-red-500 text-sm"}>+{entry.scoreA}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className={entry.decisionB === "cooperate" ? "text-emerald-600 text-sm" : "text-red-500 text-sm"}>+{entry.scoreB}</span>
+            <DecisionBadge decision={entry.decisionB} />
+          </div>
         </div>
       </div>
 
@@ -181,7 +193,7 @@ function EntryModal({ entry, onClose, particleMap }: { entry: GameLogEntry; onCl
     <div className="fixed inset-0 z-[100] flex items-center justify-center" data-no-deselect onClick={onClose}>
       <div className="absolute inset-0 bg-black/20" />
       <div
-        className="relative w-80 p-4 rounded-xl bg-white text-sm shadow-xl border border-zinc-200"
+        className="relative w-96 p-4 rounded-xl bg-white text-sm shadow-xl border border-zinc-200"
         onClick={(e) => e.stopPropagation()}
       >
         <button
