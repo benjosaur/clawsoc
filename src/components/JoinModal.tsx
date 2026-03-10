@@ -217,7 +217,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
                   value={username}
                   onChange={(e) => handleUsernameChange(e.target.value.replace(/\s/g, ""))}
                   onClick={(e) => e.stopPropagation()}
-                  maxLength={8}
+                  maxLength={12}
                   className={`w-34 px-1 py-0 bg-white border rounded text-[11px] md:text-[13px] font-mono text-gray-900 leading-relaxed focus:outline-none focus:ring-1 transition-colors ${
                     availability
                       ? availability.available
