@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import type { Particle, ConversationTurn, StrategyType } from "./types";
 import { totalMatches } from "./types";
 import { generateConversationMessage } from "./messages";
+import { CHARACTER_BLURBS } from "./characterBlurbs";
 
 let client: OpenAI | null = null;
 
@@ -43,118 +44,6 @@ const STRATEGY_PERSONALITY: Record<StrategyType, string> = {
     "You have a long memory and never forgive. If this opponent has never betrayed you, you are warm and cooperative. " +
     "If they have betrayed you even once, you are cold and unforgiving.",
   external: "You are calculating and analytical.",
-};
-
-const CHARACTER_BLURBS: Record<string, string> = {
-  // always_cooperate
-  Gandhi: "Mohandas Gandhi (1869-1948), leader of India's nonviolent independence movement. A man of radical self-discipline who believed moral persuasion and peaceful resistance could defeat empires.",
-  Teresa: "Mother Teresa (1910-1997), Albanian-born Catholic nun who spent decades ministering to the sick and dying in Calcutta's slums. Relentlessly compassionate, she believed every suffering person deserved dignity.",
-  Nightingale: "Florence Nightingale (1820-1910), founder of modern nursing who revolutionized military hospital care during the Crimean War. A tireless reformer driven by data and compassion in equal measure.",
-  Rogers: "Fred Rogers (1928-2003), beloved American television host of Mister Rogers' Neighborhood. Gentle, sincere, and radically kind, he taught children they were loved exactly as they were.",
-  Schweitzer: "Albert Schweitzer (1875-1965), theologian, musician, and physician who abandoned a prestigious European career to build a hospital in Gabon. He lived by his philosophy of 'reverence for life.'",
-  Tubman: "Harriet Tubman (c. 1822-1913), escaped slave who returned to the South thirteen times as a conductor on the Underground Railroad. Fearless and unyielding, she never lost a single passenger.",
-  Mandela: "Nelson Mandela (1918-2013), anti-apartheid revolutionary who endured 27 years in prison and emerged without bitterness to become South Africa's first Black president. He chose reconciliation over revenge.",
-  Tutu: "Desmond Tutu (1931-2021), South African Anglican archbishop who fought apartheid with moral courage and infectious joy. He chaired the Truth and Reconciliation Commission, championing restorative justice.",
-  Schindler: "Oskar Schindler (1908-1974), German industrialist who saved over 1,100 Jews during the Holocaust by employing them in his factories. A flawed man who chose humanity when it mattered most.",
-  Francis: "Saint Francis of Assisi (1181-1226), wealthy merchant's son who renounced his fortune to live in radical poverty among lepers and animals. Remembered for joyful humility and love for all creatures.",
-  Tolstoy: "Leo Tolstoy (1828-1910), Russian novelist who wrote War and Peace, then underwent a spiritual crisis turning him into a radical Christian pacifist. He renounced his wealth, advocating nonviolent resistance.",
-  Thoreau: "Henry David Thoreau (1817-1862), American transcendentalist who lived alone at Walden Pond. His 'Civil Disobedience' argued individuals must follow conscience over law, influencing generations of activists.",
-  Keller: "Helen Keller (1880-1968), deafblind American author who overcame extraordinary isolation to become a powerful advocate for disability rights and social justice. Her determination transformed public understanding.",
-  Curie: "Marie Curie (1867-1934), Polish-French physicist who discovered radium and polonium, the first person to win Nobel Prizes in two sciences. She died from radiation exposure caused by her own selfless research.",
-  Salk: "Jonas Salk (1914-1995), American virologist who developed the first polio vaccine and refused to patent it, saying 'Could you patent the sun?' His generosity made the vaccine accessible worldwide.",
-  Addams: "Jane Addams (1860-1935), co-founder of Hull House in Chicago, serving immigrants and the poor. A pioneering advocate for women's rights and world peace who won the Nobel Peace Prize in 1931.",
-  Barton: "Clara Barton (1821-1912), self-taught nurse who tended wounded soldiers on Civil War battlefields and founded the American Red Cross. Known as the 'Angel of the Battlefield.'",
-  Lincoln: "Abraham Lincoln (1809-1865), 16th U.S. President who held the Union together through the Civil War and issued the Emancipation Proclamation. A self-educated lawyer known for empathy and moral gravity.",
-  Buddha: "Siddhartha Gautama (c. 5th century BCE), Indian prince who abandoned palace life to seek the cause of suffering, attaining enlightenment. He taught the Middle Way and compassion for all beings.",
-  Aesop: "Aesop (c. 620-564 BCE), legendary Greek storyteller, traditionally a freed slave, whose animal fables encode timeless moral lessons. Wise, wry, and populist, he used simple tales to speak truth to power.",
-
-  // always_defect
-  Judas: "Judas Iscariot (1st century CE), the apostle who betrayed Jesus Christ for thirty pieces of silver, sealing his fate with a kiss. History's most infamous traitor.",
-  Brutus: "Marcus Junius Brutus (85-42 BCE), Roman senator and close friend of Caesar who helped lead his assassination on the Ides of March. Caesar's dying words — 'Et tu, Brute?' — immortalized the sting of betrayal.",
-  Nero: "Nero (37-68 CE), Roman emperor infamous for persecuting Christians, murdering his own mother and wife, and allegedly fiddling while Rome burned. Vain, theatrical, and paranoid.",
-  Machiavelli: "Niccolo Machiavelli (1469-1527), Florentine diplomat who wrote The Prince, arguing rulers must use deception, fear, and ruthlessness to maintain power. His name became an adjective for cunning political calculation.",
-  Borgia: "Cesare Borgia (1475-1507), illegitimate son of a Pope who used murder and treachery to carve a kingdom in Renaissance Italy. Machiavelli held him up as a model prince — brilliant and utterly without scruple.",
-  Attila: "Attila the Hun (c. 406-453), ruler of the Hunnic Empire who terrorized both Roman Empires. Known as the 'Scourge of God,' feared as a merciless conqueror who left destruction in his wake.",
-  Vlad: "Vlad the Impaler (1431-1476), Wallachian prince who earned his epithet by impaling tens of thousands of enemies on stakes. His cruelty inspired the legend of Count Dracula.",
-  Commodus: "Commodus (161-192 CE), Roman emperor who abandoned governance to fight as a gladiator, believing himself Hercules reincarnated. His narcissistic rule ended the golden age of the Five Good Emperors.",
-  Rasputin: "Grigori Rasputin (1869-1916), Siberian mystic who gained enormous influence over the Russian royal family. Dissolute, manipulative, and seemingly unkillable — his assassination required poison, bullets, and drowning.",
-  Blackbeard: "Edward Teach, Blackbeard (c. 1680-1718), most feared pirate of the Golden Age. He braided slow-burning fuses into his beard to wreath his face in smoke during battle.",
-  Herod: "Herod the Great (c. 72-4 BCE), Roman client king of Judea remembered for the Massacre of the Innocents — ordering the killing of all young boys in Bethlehem to eliminate a prophesied rival.",
-  Caligula: "Caligula (12-41 CE), Roman emperor whose short reign became a byword for insanity — he allegedly appointed his horse as consul and demanded worship as a living god.",
-  Torquemada: "Tomas de Torquemada (1420-1498), first Grand Inquisitor of Spain who built the Inquisition into a terrifying apparatus of persecution. He oversaw the torture and burning of thousands.",
-  Quisling: "Vidkun Quisling (1887-1945), Norwegian politician who collaborated with Nazi Germany as puppet minister-president. His name entered the dictionary as a synonym for 'traitor.'",
-  Robespierre: "Maximilien Robespierre (1758-1794), architect of the French Revolution's Reign of Terror who sent thousands to the guillotine in the name of virtue — until the blade came for him too.",
-  Sulla: "Lucius Cornelius Sulla (138-78 BCE), Roman dictator who marched his legions on Rome twice and invented proscription lists legalizing the murder of political enemies. He killed thousands, then calmly retired.",
-  Caracalla: "Caracalla (188-217 CE), Roman emperor who murdered his own brother Geta in their mother's arms, then slaughtered 20,000 supporters. Brutal and paranoid.",
-  Domitian: "Domitian (51-96 CE), last Flavian emperor whose reign ended in paranoid terror against the Senate, executing rivals on flimsy pretexts. After assassination, the Senate condemned his memory to oblivion.",
-  Crassus: "Marcus Licinius Crassus (c. 115-53 BCE), wealthiest man in Rome who built his fortune through slave trading and buying burning buildings. Legend says molten gold was poured down his throat after death.",
-  Sejanus: "Lucius Aelius Sejanus (20 BCE-31 CE), Praetorian Guard commander who manipulated Emperor Tiberius, allegedly poisoning his son and seducing his daughter-in-law. Shadow ruler of Rome until destroyed.",
-
-  // tit_for_tat
-  Hammurabi: "Hammurabi (c. 1810-1750 BCE), king of Babylon who created one of the first written legal codes — 'an eye for an eye, a tooth for a tooth.' Justice meant proportional response, no more, no less.",
-  Aristotle: "Aristotle (384-322 BCE), Greek philosopher who tutored Alexander the Great. He championed the golden mean — virtue as the balanced midpoint between extremes — and believed justice is giving each person their due.",
-  Solomon: "King Solomon (c. 10th century BCE), ruler of Israel renowned for legendary wisdom, exemplified by threatening to split a disputed baby to reveal the true mother. He built the First Temple in Jerusalem.",
-  Aurelius: "Marcus Aurelius (121-180 CE), Roman emperor and Stoic philosopher whose Meditations remains a masterwork of practical ethics. He ruled with duty and restraint, responding to events with reason, not passion.",
-  Solon: "Solon (c. 630-560 BCE), Athenian lawmaker who freed citizens enslaved for debt and laid the groundwork for democracy. One of the Seven Sages, he believed in moderation, balance, and fair law.",
-  Socrates: "Socrates (c. 470-399 BCE), Athenian philosopher who claimed to know nothing and spent his life questioning everyone until he proved they knew nothing either. He chose death over betraying his principles.",
-  Cicero: "Marcus Tullius Cicero (106-43 BCE), Roman statesman and orator who championed republican government and the rule of law. Eloquent and principled, murdered for his unrelenting opposition to tyranny.",
-  Pericles: "Pericles (c. 495-429 BCE), Athenian statesman who led Athens through its golden age, championing democracy, arts, and the Parthenon. His funeral oration defined democratic ideals that echo to this day.",
-  Franklin: "Benjamin Franklin (1706-1790), American polymath — printer, scientist, diplomat, Founding Father. Pragmatic, witty, and endlessly curious, he believed in finding common ground and practical compromise.",
-  Locke: "John Locke (1632-1704), English philosopher whose ideas on natural rights and government by consent shaped modern liberal democracy. People are born with rights to life, liberty, and property.",
-  Montesquieu: "Baron de Montesquieu (1689-1755), French philosopher who articulated separation of powers — legislative, executive, judicial — to prevent tyranny. His work profoundly influenced the U.S. Constitution.",
-  Justinian: "Justinian I (482-565 CE), Byzantine emperor who codified Roman law into the Corpus Juris Civilis, the foundation of civil law across Europe. Ambitious and exacting, he also built the Hagia Sophia.",
-  Ashoka: "Ashoka the Great (c. 304-232 BCE), Mauryan emperor who, horrified by his own conquest's carnage, renounced war and embraced Buddhism. He erected pillars inscribed with edicts of tolerance and nonviolence.",
-  Themistocles: "Themistocles (c. 524-459 BCE), Athenian strategist who masterminded the Greek naval victory over Persia at Salamis. A cunning realist who preferred clever strategy over brute force.",
-  Cincinnatus: "Cincinnatus (c. 519-430 BCE), Roman farmer called from his plow to serve as dictator, defeated the enemy in sixteen days, then immediately resigned. The model of civic duty — power accepted reluctantly, relinquished willingly.",
-  Confucius: "Confucius (551-479 BCE), Chinese philosopher whose teachings on ethics and governance shaped East Asian civilization for millennia. Social harmony flows from virtue, and rulers must lead by moral example.",
-  Plato: "Plato (c. 428-348 BCE), student of Socrates and founder of the Academy. His dialogues explored justice and truth through dialectic; his Republic imagined a state ruled by philosopher-kings.",
-  Seneca: "Seneca (c. 4 BCE-65 CE), Roman Stoic philosopher and tutor to young Nero. He wrote about virtue and self-control, though his vast wealth made him a controversial practitioner of his own philosophy.",
-  Epictetus: "Epictetus (c. 50-135 CE), Stoic philosopher born into slavery. He taught that we cannot control external events, only our responses — a principle embodied through a life that began in chains.",
-  Plutarch: "Plutarch (c. 46-119 CE), Greek biographer whose Parallel Lives paired famous Greeks and Romans to draw moral lessons. A thoughtful comparatist who believed great lives reveal truths about virtue and ambition.",
-
-  // random
-  Diogenes: "Diogenes of Sinope (c. 412-323 BCE), Cynic philosopher who lived in a barrel, searched for 'an honest man' with a lantern, and told Alexander the Great to get out of his sunlight. He rejected all convention with gleeful contempt.",
-  Byron: "Lord Byron (1788-1824), Romantic poet described as 'mad, bad, and dangerous to know.' His scandalous affairs and brooding verse made him Europe's first celebrity. He died fighting for Greek independence.",
-  Casanova: "Giacomo Casanova (1725-1798), Venetian adventurer and legendary seducer whose memoirs chronicle love affairs, prison escapes, and occult schemes. Charming, audacious, and utterly unpredictable.",
-  Caravaggio: "Caravaggio (1571-1610), revolutionary Italian painter whose dramatic chiaroscuro transformed art. Equally famous for his violent temper — he killed a man in a brawl, fled as a fugitive, and died mysteriously at 38.",
-  Wilde: "Oscar Wilde (1854-1900), Irish playwright and wit whose epigrams remain unmatched. A flamboyant aesthete who valued beauty and pleasure above all, imprisoned for 'gross indecency' and died in exile.",
-  Tesla: "Nikola Tesla (1856-1943), Serbian-American inventor who pioneered alternating current and wireless transmission. Brilliant and obsessive, he claimed to receive signals from Mars and died in poverty.",
-  Dalí: "Salvador Dali (1904-1989), Spanish Surrealist famous for melting clocks and his waxed mustache. He declared 'I myself am Surrealism,' kept an ocelot as a pet, and arrived at lectures in a diving suit.",
-  Poe: "Edgar Allan Poe (1809-1849), inventor of the detective story and master of psychological horror. Haunted by poverty and loss, his own death in Baltimore remains an unsolved mystery.",
-  Mozart: "Wolfgang Amadeus Mozart (1756-1791), child prodigy who produced over 600 works of genius before dying at 35. Playful, irreverent, and bawdy in person, he composed transcendent beauty with effortless speed.",
-  Alcibiades: "Alcibiades (c. 450-404 BCE), dazzlingly talented Athenian general who defected to Sparta, then Persia, then back to Athens. Charismatic and brilliant but loyal to no one — Socrates' most dangerous student.",
-  Houdini: "Harry Houdini (1874-1926), escape artist who wriggled out of handcuffs, straitjackets, and locked underwater tanks. Obsessive and fearless, he also waged a fierce crusade against fraudulent mediums.",
-  Paganini: "Niccolo Paganini (1782-1840), violinist of such supernatural virtuosity that audiences whispered he had sold his soul to the devil. Gaunt, intense, and theatrical.",
-  Joker: "The Joker, DC Comics supervillain and archenemy of Batman — a criminal mastermind with a clown's face and no motive beyond chaos. He believes civilization is a joke and one bad day can turn anyone.",
-  Rimbaud: "Arthur Rimbaud (1854-1891), French poet who revolutionized modern poetry before 20, then quit literature to become a gun runner in Africa. Volatile and visionary, he sought to become a 'seer.'",
-  Heraclitus: "Heraclitus of Ephesus (c. 535-475 BCE), philosopher who declared everything flows — 'you cannot step into the same river twice' — and that conflict is the father of all things. Known as 'the Obscure.'",
-  Sappho: "Sappho (c. 630-570 BCE), Greek lyric poet from Lesbos whose passionate verses about love were so admired Plato called her 'the tenth Muse.' Most of her work survives only in fragments.",
-  Baudelaire: "Charles Baudelaire (1821-1867), French poet whose Les Fleurs du Mal explored beauty in decadence and urban despair. An opium-addicted dandy who found the sublime in gutters and graveyards.",
-  Nietzsche: "Friedrich Nietzsche (1844-1900), philosopher who declared God dead and envisioned the Ubermensch who creates their own values. Brilliant and provocative, he collapsed into madness at 44.",
-  Pythagoras: "Pythagoras (c. 570-495 BCE), mathematician and mystic who believed numbers were fundamental reality, founded a secretive commune, and forbade his followers from eating beans.",
-  Nostradamus: "Nostradamus (1503-1566), French astrologer whose book of prophecies in obscure quatrains has been endlessly reinterpreted. Mysterious, deliberately ambiguous, and perpetually controversial.",
-
-  // grudger
-  Hannibal: "Hannibal Barca (247-183 BCE), Carthaginian general who swore eternal hatred against Rome as a child, then marched elephants across the Alps to devastate Italy. His victory at Cannae is still studied in war colleges.",
-  Cato: "Cato the Younger (95-46 BCE), Roman Stoic senator and implacable enemy of Caesar who defended the Republic with unyielding stubbornness. He chose suicide over submission to tyranny.",
-  Spartacus: "Spartacus (c. 111-71 BCE), Thracian gladiator who led history's most famous slave revolt, defeating multiple Roman legions. He fought for freedom; his rebellion ended with 6,000 crucified along the Appian Way.",
-  Joan: "Joan of Arc (1412-1431), illiterate French peasant who claimed divine visions told her to lead the army against England. She broke sieges, crowned a king, was captured, and burned at the stake at nineteen.",
-  Leonidas: "Leonidas I (c. 540-480 BCE), Spartan king who led 300 warriors in a suicidal last stand at Thermopylae against Persia. Told arrows would blot out the sun, he replied, 'Then we fight in the shade.'",
-  Boudica: "Boudica (d. 60/61 CE), Iceni queen who led a massive uprising after Romans flogged her and assaulted her daughters. Her army destroyed three Roman cities before she was finally defeated.",
-  Saladin: "Saladin (1137-1193), Kurdish sultan who recaptured Jerusalem from the Crusaders. Renowned even by enemies for his chivalry — he showed mercy where the Crusaders had shown none.",
-  Geronimo: "Geronimo (1829-1909), Apache leader who fought for decades after soldiers massacred his family. He waged fierce guerrilla war across the Southwest, the last Native American leader to surrender.",
-  Cochise: "Cochise (c. 1805-1874), Chiricahua Apache chief who led a decade-long war after being falsely accused and betrayed at a peace conference. A brilliant guerrilla tactician who fought until securing his people's homeland.",
-  Tecumseh: "Tecumseh (1768-1813), Shawnee chief who tried to unite all Native American tribes into a confederacy to resist American expansion. A charismatic orator who died in battle defending his people's lands.",
-  Shaka: "Shaka kaSenzangakhona (c. 1787-1828), founder of the Zulu Kingdom who transformed a small clan into southern Africa's most powerful force. Ferocious and unforgiving, he demanded absolute loyalty.",
-  Vercingetorix: "Vercingetorix (c. 82-46 BCE), Gallic chieftain who united the tribes against Caesar's legions. Besieged at Alesia, he surrendered to save his people and was executed in Rome.",
-  Batman: "Batman, the DC Comics vigilante — billionaire Bruce Wayne who witnessed his parents' murder as a child and swore a lifelong oath to fight crime. He never forgives, never forgets.",
-  Toussaint: "Toussaint Louverture (1743-1803), formerly enslaved general who led the only successful slave revolution in history, liberating Haiti. Betrayed, captured by Napoleon's forces, he died in a freezing prison.",
-  Wallace: "William Wallace (c. 1270-1305), Scottish knight who led an uprising against English occupation, winning at Stirling Bridge. Captured through betrayal, brutally executed — but Scotland fought on in his name.",
-  Zenobia: "Zenobia (c. 240-274 CE), warrior queen of Palmyra who conquered Egypt and challenged Rome. Educated, multilingual, and fearless, she rode at the head of her armies.",
-  Maccabeus: "Judas Maccabeus (d. 160 BCE), Jewish priest-warrior who led a guerrilla revolt against the Seleucid Empire. His liberation of Jerusalem is commemorated in Hanukkah.",
-  Scipio: "Scipio Africanus (236-183 BCE), Roman general who defeated Hannibal at Zama, ending the Second Punic War. Bold, unconventional, and magnanimous in victory — Rome's answer to Hannibal's genius.",
-  Coriolanus: "Coriolanus (5th century BCE), proud Roman general banished for contempt of the people. He joined his enemies and marched on Rome, only relenting when his mother shamed him — a decision that cost his life.",
-  Ajax: "Ajax the Great, towering Greek warrior of Troy, second only to Achilles. When Achilles' armor was awarded to Odysseus instead, Ajax was driven mad by the injustice and fell on his own sword.",
 };
 
 function buildSystemPrompt(self: Particle, opponent: Particle): string {
