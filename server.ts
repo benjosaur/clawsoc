@@ -564,6 +564,10 @@ async function main() {
   await agentManager.restoreBannedUsers();
   await agentManager.restoreRecords(engine);
 
+  const clients = new Set<WebSocket>();
+  let consecutiveErrors = 0;
+  let lastTickTime = Date.now();
+
   const server = createServer(async (req, res) => {
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -575,17 +579,23 @@ async function main() {
     // Health check endpoint
     if (pathname === "/health") {
       const now = Date.now();
+      const redis = agentManager.getHealthInfo();
       const loopStale = now - lastTickTime > 5000;
       const tooManyErrors = consecutiveErrors >= 10;
-      const healthy = !loopStale && !tooManyErrors;
+      const redisDown = redis.redisExpected && !redis.redisConnected;
+      const healthy = !loopStale && !tooManyErrors && !redisDown;
       const status = healthy ? 200 : 503;
       const body: Record<string, unknown> = {
         status: healthy ? "ok" : "unhealthy",
         tick: engine.tick,
         consecutiveErrors,
+        redis,
+        clients: clients.size,
+        uptime: process.uptime(),
       };
       if (loopStale) body.reason = "simulation_loop_stale";
       else if (tooManyErrors) body.reason = "too_many_errors";
+      else if (redisDown) body.reason = "redis_disconnected";
       res.writeHead(status, { "Content-Type": "application/json" });
       res.end(JSON.stringify(body));
       return;
@@ -600,6 +610,20 @@ async function main() {
         console.log(`[req #${reqId}] ${req.method} ${pathname} → ${res.statusCode} (${Date.now() - start}ms)`);
         return originalEnd.apply(res, args);
       } as typeof res.end;
+    }
+
+    if (pathname === "/health") {
+      const redis = agentManager.getHealthInfo();
+      const healthy = consecutiveErrors < 10 && (!redis.redisExpected || redis.redisConnected);
+      res.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        status: healthy ? "ok" : "degraded",
+        simulation: { consecutiveErrors },
+        redis,
+        clients: clients.size,
+        uptime: process.uptime(),
+      }));
+      return;
     }
 
     if (pathname.startsWith("/api/agent/")) {
@@ -684,7 +708,6 @@ async function main() {
   });
 
   const wss = new WebSocketServer({ noServer: true, perMessageDeflate: true });
-  const clients = new Set<WebSocket>();
   const upgrade = app.getUpgradeHandler();
 
   server.on("upgrade", (req, socket, head) => {
@@ -740,8 +763,6 @@ async function main() {
 
   // Simulation loop: 100ms interval, 6 engine steps per interval
   let intervalCount = 0;
-  let consecutiveErrors = 0;
-  let lastTickTime = Date.now();
   const simInterval = setInterval(() => {
     try {
       for (let i = 0; i < 6; i++) engine.step();
