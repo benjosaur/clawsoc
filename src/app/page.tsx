@@ -37,7 +37,7 @@ export default function Home() {
   const selectionChangedRef = useRef(false);
 
   const handleSelect = useCallback((id: string | null) => {
-    selectionChangedRef.current = true;
+    if (id !== null) selectionChangedRef.current = true;
     setSelectedId(id);
     if (id !== null) { setOfflinePlayer(null); setSearchNotFound(false); }
   }, []);
