@@ -207,7 +207,7 @@ export class SimulationEngine {
       if (!aStillFrozen) {
         if (a.isExternal) {
           a.state = "parked";
-          a.velocity = { x: 0, y: 0 };
+          a.velocity = va;
           this.pendingEvents.push({ e: "park", id: a.id });
           this.onParticleParked?.(a.id, a.externalOwner!);
         } else {
@@ -218,7 +218,7 @@ export class SimulationEngine {
       if (!bStillFrozen) {
         if (b.isExternal) {
           b.state = "parked";
-          b.velocity = { x: 0, y: 0 };
+          b.velocity = vb;
           this.pendingEvents.push({ e: "park", id: b.id });
           this.onParticleParked?.(b.id, b.externalOwner!);
         } else {
@@ -301,7 +301,7 @@ export class SimulationEngine {
     if (!this.isFrozen(a.id)) {
       if (a.isExternal) {
         a.state = "parked";
-        a.velocity = { x: 0, y: 0 };
+        a.velocity = va;
         this.pendingEvents.push({ e: "park", id: a.id });
         this.onParticleParked?.(a.id, a.externalOwner!);
       } else {
@@ -312,7 +312,7 @@ export class SimulationEngine {
     if (!this.isFrozen(b.id)) {
       if (b.isExternal) {
         b.state = "parked";
-        b.velocity = { x: 0, y: 0 };
+        b.velocity = vb;
         this.pendingEvents.push({ e: "park", id: b.id });
         this.onParticleParked?.(b.id, b.externalOwner!);
       } else {
@@ -407,9 +407,6 @@ export class SimulationEngine {
   unparkParticle(id: string): void {
     const p = this.particles.find((pp) => pp.id === id);
     if (!p || p.state !== "parked") return;
-    const angle = Math.random() * Math.PI * 2;
-    const speed = this.config.minSpeed + Math.random() * (this.config.maxSpeed - this.config.minSpeed);
-    p.velocity = { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed };
     p.state = "moving";
     this.pendingEvents.push({
       e: "unpark", id: p.id,
