@@ -8,7 +8,7 @@ import type { ConversationTurn, Decision, GameLogEntry } from "./src/simulation/
 import { AgentManager } from "./src/simulation/agentManager";
 import { handleAdminAPI } from "./src/simulation/adminApi";
 import { censorText } from "./src/simulation/profanity";
-import { agentApiLimiter, registerLimiter } from "./src/simulation/rateLimit";
+import { agentApiLimiter, registerLimiter, adminLimiter, publicApiLimiter } from "./src/simulation/rateLimit";
 import type { PendingMatch } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulation/protocol";
 
@@ -726,6 +726,13 @@ async function main() {
     }
 
     if (pathname.startsWith("/api/admin/")) {
+      const clientIp = (req.headers["fly-client-ip"] as string) || req.socket.remoteAddress || "unknown";
+      if (!adminLimiter.consume(clientIp)) {
+        const retryAfter = adminLimiter.retryAfter(clientIp);
+        res.setHeader("Retry-After", String(retryAfter));
+        jsonResponse(res, 429, { error: "Too many requests", retryAfter });
+        return;
+      }
       try {
         await handleAdminAPI(req, res, pathname, agentManager, engine);
       } catch (err) {
@@ -733,6 +740,17 @@ async function main() {
         jsonResponse(res, 500, { error: "Internal server error" });
       }
       return;
+    }
+
+    // Rate limit public read endpoints
+    if (pathname === "/api/player/lookup" || pathname === "/api/halloffame") {
+      const clientIp = (req.headers["fly-client-ip"] as string) || req.socket.remoteAddress || "unknown";
+      if (!publicApiLimiter.consume(clientIp)) {
+        const retryAfter = publicApiLimiter.retryAfter(clientIp);
+        res.setHeader("Retry-After", String(retryAfter));
+        jsonResponse(res, 429, { error: "Too many requests", retryAfter });
+        return;
+      }
     }
 
     // Player lookup endpoint (public, no auth)
