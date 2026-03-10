@@ -889,7 +889,7 @@ async function main() {
 
       // Parked timeout: kick agents idle after match
       for (const [username, parkedTime] of agentManager.getParkedAgents()) {
-        if (now - parkedTime > (config.parkedAgentTimeoutMs ?? 30_000)) {
+        if (now - parkedTime > (config.parkedAgentTimeoutMs ?? 15_000)) {
           agentManager.removeAgent(username, engine).catch((err) =>
             console.error(`[server] parked timeout removeAgent failed for ${username}:`, err)
           );
