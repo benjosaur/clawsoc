@@ -69,9 +69,7 @@ export const GlobalStatsSchema = z.object({
 
 /** halloffame:stats */
 export const HofStatsSchema = z.object({
-  globalMean: z.number(),
   updatedAt: z.number().default(0),
-  priorWeight: z.number(),
 });
 
 /** halloffame:meta entries */

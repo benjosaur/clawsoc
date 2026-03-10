@@ -141,11 +141,7 @@ export interface SimulationConfig {
   /** Kick idle parked agents after ms (default 30_000) */
   parkedAgentTimeoutMs?: number;
 
-  /** Bayesian prior weight for Hall of Fame (default 20) */
-  hofPriorWeight?: number;
-  /** Bayesian global mean for Hall of Fame (default 2.2215) */
-  hofGlobalMean?: number;
-  /** Minimum games to qualify for Hall of Fame (default 20) */
+  /** Minimum games to qualify for Hall of Fame (default 100) */
   hofMinGames?: number;
 }
 
@@ -154,7 +150,7 @@ export interface HallOfFameEntry {
   strategy: StrategyType;
   totalScore: number;
   avgScore: number;
-  bayesianRating: number;
+
   games: number;
   coopPct: number;
   isLive: boolean;
@@ -163,9 +159,8 @@ export interface HallOfFameEntry {
 
 export interface HallOfFameResponse {
   entries: HallOfFameEntry[];
-  globalMean: number;
+  minGames: number;
   updatedAt: number;
-  priorWeight: number;
   totalEntries: number;
   page: number;
   pageSize: number;
@@ -248,7 +243,5 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   pendingMatchTimeoutMs: 15_000,
   parkedAgentTimeoutMs: 15_000,
 
-  hofPriorWeight: 20,
-  hofGlobalMean: 2.2215,
-  hofMinGames: 20,
+  hofMinGames: 100,
 };
