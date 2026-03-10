@@ -134,7 +134,6 @@ function templateFallback(
     currentSpeaker: selfSide,
     lockedInA: null,
     lockedInB: null,
-    forcedDecideNext: false,
     waitingForExternal: false,
   });
 }

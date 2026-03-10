@@ -97,7 +97,6 @@ export interface ConversationState {
   currentSpeaker: "a" | "b";
   lockedInA: Decision | null;
   lockedInB: Decision | null;
-  forcedDecideNext: boolean;
   waitingForExternal: boolean;
 }
 
