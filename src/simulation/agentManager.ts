@@ -59,6 +59,8 @@ export class AgentManager {
   private activeResultKeys = new Map<string, string>(); // username → "aId|bId"
   private parkedAt = new Map<string, number>(); // username → Date.now() when parked
   private bannedUsers = new Set<string>();
+  private agentIps = new Map<string, string>(); // username → client IP
+  private readonly maxAgentsPerIp = 5;
   private redis: Redis | null = null;
 
   constructor(redisUrl?: string) {
@@ -86,6 +88,14 @@ export class AgentManager {
       console.error("[AgentManager] Redis connection failed, falling back to in-memory:", (err as Error).message);
       this.redis = null;
     }
+  }
+
+  private countAgentsForIp(ip: string): number {
+    let count = 0;
+    for (const v of this.agentIps.values()) {
+      if (v === ip) count++;
+    }
+    return count;
   }
 
   private async displaceAndSpawn(
@@ -162,13 +172,17 @@ export class AgentManager {
     return { available: true };
   }
 
-  async register(username: string, greeting: string, engine: SimulationEngine): Promise<RegisterResult> {
+  async register(username: string, greeting: string, engine: SimulationEngine, clientIp?: string): Promise<RegisterResult> {
     const invalid = this.validateUsername(username);
     if (invalid) return { error: invalid };
     username = username.toLowerCase();
     if (this.bannedUsers.has(username)) return { error: "This username has been banned" };
     if (this.agents.has(username)) return { error: "Username already taken" };
     if (this.reservedNames.has(username)) return { error: "Username is reserved (matches a bot name)" };
+
+    if (clientIp && this.countAgentsForIp(clientIp) >= this.maxAgentsPerIp) {
+      return { error: `Too many agents from this IP (max ${this.maxAgentsPerIp})` };
+    }
 
     // If username is already claimed, direct to login
     if (this.redis) {
@@ -187,6 +201,7 @@ export class AgentManager {
     const { agent } = result;
     this.agents.set(username, agent);
     this.apiKeyToUsername.set(apiKeyH, username);
+    if (clientIp) this.agentIps.set(username, clientIp);
 
     if (this.redis) {
       await this.redis.set(`agent:${username}`, JSON.stringify(agent));
@@ -280,7 +295,7 @@ export class AgentManager {
     }
   }
 
-  async ensureInArena(username: string, apiKeyHash: string, engine: SimulationEngine): Promise<{ error?: string }> {
+  async ensureInArena(username: string, apiKeyHash: string, engine: SimulationEngine, clientIp?: string): Promise<{ error?: string }> {
     username = username.toLowerCase();
     if (this.bannedUsers.has(username)) return { error: "This username has been banned" };
     if (this.agents.has(username)) return {};
@@ -292,6 +307,10 @@ export class AgentManager {
     const ownerHash = await this.redis.get(`owner:${username}`);
     if (!ownerHash) return { error: "Not registered. Use POST /api/agent/register first." };
     if (apiKeyHash !== ownerHash) return { error: "Invalid API key" };
+
+    if (clientIp && this.countAgentsForIp(clientIp) >= this.maxAgentsPerIp) {
+      return { error: `Too many agents from this IP (max ${this.maxAgentsPerIp})` };
+    }
 
     // Restore greeting from prior agent record
     let greeting = "";
@@ -306,6 +325,7 @@ export class AgentManager {
     const { particle, agent } = result;
     this.agents.set(username, agent);
     this.apiKeyToUsername.set(apiKeyHash, username);
+    if (clientIp) this.agentIps.set(username, clientIp);
 
     // Restore prior record from Redis
     const raw = await this.redis.get(`record:${username}`);
@@ -390,6 +410,7 @@ export class AgentManager {
       }
     }
     this.parkedAt.delete(username);
+    this.agentIps.delete(username);
     this.apiKeyToUsername.delete(agent.apiKeyHash);
     this.agents.delete(username);
 
