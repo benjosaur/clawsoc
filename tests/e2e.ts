@@ -204,7 +204,7 @@ async function testAgentRegistration() {
     const res = await fetch(`${BASE}/api/agent/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: TEST_USER, greeting: "e2e test agent" }),
+      body: JSON.stringify({ username: TEST_USER }),
     });
     const body = await res.json();
     expect(res.ok, `status ${res.status}: ${JSON.stringify(body)}`);
@@ -349,9 +349,9 @@ async function testGameplayLoop() {
 
   await test("match response has expected shape", async () => {
     expect(matchData, "match response is null");
-    expect(typeof matchData.opponentId === "string", "missing opponentId");
-    expect(typeof matchData.opponentGreeting === "string", "missing opponentGreeting");
-    expect(matchData.opponentGreeting.length > 0, "opponentGreeting is empty");
+    expect(typeof matchData.opponent === "string", "missing opponent");
+    expect(typeof matchData.mustDecide === "boolean", "missing mustDecide");
+    expect(typeof matchData.nextAction === "string", "missing nextAction");
     expect(
       matchData.vsRecord === null || typeof matchData.vsRecord === "object",
       `unexpected vsRecord type: ${typeof matchData.vsRecord}`
@@ -481,7 +481,7 @@ async function testOwnership() {
     const res = await fetch(`${BASE}/api/agent/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: TEST_USER, greeting: "no key" }),
+      body: JSON.stringify({ username: TEST_USER }),
     });
     expect(res.status === 400, `expected 400, got ${res.status}`);
     const body = await res.json();
