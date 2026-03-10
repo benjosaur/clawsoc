@@ -131,10 +131,10 @@ export class SimulationEngine {
       return true;
     }
 
-    // Turn limit reached — force any undecided players to cooperate
+    // Turn limit reached — force any undecided players to defect
     if (conv.turns.length >= MAX_CONVERSATION_TURNS) {
-      if (conv.lockedInA === null) conv.lockedInA = "cooperate";
-      if (conv.lockedInB === null) conv.lockedInB = "cooperate";
+      if (conv.lockedInA === null) conv.lockedInA = "defect";
+      if (conv.lockedInB === null) conv.lockedInB = "defect";
       return true;
     }
 
@@ -156,7 +156,7 @@ export class SimulationEngine {
       }
       // Bot: forced decision
       const action = botChooseTurnAction(selfP, oppP, conv);
-      const decision = action.decision ?? (selfP.strategy === "always_defect" ? "defect" : "cooperate");
+      const decision = action.decision ?? "defect";
       this.recordTurn(fp, undecided, "decision", "", decision);
       return true; // both decided now
     }
@@ -213,8 +213,8 @@ export class SimulationEngine {
     }
     // Safety valve: force both to decide if somehow stuck
     const conv = fp.conversation;
-    if (conv.lockedInA === null) conv.lockedInA = "cooperate";
-    if (conv.lockedInB === null) conv.lockedInB = "cooperate";
+    if (conv.lockedInA === null) conv.lockedInA = "defect";
+    if (conv.lockedInB === null) conv.lockedInB = "defect";
     this.transitionToDeciding(fp);
   }
 
@@ -534,7 +534,7 @@ export class SimulationEngine {
 
     // If forced to decide but they sent a message, force decision instead
     if (conv.forcedDecideNext && turnType !== "decision") {
-      this.recordTurn(fp, side, "decision", "", decision ?? "cooperate");
+      this.recordTurn(fp, side, "decision", "", decision ?? "defect");
     } else {
       this.recordTurn(fp, side, turnType, content, decision);
     }

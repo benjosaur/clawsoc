@@ -21,7 +21,7 @@ export type SimEvent =
       ax: number; ay: number; avx: number; avy: number;
       bx: number; by: number; bvx: number; bvy: number;
     }
-  | { e: "add"; id: string; x: number; y: number; vx: number; vy: number; radius: number; strategy: StrategyType; greeting?: string }
+  | { e: "add"; id: string; x: number; y: number; vx: number; vy: number; radius: number; strategy: StrategyType }
   | { e: "remove"; id: string }
   | { e: "park"; id: string }
   | { e: "unpark"; id: string; x: number; y: number; vx: number; vy: number }
@@ -47,7 +47,7 @@ export interface InitFrame {
     radius: number;
     state: number; // 0=moving, 1=colliding, 3=parked
   }[];
-  meta: { id: string; radius: number; strategy: StrategyType; greeting?: string }[];
+  meta: { id: string; radius: number; strategy: StrategyType }[];
 }
 
 /** Sent when simulation events occur (collisions, unfreezes). */

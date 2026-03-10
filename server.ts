@@ -4,8 +4,7 @@ import { parse } from "url";
 import { WebSocketServer, WebSocket } from "ws";
 import { SimulationEngine } from "./src/simulation/engine";
 import { DEFAULT_CONFIG, totalMatches } from "./src/simulation/types";
-import type { ConversationTurn, Decision, GameLogEntry, StrategyType } from "./src/simulation/types";
-import { generateMessage } from "./src/simulation/messages";
+import type { ConversationTurn, Decision, GameLogEntry } from "./src/simulation/types";
 import { AgentManager } from "./src/simulation/agentManager";
 import { handleAdminAPI } from "./src/simulation/adminApi";
 import { censorText } from "./src/simulation/profanity";
@@ -33,13 +32,6 @@ engine.onRequestExternalTurn = (aId, bId, side, self, opponent, conversationSoFa
     ? { cc: rec.cc, cd: rec.cd, dc: rec.dc, dd: rec.dd }
     : null;
 
-  let opponentGreeting: string;
-  if (opponent.isExternal && opponent.externalOwner) {
-    opponentGreeting = agentManager.getAgentByUsername(opponent.externalOwner)?.greeting ?? "";
-  } else {
-    opponentGreeting = generateMessage(opponent, self);
-  }
-
   // Filter conversation: hide actual decision values (blind lock-in)
   const sanitizedConversation: ConversationTurn[] = conversationSoFar.map((t) => {
     if (t.type === "decision") {
@@ -53,7 +45,6 @@ engine.onRequestExternalTurn = (aId, bId, side, self, opponent, conversationSoFa
     bId,
     side,
     opponentId: opponent.id,
-    opponentGreeting,
     vsRecord,
     conversation: sanitizedConversation,
     forcedDecide,
@@ -121,6 +112,31 @@ function jsonResponse(res: ServerResponse, status: number, body: unknown): void 
   res.end(JSON.stringify(body));
 }
 
+/** Extract latest opponent message and state from a PendingMatch for AI-agent-friendly responses. */
+function formatTurnResponse(match: PendingMatch): Record<string, unknown> {
+  const opponentSide = match.side === "a" ? "b" : "a";
+  let message: string | null = null;
+  let opponentLockedIn = false;
+
+  for (const turn of match.conversation) {
+    if (turn.speaker === opponentSide) {
+      if (turn.type === "decision") opponentLockedIn = true;
+      else if (turn.type === "message") message = turn.content;
+    }
+  }
+
+  return {
+    opponent: match.opponentId,
+    ...(message !== null && { message }),
+    vsRecord: match.vsRecord,
+    ...(opponentLockedIn && { opponentLockedIn: true }),
+    mustDecide: match.forcedDecide,
+    nextAction: match.forcedDecide
+      ? "POST /api/agent/turn — you must send {type:'decision', decision:'cooperate'|'defect'}"
+      : "POST /api/agent/turn — send {type:'message', content:'...'} or {type:'decision', decision:'cooperate'|'defect'}",
+  };
+}
+
 async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<void> {
   const method = req.method ?? "GET";
 
@@ -169,7 +185,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     } catch {
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
-    const result = await agentManager.register(body.username ?? "", body.greeting ?? "", clientIp);
+    const result = await agentManager.register(body.username ?? "", clientIp);
     if ("error" in result) {
       return jsonResponse(res, 400, result);
     }
@@ -211,8 +227,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       return jsonResponse(res, 409, {
         error: "You have a pending match. Submit your action before requesting a new match.",
         status: "pending_match",
-        pendingMatch: { opponentId: pending.opponentId, opponentGreeting: pending.opponentGreeting, vsRecord: pending.vsRecord, conversation: pending.conversation, forcedDecide: pending.forcedDecide },
-        nextAction: "POST /api/agent/turn with { type, content?, decision? }",
+        ...formatTurnResponse(pending),
       });
     }
 
@@ -247,13 +262,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
         ),
       ]);
 
-      return jsonResponse(res, 200, {
-        opponentId: match.opponentId,
-        opponentGreeting: match.opponentGreeting,
-        vsRecord: match.vsRecord,
-        conversation: match.conversation,
-        forcedDecide: match.forcedDecide,
-      });
+      return jsonResponse(res, 200, formatTurnResponse(match));
     } catch (err) {
       const msg = (err as Error).message;
       if (msg === "timeout") return jsonResponse(res, 408, { timeout: true, status: "moving", nextAction: "GET /api/agent/match to try again" });
@@ -293,9 +302,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       score: particle?.score ?? 0,
       matches: particle ? totalMatches(particle.matchHistory) : 0,
       status,
-      pendingMatch: pending
-        ? { opponentId: pending.opponentId, opponentGreeting: pending.opponentGreeting, vsRecord: pending.vsRecord, conversation: pending.conversation, forcedDecide: pending.forcedDecide }
-        : null,
+      pendingMatch: pending ? formatTurnResponse(pending) : null,
       nextAction,
     });
   }
@@ -351,9 +358,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
         const nextTurn = turnOrResult.turn;
         return jsonResponse(res, 200, {
           ok: true,
-          conversation: nextTurn.conversation,
-          forcedDecide: nextTurn.forcedDecide,
-          nextAction: "POST /api/agent/turn",
+          ...formatTurnResponse(nextTurn),
         });
       } else {
         const record = turnOrResult.record;
@@ -369,7 +374,6 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
             theirDecision: isSideA ? record.decisionB : record.decisionA,
             yourScore: isSideA ? record.scoreA : record.scoreB,
             theirScore: isSideA ? record.scoreB : record.scoreA,
-            conversation: record.conversation,
           },
           status: "parked",
           nextAction: "GET /api/agent/match",
@@ -482,14 +486,7 @@ function buildInitFrame(): string {
       state: p.state === "colliding" ? 1 : p.state === "parked" ? 3 : 0,
     })),
     meta: engine.particles.map((p) => {
-      const m: { id: string; radius: number; strategy: StrategyType; greeting?: string } = {
-        id: p.id, radius: p.radius, strategy: p.strategy,
-      };
-      if (p.isExternal && p.externalOwner) {
-        const greeting = agentManager.getAgentByUsername(p.externalOwner)?.greeting;
-        if (greeting) m.greeting = greeting;
-      }
-      return m;
+      return { id: p.id, radius: p.radius, strategy: p.strategy };
     }),
   };
   return JSON.stringify(frame);
@@ -861,11 +858,14 @@ async function main() {
       consecutiveErrors = 0;
       lastTickTime = Date.now();
 
-      // Per-turn timeout: force cooperate if agent hasn't responded
+      // Per-turn timeout: kick offending agent (aborts match with no outcome, writes stats)
       const now = Date.now();
       for (const [username, match] of agentManager.getAllPendingMatches()) {
         if (now - match.createdAt > (config.pendingMatchTimeoutMs ?? 15_000)) {
-          engine.resolveExternalTurn(match.aId, match.bId, match.side, "decision", "", "cooperate");
+          agentManager.clearPendingMatch(username);
+          agentManager.removeAgent(username, engine).catch((err) =>
+            console.error(`[server] timeout kick failed for ${username}:`, err)
+          );
         }
       }
 
@@ -880,16 +880,6 @@ async function main() {
 
       // Drain events accumulated during this interval's steps
       const events = engine.drainEvents();
-      // Patch greeting onto "add" events for external agents
-      for (const ev of events) {
-        if (ev.e === "add") {
-          const p = engine.getParticle(ev.id);
-          if (p?.isExternal && p.externalOwner) {
-            const greeting = agentManager.getAgentByUsername(p.externalOwner)?.greeting;
-            if (greeting) ev.greeting = greeting;
-          }
-        }
-      }
       const metaUpdatedIds = engine.drainMetaUpdates();
       const gameLogEntries = engine.drainGameLog();
       intervalCount++;

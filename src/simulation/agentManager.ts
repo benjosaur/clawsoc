@@ -1,14 +1,13 @@
 import { createHash, randomBytes } from "crypto";
 import { DEFAULT_CONFIG, type ConversationTurn, type Decision, type MatchRecord, type Particle, type SimulationConfig, type StrategyType, type HallOfFameEntry, type HallOfFameResponse } from "./types";
 import type { SimulationEngine } from "./engine";
-import { validateNoProfanity, censorText } from "./profanity";
+import { validateNoProfanity } from "./profanity";
 
 export interface ExternalAgent {
   apiKeyHash: string;
   displacedId: string | null;
   displacedStrategy: StrategyType | null;
   joinedAt: number;
-  greeting: string;
 }
 
 export interface PendingMatch {
@@ -16,7 +15,6 @@ export interface PendingMatch {
   bId: string;
   side: "a" | "b";
   opponentId: string;
-  opponentGreeting: string;
   vsRecord: { cc: number; cd: number; dc: number; dd: number } | null;
   conversation: ConversationTurn[];
   forcedDecide: boolean;
@@ -132,7 +130,6 @@ export class AgentManager {
 
   private async displaceAndSpawn(
     username: string,
-    greeting: string,
     engine: SimulationEngine,
   ): Promise<{ particle: Particle; displacedId: string; displacedStrategy: StrategyType } | { error: string }> {
     const npcs = engine.particles.filter((p) => !p.isExternal);
@@ -195,7 +192,7 @@ export class AgentManager {
     return { available: true };
   }
 
-  async register(username: string, greeting: string, clientIp?: string): Promise<RegisterResult> {
+  async register(username: string, clientIp?: string): Promise<RegisterResult> {
     const invalid = this.validateUsername(username);
     if (invalid) return { error: invalid };
     username = username.toLowerCase();
@@ -223,7 +220,6 @@ export class AgentManager {
       displacedId: null,
       displacedStrategy: null,
       joinedAt: Date.now(),
-      greeting: censorText(greeting.trim().slice(0, 280)),
     };
 
     this.agents.set(username, agent);
@@ -356,7 +352,7 @@ export class AgentManager {
       // Registered but no particle — spawn into arena
       this.spawningUsers.add(username);
       try {
-        const result = await this.displaceAndSpawn(username, existingAgent.greeting, engine);
+        const result = await this.displaceAndSpawn(username, engine);
         if ("error" in result) return result;
 
         existingAgent.displacedId = result.displacedId;
@@ -397,14 +393,7 @@ export class AgentManager {
         return { error: `Too many agents from this IP (max ${this.maxAgentsPerIp})` };
       }
 
-      // Restore greeting from prior agent record
-      let greeting = "";
-      const agentRaw = await this.redis.get(`agent:${username}`);
-      if (agentRaw) {
-        try { greeting = censorText(JSON.parse(agentRaw).greeting ?? ""); } catch { /* ignore */ }
-      }
-
-      const result = await this.displaceAndSpawn(username, greeting, engine);
+      const result = await this.displaceAndSpawn(username, engine);
       if ("error" in result) return result;
 
       const agent: ExternalAgent = {
@@ -412,7 +401,6 @@ export class AgentManager {
         displacedId: result.displacedId,
         displacedStrategy: result.displacedStrategy,
         joinedAt: Date.now(),
-        greeting,
       };
 
       this.agents.set(username, agent);
@@ -511,7 +499,6 @@ export class AgentManager {
     this.agentIps.delete(username);
     this.apiKeyToUsername.delete(agent.apiKeyHash);
     this.agents.delete(username);
-    // Keep agent:${username} in Redis so greeting persists for re-entry via /match
 
   }
 
