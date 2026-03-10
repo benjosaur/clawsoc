@@ -572,6 +572,25 @@ async function main() {
     const parsed = parse(req.url || "/", true);
     const pathname = parsed.pathname ?? "/";
 
+    // Health check endpoint
+    if (pathname === "/health") {
+      const now = Date.now();
+      const loopStale = now - lastTickTime > 5000;
+      const tooManyErrors = consecutiveErrors >= 10;
+      const healthy = !loopStale && !tooManyErrors;
+      const status = healthy ? 200 : 503;
+      const body: Record<string, unknown> = {
+        status: healthy ? "ok" : "unhealthy",
+        tick: engine.tick,
+        consecutiveErrors,
+      };
+      if (loopStale) body.reason = "simulation_loop_stale";
+      else if (tooManyErrors) body.reason = "too_many_errors";
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(body));
+      return;
+    }
+
     // Request logging for API routes
     if (pathname.startsWith("/api/")) {
       const start = Date.now();
@@ -722,10 +741,12 @@ async function main() {
   // Simulation loop: 100ms interval, 6 engine steps per interval
   let intervalCount = 0;
   let consecutiveErrors = 0;
+  let lastTickTime = Date.now();
   setInterval(() => {
     try {
       for (let i = 0; i < 6; i++) engine.step();
       consecutiveErrors = 0;
+      lastTickTime = Date.now();
 
       // Timeout sweep: kick external agents that haven't responded
       const now = Date.now();
