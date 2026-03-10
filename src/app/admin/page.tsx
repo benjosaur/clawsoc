@@ -21,6 +21,8 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [users, setUsers] = useState<AgentUser[]>([]);
   const [banned, setBanned] = useState<string[]>([]);
+  const [llmAvailable, setLlmAvailable] = useState(false);
+  const [llmEnabled, setLlmEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const fetchData = useCallback(async (pwd: string) => {
@@ -28,19 +30,23 @@ export default function AdminPage() {
     setError("");
     try {
       const headers = authHeaders(pwd);
-      const [usersRes, bannedRes] = await Promise.all([
+      const [usersRes, bannedRes, llmRes] = await Promise.all([
         fetch("/api/admin/users", { headers }),
         fetch("/api/admin/banned", { headers }),
+        fetch("/api/admin/llm", { headers }),
       ]);
-      if (usersRes.status === 401 || bannedRes.status === 401) {
+      if (usersRes.status === 401 || bannedRes.status === 401 || llmRes.status === 401) {
         setError("Invalid password");
         setAuthenticated(false);
         return;
       }
       const usersData = await usersRes.json();
       const bannedData = await bannedRes.json();
+      const llmData = await llmRes.json();
       setUsers(usersData.users ?? []);
       setBanned(bannedData.banned ?? []);
+      setLlmAvailable(llmData.available ?? false);
+      setLlmEnabled(llmData.enabled ?? false);
       setAuthenticated(true);
     } catch {
       setError("Failed to connect");
@@ -80,6 +86,23 @@ export default function AdminPage() {
       return;
     }
     fetchData(password);
+  };
+
+  const handleToggleLlm = async () => {
+    const res = await fetch("/api/admin/llm", {
+      method: "POST",
+      headers: authHeaders(password),
+      body: JSON.stringify({ enabled: !llmEnabled }),
+    });
+    if (res.status === 401) {
+      setAuthenticated(false);
+      setError("Session expired");
+      return;
+    }
+    if (res.ok) {
+      const data = await res.json();
+      setLlmEnabled(data.enabled);
+    }
   };
 
   if (!authenticated) {
@@ -127,6 +150,42 @@ export default function AdminPage() {
             Refresh
           </button>
         </div>
+
+        {/* Settings */}
+        <section className="mb-8">
+          <h2 className="text-sm font-semibold text-zinc-700 mb-3">
+            Settings
+          </h2>
+          <div className="border border-zinc-200 rounded p-3 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-medium text-zinc-900">
+                LLM Messaging
+              </span>
+              <p className="text-[10px] text-zinc-400 mt-0.5">
+                {llmAvailable
+                  ? "Use GPT-4o-mini for bot conversations instead of templates"
+                  : "Unavailable — no OPENAI_API_KEY configured"}
+              </p>
+            </div>
+            <button
+              onClick={handleToggleLlm}
+              disabled={!llmAvailable}
+              className={`relative w-9 h-5 rounded-full transition-colors ${
+                !llmAvailable
+                  ? "bg-zinc-200 cursor-not-allowed"
+                  : llmEnabled
+                    ? "bg-emerald-500"
+                    : "bg-zinc-300"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                  llmEnabled && llmAvailable ? "translate-x-4" : ""
+                }`}
+              />
+            </button>
+          </div>
+        </section>
 
         {/* Users Table */}
         <section className="mb-8">

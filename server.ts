@@ -98,21 +98,40 @@ engine.onMatchResolved = (record, aId, bId) => {
 
 // --- LLM bot message callback ---
 
-const llmEnabled = initLlm();
-if (llmEnabled) {
+const llmAvailable = initLlm();
+const llmCallback = (aId: string, bId: string, side: "a" | "b", self: import("./src/simulation/types").Particle, opponent: import("./src/simulation/types").Particle, conversationSoFar: import("./src/simulation/types").ConversationTurn[]) => {
+  requestLlmMessage(self, opponent, side, conversationSoFar)
+    .then((content) => {
+      engine.resolveExternalTurn(aId, bId, side, "message", content);
+    })
+    .catch((err) => {
+      console.error(`[llm] Failed for ${self.id}:`, err);
+      engine.resolveExternalTurn(aId, bId, side, "message", "...");
+    });
+};
+
+if (llmAvailable) {
   console.log("[server] LLM enabled — bot messages will use gpt-4o-mini");
-  engine.onRequestBotLlmMessage = (aId, bId, side, self, opponent, conversationSoFar) => {
-    requestLlmMessage(self, opponent, side, conversationSoFar)
-      .then((content) => {
-        engine.resolveExternalTurn(aId, bId, side, "message", content);
-      })
-      .catch((err) => {
-        console.error(`[llm] Failed for ${self.id}:`, err);
-        engine.resolveExternalTurn(aId, bId, side, "message", "...");
-      });
-  };
+  engine.onRequestBotLlmMessage = llmCallback;
 } else {
   console.log("[server] LLM disabled — no OPENAI_API_KEY, using template messages");
+}
+
+export function getLlmStatus() {
+  return { available: llmAvailable, enabled: engine.onRequestBotLlmMessage !== null };
+}
+
+export function setLlmEnabled(enabled: boolean) {
+  if (!llmAvailable) return;
+  engine.onRequestBotLlmMessage = enabled ? llmCallback : null;
+  if (!enabled) {
+    for (const fp of engine.frozenPairs) {
+      if (!fp.conversation.waitingForExternal) continue;
+      const speaker = fp.conversation.currentSpeaker;
+      engine.resolveExternalTurn(fp.aId, fp.bId, speaker, "message", "...");
+    }
+  }
+  console.log(`[server] LLM messaging ${enabled ? "enabled" : "disabled"} by admin`);
 }
 
 // --- Agent HTTP API ---
@@ -810,7 +829,7 @@ async function main() {
         return;
       }
       try {
-        await handleAdminAPI(req, res, pathname, agentManager, engine);
+        await handleAdminAPI(req, res, pathname, agentManager, engine, { getLlmStatus, setLlmEnabled });
       } catch (err) {
         console.error("Admin API error:", err);
         jsonResponse(res, 500, { error: "Internal server error" });
