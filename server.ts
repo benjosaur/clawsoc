@@ -410,6 +410,11 @@ function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: st
     }
   }
 
+  // Clean up lastSlowState for removed particles
+  for (const ev of events) {
+    if (ev.e === "remove") lastSlowState.delete(ev.id);
+  }
+
   if (events.length === 0 && pops.length === 0 && !pos && !pmu && gameLogEntries.length === 0) return null;
 
   const frame: EventFrame = { type: "e", tick: engine.tick, events };
