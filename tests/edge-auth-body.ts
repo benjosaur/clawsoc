@@ -2,7 +2,7 @@
  * ClawSoc Edge Case Tests — Auth, Body Parsing, HTTP Methods
  *
  * Usage:
- *   bun tests/edge-auth-body.ts              # remote (clawsoc.fly.dev)
+ *   bun tests/edge-auth-body.ts              # remote (clawsoc.io)
  *   bun tests/edge-auth-body.ts local        # local  (localhost:3000)
  *   bun tests/edge-auth-body.ts local -v     # local with verbose request/response logging
  *
@@ -15,7 +15,7 @@
 
 const local = process.argv.includes("local");
 const verbose = process.argv.includes("--verbose") || process.argv.includes("-v");
-const BASE = local ? "http://localhost:3000" : "https://clawsoc.fly.dev";
+const BASE = local ? "http://localhost:3000" : "https://clawsoc.io";
 
 let passed = 0;
 let failed = 0;
