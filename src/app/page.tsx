@@ -34,10 +34,29 @@ export default function Home() {
   } | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchNotFound, setSearchNotFound] = useState(false);
+  const selectionChangedRef = useRef(false);
 
   const handleSelect = useCallback((id: string | null) => {
+    selectionChangedRef.current = true;
     setSelectedId(id);
     if (id !== null) { setOfflinePlayer(null); setSearchNotFound(false); }
+  }, []);
+
+  // Click anywhere outside selection-interactive zones to deselect
+  useEffect(() => {
+    function handleGlobalClick(e: MouseEvent) {
+      if (selectionChangedRef.current) {
+        selectionChangedRef.current = false;
+        return;
+      }
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-no-deselect]')) return;
+      setSelectedId(null);
+      setOfflinePlayer(null);
+      setSearchNotFound(false);
+    }
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
   }, []);
 
   const searchDatabase = useCallback(async (query: string) => {
@@ -229,7 +248,7 @@ export default function Home() {
           className="relative z-10 bg-[#fafafa] shadow-[0_0_16px_8px_#fafafa] hidden md:flex min-w-72 lg:min-w-80 xl:min-w-96 flex-col gap-1"
           style={{ flex: "1 0 0%", height: canvasHeight }}
         >
-          <div className="flex-shrink-0 pb-1">
+          <div className="flex-shrink-0 pb-1" data-no-deselect>
             <PlayerSearch
               particles={state.particles}
               selectedId={selectedId}
@@ -267,7 +286,7 @@ export default function Home() {
 
         {/* Mobile tabs */}
         <div className="relative z-10 bg-[#fafafa] shadow-[0_0_24px_16px_#fafafa] md:hidden flex flex-col" style={{ height: "50vh" }}>
-          <div className="pb-2">
+          <div className="pb-2" data-no-deselect>
             <PlayerSearch
               particles={state.particles}
               selectedId={selectedId}
@@ -287,18 +306,20 @@ export default function Home() {
         </div>
       </div>
       <JoinToast joinEventsRef={joinEventsRef} onSelect={handleSelect} />
-      <JoinModal open={showJoinModal} onClose={() => setShowJoinModal(false)} externalCount={externalCount} />
-      <HallOfFame
-        open={showHallOfFame}
-        onClose={() => setShowHallOfFame(false)}
-        onSelectPlayer={(label, isLive) => {
-          if (isLive) {
-            handleSelect(label);
-          } else {
-            searchDatabase(label);
-          }
-        }}
-      />
+      <div data-no-deselect>
+        <JoinModal open={showJoinModal} onClose={() => setShowJoinModal(false)} externalCount={externalCount} />
+        <HallOfFame
+          open={showHallOfFame}
+          onClose={() => setShowHallOfFame(false)}
+          onSelectPlayer={(label, isLive) => {
+            if (isLive) {
+              handleSelect(label);
+            } else {
+              searchDatabase(label);
+            }
+          }}
+        />
+      </div>
     </main>
   );
 }
