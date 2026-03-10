@@ -30,6 +30,7 @@ import { agentApiLimiter, registerLimiter, adminLimiter, publicApiLimiter } from
 import type { PendingMatch } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent, WireGameLogEntry } from "./src/simulation/protocol";
 import { initLlm, requestLlmMessage } from "./src/simulation/llm";
+import { CHARACTER_BLURBS } from "./src/simulation/characterBlurbs";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -59,11 +60,17 @@ engine.onRequestExternalTurn = (aId, bId, side, self, opponent, conversationSoFa
     return t;
   });
 
+  // Include opponent's character blurb on the first turn of the match
+  const opponentContext = conversationSoFar.length === 0
+    ? CHARACTER_BLURBS[opponent.id]
+    : undefined;
+
   const match: PendingMatch = {
     aId,
     bId,
     side,
     opponentId: opponent.id,
+    ...(opponentContext && { opponentContext }),
     vsRecord,
     conversation: sanitizedConversation,
     forcedDecide,
@@ -185,6 +192,7 @@ function formatTurnResponse(match: PendingMatch): Record<string, unknown> {
 
   return {
     opponent: match.opponentId,
+    ...(match.opponentContext && { opponentContext: match.opponentContext }),
     ...(message !== null && { message }),
     vsRecord: match.vsRecord,
     ...(opponentLockedIn && { opponentLockedIn: true }),
