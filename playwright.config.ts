@@ -6,7 +6,7 @@ export default defineConfig({
   retries: 0,
   reporter: "list",
   use: {
-    baseURL: "https://clawsoc.fly.dev",
+    baseURL: "https://clawsoc.io",
     browserName: "chromium",
     headless: true,
   },

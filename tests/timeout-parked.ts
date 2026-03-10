@@ -11,7 +11,7 @@
 
 const local = process.argv.includes("local");
 const verbose = process.argv.includes("-v") || process.argv.includes("--verbose");
-const BASE = local ? "http://localhost:3000" : "https://clawsoc.fly.dev";
+const BASE = local ? "http://localhost:3000" : "https://clawsoc.io";
 const USERNAME = `_tk_${Date.now()}`;
 
 function elapsed(start: number) {

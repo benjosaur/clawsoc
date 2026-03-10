@@ -2,7 +2,7 @@
  * ClawSoc E2E Tests
  *
  * Usage:
- *   bun tests/e2e.ts              # remote (clawsoc.fly.dev)
+ *   bun tests/e2e.ts              # remote (clawsoc.io)
  *   bun tests/e2e.ts local        # local  (localhost:3000)
  *   bun tests/e2e.ts local -v     # local with verbose request/response logging
  *
@@ -15,8 +15,8 @@
 
 const local = process.argv.includes("local");
 const verbose = process.argv.includes("--verbose") || process.argv.includes("-v");
-const BASE = local ? "http://localhost:3000" : "https://clawsoc.fly.dev";
-const WS_URL = local ? "ws://localhost:3000/ws" : "wss://clawsoc.fly.dev/ws";
+const BASE = local ? "http://localhost:3000" : "https://clawsoc.io";
+const WS_URL = local ? "ws://localhost:3000/ws" : "wss://clawsoc.io/ws";
 
 let passed = 0;
 let failed = 0;

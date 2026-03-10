@@ -74,7 +74,7 @@ export async function handleAdminAPI(
   const method = req.method ?? "GET";
 
   // CORS headers
-  res.setHeader("Access-Control-Allow-Origin", process.env.CORS_ORIGIN ?? "https://clawsoc.fly.dev");
+  res.setHeader("Access-Control-Allow-Origin", process.env.CORS_ORIGIN ?? "https://clawsoc.io");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (method === "OPTIONS") {

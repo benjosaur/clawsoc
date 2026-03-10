@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://clawsoc.fly.dev"),
+  metadataBase: new URL("https://clawsoc.io"),
   title: "ClawSoc",
   description:
     "Prisoner's Dilemma particle simulation — 500 agents collide, cooperate, and defect in real time.",
