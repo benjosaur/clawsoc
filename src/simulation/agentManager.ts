@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import { DEFAULT_CONFIG, type Decision, type MatchRecord, type Particle, type StrategyType, type HallOfFameEntry, type HallOfFameResponse } from "./types";
+import { DEFAULT_CONFIG, type Decision, type MatchRecord, type Particle, type SimulationConfig, type StrategyType, type HallOfFameEntry, type HallOfFameResponse } from "./types";
 import type { SimulationEngine } from "./engine";
 import { validateNoProfanity, censorText } from "./profanity";
 
@@ -63,10 +63,14 @@ export class AgentManager {
   private readonly maxAgentsPerIp = 5;
   private spawningUsers = new Set<string>();
   private redis: Redis | null = null;
+  private config: SimulationConfig;
+  private redisExpected: boolean;
 
-  constructor() {
+  constructor(config: SimulationConfig = DEFAULT_CONFIG) {
+    this.config = config;
+    this.redisExpected = false;
     this.reservedNames = new Set<string>();
-    for (const ac of DEFAULT_CONFIG.agentClasses) {
+    for (const ac of config.agentClasses) {
       for (const name of ac.names ?? []) {
         this.reservedNames.add(name.toLowerCase());
       }
@@ -78,15 +82,11 @@ export class AgentManager {
       console.warn("[AgentManager] No REDIS_URL — running in-memory only. Records will not persist across restarts.");
       return;
     }
-    try {
-      const { default: RedisClient } = await import("ioredis");
-      this.redis = new RedisClient(url, { maxRetriesPerRequest: 3, lazyConnect: true }) as unknown as Redis;
-      await (this.redis as unknown as { connect(): Promise<void> }).connect();
-      console.log("[AgentManager] Redis connected");
-    } catch (err) {
-      console.error("[AgentManager] Redis connection failed, falling back to in-memory:", (err as Error).message);
-      this.redis = null;
-    }
+    this.redisExpected = true;
+    const { default: RedisClient } = await import("ioredis");
+    this.redis = new RedisClient(url, { maxRetriesPerRequest: 3, lazyConnect: true }) as unknown as Redis;
+    await (this.redis as unknown as { connect(): Promise<void> }).connect();
+    console.log("[AgentManager] Redis connected");
   }
 
   private countAgentsForIp(ip: string): number {
@@ -96,6 +96,16 @@ export class AgentManager {
     }
     return count;
   }
+
+  private warnIfNoRedis(operation: string): void {
+    if (!this.redis) {
+      console.warn(`[AgentManager] Redis unavailable — skipping ${operation}`);
+    }
+  }
+
+  private get hofPriorWeight(): number { return this.config.hofPriorWeight ?? 20; }
+  private get hofGlobalMean(): number { return this.config.hofGlobalMean ?? 2.2215; }
+  private get hofMinGames(): number { return this.config.hofMinGames ?? 20; }
 
   private async displaceAndSpawn(
     username: string,
@@ -426,7 +436,7 @@ export class AgentManager {
   }
 
   async snapshotRecord(particle: Particle): Promise<void> {
-    if (!this.redis) return;
+    if (!this.redis) { this.warnIfNoRedis("snapshotRecord"); return; }
     const rec = {
       strategy: particle.strategy,
       score: particle.score,
@@ -438,7 +448,7 @@ export class AgentManager {
   }
 
   async snapshotAllRecords(engine: SimulationEngine): Promise<void> {
-    if (!this.redis) return;
+    if (!this.redis) { this.warnIfNoRedis("snapshotAllRecords"); return; }
     for (const p of engine.particles) {
       const rec = {
         strategy: p.strategy,
@@ -457,7 +467,7 @@ export class AgentManager {
   }
 
   async restoreApiKeys(): Promise<void> {
-    if (!this.redis) return;
+    if (!this.redis) { this.warnIfNoRedis("restoreApiKeys"); return; }
     const keys = await this.redis.keys("owner:*");
     for (const key of keys) {
       const apiKeyHash = await this.redis.get(key);
@@ -470,7 +480,7 @@ export class AgentManager {
   }
 
   async restoreRecords(engine: SimulationEngine): Promise<void> {
-    if (!this.redis) return;
+    if (!this.redis) { this.warnIfNoRedis("restoreRecords"); return; }
 
     // Restore global stats
     const statsRaw = await this.redis.get("global:stats");
@@ -519,7 +529,7 @@ export class AgentManager {
     isExternal: boolean;
     externalOwner?: string;
   } | null> {
-    if (!this.redis) return null;
+    if (!this.redis) { this.warnIfNoRedis("lookupRecord"); return null; }
     const raw = await this.redis.get(`record:${id}`);
     if (!raw) return null;
     try {
@@ -531,27 +541,23 @@ export class AgentManager {
 
   // --- Hall of Fame ---
 
-  private static readonly HOF_PRIOR_WEIGHT = 20;
-  private static readonly HOF_GLOBAL_MEAN = 2.2215;
-  private static readonly HOF_MIN_GAMES = 20;
-
-  /** Upsert a single player into the Hall of Fame ZSET if they qualify (≥20 games). */
+  /** Upsert a single player into the Hall of Fame ZSET if they qualify. */
   async upsertHallOfFameEntry(particle: {
     id: string; score: number; strategy: StrategyType;
     matchHistory: Record<string, { cc: number; cd: number; dc: number; dd: number }>;
     isExternal: boolean;
   }): Promise<void> {
-    if (!this.redis) return;
+    if (!this.redis) { this.warnIfNoRedis("upsertHallOfFameEntry"); return; }
     let games = 0, coops = 0;
     for (const r of Object.values(particle.matchHistory)) {
       games += r.cc + r.cd + r.dc + r.dd;
       coops += r.cc + r.cd;
     }
-    if (games < AgentManager.HOF_MIN_GAMES) return;
+    if (games < this.hofMinGames) return;
 
     const avg = particle.score / games;
-    const m = AgentManager.HOF_PRIOR_WEIGHT;
-    const C = AgentManager.HOF_GLOBAL_MEAN;
+    const m = this.hofPriorWeight;
+    const C = this.hofGlobalMean;
     const rating = (games * avg + m * C) / (games + m);
 
     await this.redis.zadd("halloffame", rating, particle.id);
@@ -572,23 +578,24 @@ export class AgentManager {
       await this.upsertHallOfFameEntry(p);
       let games = 0;
       for (const r of Object.values(p.matchHistory)) games += r.cc + r.cd + r.dc + r.dd;
-      if (games >= AgentManager.HOF_MIN_GAMES) count++;
+      if (games >= this.hofMinGames) count++;
     }
     if (this.redis) {
       await this.redis.set("halloffame:stats", JSON.stringify({
-        globalMean: AgentManager.HOF_GLOBAL_MEAN,
+        globalMean: this.hofGlobalMean,
         updatedAt: Date.now(),
-        priorWeight: AgentManager.HOF_PRIOR_WEIGHT,
+        priorWeight: this.hofPriorWeight,
       }));
     }
     console.log(`[HallOfFame] Updated ${count} qualifying live particles`);
   }
 
   async getHallOfFamePage(page: number, pageSize: number, engine: SimulationEngine): Promise<HallOfFameResponse> {
-    const m = AgentManager.HOF_PRIOR_WEIGHT;
-    const C = AgentManager.HOF_GLOBAL_MEAN;
+    const m = this.hofPriorWeight;
+    const C = this.hofGlobalMean;
 
     if (!this.redis) {
+      this.warnIfNoRedis("getHallOfFamePage");
       // Fallback: compute from live particles only
       const entries: HallOfFameEntry[] = [];
       for (const p of engine.particles) {
@@ -597,7 +604,7 @@ export class AgentManager {
           games += r.cc + r.cd + r.dc + r.dd;
           coops += r.cc + r.cd;
         }
-        if (games < AgentManager.HOF_MIN_GAMES) continue;
+        if (games < this.hofMinGames) continue;
         const avg = p.score / games;
         const rating = (games * avg + m * C) / (games + m);
         entries.push({
@@ -706,7 +713,7 @@ export class AgentManager {
   }
 
   async restoreBannedUsers(): Promise<void> {
-    if (!this.redis) return;
+    if (!this.redis) { this.warnIfNoRedis("restoreBannedUsers"); return; }
     const members = await this.redis.smembers("banned");
     for (const m of members) {
       this.bannedUsers.add(m);

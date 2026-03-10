@@ -18,8 +18,9 @@ const port = parseInt(process.env.PORT || "3000", 10);
 
 // --- Simulation engine ---
 
-const engine = new SimulationEngine(DEFAULT_CONFIG);
-const agentManager = new AgentManager();
+const config = DEFAULT_CONFIG;
+const engine = new SimulationEngine(config);
+const agentManager = new AgentManager(config);
 
 // --- External agent decision callback ---
 
@@ -233,7 +234,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       const match = await Promise.race([
         agentManager.waitForMatch(username),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 120_000)
+          setTimeout(() => reject(new Error("timeout")), config.matchResponseTimeoutMs ?? 120_000)
         ),
       ]);
 
@@ -335,7 +336,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     try {
       const record = await Promise.race([
         resultPromise,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 15_000)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), config.decideResponseTimeoutMs ?? 15_000)),
       ]);
 
       if (!record) {
@@ -547,6 +548,8 @@ function buildSlowFrame(full = false): string | null {
 
 // --- Next.js + HTTP + WebSocket server ---
 
+let requestCounter = 0;
+
 async function main() {
   const app = next({ dev, port });
   const handle = app.getRequestHandler();
@@ -564,8 +567,20 @@ async function main() {
     res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
 
     const parsed = parse(req.url || "/", true);
-    const pathname = parsed.pathname;
-    if (pathname?.startsWith("/api/agent/")) {
+    const pathname = parsed.pathname ?? "/";
+
+    // Request logging for API routes
+    if (pathname.startsWith("/api/")) {
+      const start = Date.now();
+      const reqId = ++requestCounter;
+      const originalEnd = res.end;
+      res.end = function (...args: Parameters<typeof originalEnd>) {
+        console.log(`[req #${reqId}] ${req.method} ${pathname} → ${res.statusCode} (${Date.now() - start}ms)`);
+        return originalEnd.apply(res, args);
+      } as typeof res.end;
+    }
+
+    if (pathname.startsWith("/api/agent/")) {
       try {
         await handleAgentAPI(req, res, pathname);
       } catch (err) {
@@ -575,7 +590,7 @@ async function main() {
       return;
     }
 
-    if (pathname?.startsWith("/api/admin/")) {
+    if (pathname.startsWith("/api/admin/")) {
       try {
         await handleAdminAPI(req, res, pathname, agentManager, engine);
       } catch (err) {
@@ -709,10 +724,10 @@ async function main() {
       for (let i = 0; i < 6; i++) engine.step();
       consecutiveErrors = 0;
 
-      // Timeout sweep: kick external agents that haven't responded in 60s
+      // Timeout sweep: kick external agents that haven't responded
       const now = Date.now();
       for (const [username, match] of agentManager.getAllPendingMatches()) {
-        if (now - match.createdAt > 60_000) {
+        if (now - match.createdAt > (config.pendingMatchTimeoutMs ?? 60_000)) {
           engine.abortPair(match.aId, match.bId);
           agentManager.removeAgent(username, engine).catch((err) =>
             console.error(`[server] removeAgent failed for ${username}:`, err)
@@ -720,9 +735,9 @@ async function main() {
         }
       }
 
-      // Parked timeout: kick agents idle for 30s after match
+      // Parked timeout: kick agents idle after match
       for (const [username, parkedTime] of agentManager.getParkedAgents()) {
-        if (now - parkedTime > 30_000) {
+        if (now - parkedTime > (config.parkedAgentTimeoutMs ?? 30_000)) {
           agentManager.removeAgent(username, engine).catch((err) =>
             console.error(`[server] parked timeout removeAgent failed for ${username}:`, err)
           );
@@ -744,11 +759,11 @@ async function main() {
       const metaUpdatedIds = engine.drainMetaUpdates();
       const gameLogEntries = engine.drainGameLog();
       intervalCount++;
-      const syncPos = intervalCount % 120 === 0; // position sync every ~12s
+      const syncPos = intervalCount % (config.positionSyncInterval ?? 120) === 0;
       const eventMsg = buildEventFrame(events, syncPos, metaUpdatedIds, gameLogEntries);
 
-      // Every 300th interval (~30s): broadcast slow frame as safety net / catch-up
-      const slow = intervalCount % 300 === 0 ? buildSlowFrame() : null;
+      // Periodic slow frame broadcast as safety net / catch-up
+      const slow = intervalCount % (config.slowFrameInterval ?? 300) === 0 ? buildSlowFrame() : null;
 
       for (const ws of clients) {
         if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < WS_BUFFER_THRESHOLD) {
@@ -764,14 +779,14 @@ async function main() {
         process.exit(1);
       }
     }
-  }, 100);
+  }, config.simulationIntervalMs ?? 100);
 
-  // Snapshot all particle records to Redis every hour, then upsert qualifying live particles into hall of fame
+  // Snapshot all particle records to Redis periodically, then upsert qualifying live particles into hall of fame
   setInterval(() => {
     agentManager.snapshotAllRecords(engine)
       .then(() => agentManager.updateHallOfFameForLiveParticles(engine))
       .catch((err) => console.error("Periodic snapshot/hall of fame failed:", err));
-  }, 60 * 60 * 1000);
+  }, config.hofSnapshotIntervalMs ?? 3_600_000);
 
   // Upsert qualifying live particles into hall of fame on startup
   agentManager.updateHallOfFameForLiveParticles(engine).catch((err) =>

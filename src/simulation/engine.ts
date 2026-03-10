@@ -5,7 +5,7 @@ import { playMatchWithOverrides, applyMatchResult } from "./game";
 import { generateMessage } from "./messages";
 import type { SimEvent } from "./protocol";
 
-const PHASE_DURATIONS: Record<CollisionPhase, number> = {
+const DEFAULT_PHASE_DURATIONS: Record<CollisionPhase, number> = {
   greeting: 15,
   messaging_a: 40,
   messaging_b: 40,
@@ -66,6 +66,10 @@ export class SimulationEngine {
   onMatchResolved: MatchResolvedCallback | null = null;
   onParticleParked: ((particleId: string, username: string) => void) | null = null;
 
+  private get phaseDurations(): Record<CollisionPhase, number> {
+    return this.config.phaseDurations ?? DEFAULT_PHASE_DURATIONS;
+  }
+
   constructor(config: SimulationConfig = DEFAULT_CONFIG) {
     this.config = config;
     this.particles = createParticles(config);
@@ -87,7 +91,7 @@ export class SimulationEngine {
       if (fp.waitingForExternal) continue;
 
       const elapsed = this.tick - fp.phaseStartTick;
-      const phaseDuration = PHASE_DURATIONS[fp.phase];
+      const phaseDuration = this.phaseDurations[fp.phase];
 
       if (elapsed < phaseDuration) continue;
 
@@ -158,7 +162,7 @@ export class SimulationEngine {
             color: record.decisionA === "cooperate" ? "#16a34a" : "#dc2626",
             spawnTick: this.tick,
             delayTicks: 0,
-            durationTicks: PHASE_DURATIONS.resolved,
+            durationTicks: this.phaseDurations.resolved,
           });
           this.popups.push({
             x: midX - sign * offset,
@@ -167,11 +171,11 @@ export class SimulationEngine {
             color: record.decisionB === "cooperate" ? "#16a34a" : "#dc2626",
             spawnTick: this.tick,
             delayTicks: 0,
-            durationTicks: PHASE_DURATIONS.resolved,
+            durationTicks: this.phaseDurations.resolved,
           });
 
           this.onMatchResolved?.(record, fp.aId, fp.bId);
-          fp.unfreezeAtTick = this.tick + PHASE_DURATIONS.resolved;
+          fp.unfreezeAtTick = this.tick + this.phaseDurations.resolved;
           break;
         }
       }

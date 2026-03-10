@@ -14,20 +14,29 @@ interface Props {
 
 export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
   const [data, setData] = useState<HallOfFameResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [includeBots, setIncludeBots] = useState(false);
   const { tip, showTip, hideTip } = useStrategyTip();
 
   const fetchPage = (p: number) => {
+    setError(null);
     fetch(`/api/halloffame?page=${p}&pageSize=${PAGE_SIZE}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d) setData(d); })
-      .catch(() => {});
+      .then((r) => {
+        if (!r.ok) throw new Error(`Server returned ${r.status}`);
+        return r.json();
+      })
+      .then((d) => setData(d))
+      .catch((err) => {
+        console.error("[HallOfFame] fetch failed:", err);
+        setError("Failed to load leaderboard");
+      });
   };
 
   useEffect(() => {
     if (!open) return;
     setData(null);
+    setError(null);
     setPage(1);
     fetchPage(1);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -97,9 +106,21 @@ export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
 
         <div className="space-y-0.5 overflow-y-auto min-h-0 flex-1">
           {!data ? (
-            <div className="flex items-center justify-center text-xs text-zinc-300 font-mono py-8">
-              loading...
-            </div>
+            error ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-2">
+                <span className="text-xs text-red-500 font-mono">{error}</span>
+                <button
+                  onClick={() => fetchPage(page)}
+                  className="text-xs text-zinc-500 hover:text-zinc-700 underline cursor-pointer"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center text-xs text-zinc-300 font-mono py-8">
+                loading...
+              </div>
+            )
           ) : (includeBots ? data.entries : data.entries.filter(e => e.isExternal)).length === 0 ? (
             <div className="text-xs text-zinc-300 font-mono py-4 text-center">
               No players qualify yet (need {data.priorWeight}+ games)

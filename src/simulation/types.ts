@@ -103,6 +103,34 @@ export interface SimulationConfig {
   minSpeed: number;
   maxSpeed: number;
   freezeDurationTicks: number;
+
+  /** Engine ticks per collision phase */
+  phaseDurations?: Record<CollisionPhase, number>;
+
+  /** Main simulation loop interval in ms (default 100) */
+  simulationIntervalMs?: number;
+  /** Broadcast position sync every N intervals (default 120) */
+  positionSyncInterval?: number;
+  /** Broadcast slow frame every N intervals (default 300) */
+  slowFrameInterval?: number;
+  /** Hall of Fame snapshot interval in ms (default 3_600_000) */
+  hofSnapshotIntervalMs?: number;
+
+  /** /match long-poll timeout in ms (default 120_000) */
+  matchResponseTimeoutMs?: number;
+  /** /decide result wait timeout in ms (default 15_000) */
+  decideResponseTimeoutMs?: number;
+  /** Abort stale pending matches after ms (default 60_000) */
+  pendingMatchTimeoutMs?: number;
+  /** Kick idle parked agents after ms (default 30_000) */
+  parkedAgentTimeoutMs?: number;
+
+  /** Bayesian prior weight for Hall of Fame (default 20) */
+  hofPriorWeight?: number;
+  /** Bayesian global mean for Hall of Fame (default 2.2215) */
+  hofGlobalMean?: number;
+  /** Minimum games to qualify for Hall of Fame (default 20) */
+  hofMinGames?: number;
 }
 
 export interface HallOfFameEntry {
@@ -186,4 +214,26 @@ export const DEFAULT_CONFIG: SimulationConfig = {
   minSpeed: 0.15,
   maxSpeed: 0.3,
   freezeDurationTicks: 45,
+
+  phaseDurations: {
+    greeting: 15,
+    messaging_a: 40,
+    messaging_b: 40,
+    deciding: 25,
+    resolved: 40,
+  },
+
+  simulationIntervalMs: 100,
+  positionSyncInterval: 120,
+  slowFrameInterval: 300,
+  hofSnapshotIntervalMs: 3_600_000,
+
+  matchResponseTimeoutMs: 120_000,
+  decideResponseTimeoutMs: 15_000,
+  pendingMatchTimeoutMs: 60_000,
+  parkedAgentTimeoutMs: 30_000,
+
+  hofPriorWeight: 20,
+  hofGlobalMean: 2.2215,
+  hofMinGames: 20,
 };
