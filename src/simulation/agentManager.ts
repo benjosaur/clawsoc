@@ -39,6 +39,7 @@ type Redis = {
   sadd(key: string, ...members: string[]): Promise<unknown>;
   srem(key: string, ...members: string[]): Promise<unknown>;
   smembers(key: string): Promise<string[]>;
+  quit(): Promise<unknown>;
 };
 
 function hashKey(apiKey: string): string {
@@ -87,6 +88,13 @@ export class AgentManager {
     this.redis = new RedisClient(url, { maxRetriesPerRequest: 3, lazyConnect: true }) as unknown as Redis;
     await (this.redis as unknown as { connect(): Promise<void> }).connect();
     console.log("[AgentManager] Redis connected");
+  }
+
+  async closeRedis(): Promise<void> {
+    if (this.redis) {
+      await this.redis.quit();
+      this.redis = null;
+    }
   }
 
   private countAgentsForIp(ip: string): number {

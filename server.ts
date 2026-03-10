@@ -716,7 +716,7 @@ async function main() {
   });
 
   // Ping sweep: detect and terminate dead clients every 15s
-  setInterval(() => {
+  const pingInterval = setInterval(() => {
     for (const ws of clients) {
       if (!(ws as any).isAlive) {
         clients.delete(ws);
@@ -742,7 +742,7 @@ async function main() {
   let intervalCount = 0;
   let consecutiveErrors = 0;
   let lastTickTime = Date.now();
-  setInterval(() => {
+  const simInterval = setInterval(() => {
     try {
       for (let i = 0; i < 6; i++) engine.step();
       consecutiveErrors = 0;
@@ -806,7 +806,7 @@ async function main() {
   }, config.simulationIntervalMs ?? 100);
 
   // Snapshot all particle records to Redis periodically, then upsert qualifying live particles into hall of fame
-  setInterval(() => {
+  const snapshotInterval = setInterval(() => {
     agentManager.snapshotAllRecords(engine)
       .then(() => agentManager.updateHallOfFameForLiveParticles(engine))
       .catch((err) => console.error("Periodic snapshot/hall of fame failed:", err));
@@ -820,6 +820,56 @@ async function main() {
   server.listen(port, () => {
     console.log(`> Server listening on http://localhost:${port} (${dev ? "dev" : "production"})`);
   });
+
+  // --- Graceful shutdown ---
+  let shuttingDown = false;
+  async function shutdown(signal: string) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[server] ${signal} received — shutting down gracefully...`);
+
+    // 1. Stop simulation and periodic tasks
+    clearInterval(simInterval);
+    clearInterval(pingInterval);
+    clearInterval(snapshotInterval);
+
+    // 2. Flush state to Redis
+    try {
+      await agentManager.snapshotAllRecords(engine);
+      await agentManager.updateHallOfFameForLiveParticles(engine);
+      console.log("[server] Redis snapshot complete");
+    } catch (err) {
+      console.error("[server] Redis snapshot failed during shutdown:", err);
+    }
+
+    // 3. Close WebSocket clients with close frame
+    for (const ws of clients) {
+      ws.close(1001, "Server shutting down");
+    }
+    wss.close();
+
+    // 4. Close Redis connection
+    try {
+      await agentManager.closeRedis();
+    } catch (err) {
+      console.error("[server] Redis close failed:", err);
+    }
+
+    // 5. Drain HTTP server
+    server.close(() => {
+      console.log("[server] HTTP server closed");
+      process.exit(0);
+    });
+
+    // Force exit after 10s if drain stalls
+    setTimeout(() => {
+      console.error("[server] Forced exit after timeout");
+      process.exit(1);
+    }, 10_000).unref();
+  }
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 main().catch((err) => {
