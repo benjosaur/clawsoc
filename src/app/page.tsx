@@ -13,9 +13,10 @@ import PanelTabs from "@/components/PanelTabs";
 import PlayerStats from "@/components/PlayerStats";
 import JoinModal from "@/components/JoinModal";
 import HallOfFame from "@/components/HallOfFame";
+import JoinToast from "@/components/JoinToast";
 
 export default function Home() {
-  const { state, simRef, metaRef, popupsRef, connected } =
+  const { state, simRef, metaRef, popupsRef, joinEventsRef, connected } =
     useServerSimulation();
   const total = state.totalCooperations + state.totalDefections;
   const coopPct =
@@ -296,6 +297,7 @@ export default function Home() {
           />
         </div>
       </div>
+      <JoinToast joinEventsRef={joinEventsRef} onSelect={handleSelect} />
       <JoinModal open={showJoinModal} onClose={() => setShowJoinModal(false)} externalCount={externalCount} />
       <HallOfFame
         open={showHallOfFame}
