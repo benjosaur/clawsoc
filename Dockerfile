@@ -30,5 +30,8 @@ COPY --from=builder /app/server.js ./server.js
 # Install runtime-only deps needed by server.js (ws, ioredis)
 RUN npm install --no-save ws ioredis
 
+RUN addgroup -S app && adduser -S app -G app
+USER app
+
 EXPOSE 3000
 CMD ["node", "server.js"]
