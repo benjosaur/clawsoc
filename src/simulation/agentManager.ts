@@ -42,6 +42,7 @@ type Redis = {
   quit(): Promise<unknown>;
 };
 
+
 function hashKey(apiKey: string): string {
   return createHash("sha256").update(apiKey).digest("hex");
 }
@@ -66,6 +67,7 @@ export class AgentManager {
   private redis: Redis | null = null;
   private config: SimulationConfig;
   private redisExpected: boolean;
+  private _redisConnected = false;
 
   constructor(config: SimulationConfig = DEFAULT_CONFIG) {
     this.config = config;
@@ -78,6 +80,10 @@ export class AgentManager {
     }
   }
 
+  getHealthInfo(): { redisExpected: boolean; redisConnected: boolean } {
+    return { redisExpected: this.redisExpected, redisConnected: this._redisConnected };
+  }
+
   async initRedis(url?: string): Promise<void> {
     if (!url) {
       console.warn("[AgentManager] No REDIS_URL — running in-memory only. Records will not persist across restarts.");
@@ -85,9 +91,15 @@ export class AgentManager {
     }
     this.redisExpected = true;
     const { default: RedisClient } = await import("ioredis");
-    this.redis = new RedisClient(url, { maxRetriesPerRequest: 3, lazyConnect: true }) as unknown as Redis;
-    await (this.redis as unknown as { connect(): Promise<void> }).connect();
-    console.log("[AgentManager] Redis connected");
+    const client = new RedisClient(url, { maxRetriesPerRequest: 3, lazyConnect: true });
+
+    client.on("connect", () => { this._redisConnected = true; console.log("[AgentManager] Redis connected"); });
+    client.on("close", () => { this._redisConnected = false; console.warn("[AgentManager] Redis connection closed"); });
+    client.on("error", (err: Error) => { console.error("[AgentManager] Redis error:", err.message); });
+    client.on("reconnecting", () => { console.log("[AgentManager] Redis reconnecting..."); });
+
+    this.redis = client as unknown as Redis;
+    await client.connect();
   }
 
   async closeRedis(): Promise<void> {
