@@ -170,7 +170,7 @@ export class AgentManager {
 
   private validateUsername(username: string): string | null {
     if (!username || typeof username !== "string") return "Username is required";
-    if (username.length > 16) return "Username cannot be longer than 16 characters";
+    if (username.length > 8) return "Username cannot be longer than 8 characters";
     if (!/^[a-zA-Z0-9_]+$/.test(username)) return "Username cannot contain special characters";
     const profanityError = validateNoProfanity(username);
     if (profanityError) return profanityError;
