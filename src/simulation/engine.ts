@@ -108,13 +108,6 @@ export class SimulationEngine {
       } else {
         conv.lockedInB = decision;
       }
-
-      // If opponent hasn't decided yet, give them one more turn then force
-      const opponentLocked = speaker === "a" ? conv.lockedInB : conv.lockedInA;
-      if (opponentLocked === null) {
-        // Opponent gets one more turn, then forcedDecideNext kicks in
-        // (forcedDecideNext is set AFTER the opponent's extra turn — see requestTurn)
-      }
     }
 
     // Switch speaker
@@ -136,37 +129,14 @@ export class SimulationEngine {
       return true;
     }
 
-    // Turn limit reached — force any undecided players to defect
+    // Safety valve: if turn limit reached, default undecided to defect
     if (conv.turns.length >= MAX_CONVERSATION_TURNS) {
       if (conv.lockedInA === null) conv.lockedInA = "defect";
       if (conv.lockedInB === null) conv.lockedInB = "defect";
       return true;
     }
 
-    // Check: is this speaker forced to decide?
-    if (conv.forcedDecideNext) {
-      // Determine who hasn't decided — force THAT player, regardless of currentSpeaker
-      const undecided: "a" | "b" = conv.lockedInA === null ? "a" : "b";
-      const undecidedId = undecided === "a" ? fp.aId : fp.bId;
-      const undecidedOppId = undecided === "a" ? fp.bId : fp.aId;
-      const selfP = this.getParticle(undecidedId);
-      const oppP = this.getParticle(undecidedOppId);
-      if (!selfP || !oppP) return true;
-
-      if (selfP.isExternal && this.onRequestExternalTurn) {
-        conv.currentSpeaker = undecided;
-        conv.waitingForExternal = true;
-        this.onRequestExternalTurn(fp.aId, fp.bId, undecided, selfP, oppP, conv.turns, true);
-        return false; // yielding, waiting for external
-      }
-      // Bot: forced decision
-      const action = botChooseTurnAction(selfP, oppP, conv);
-      const decision = action.decision ?? "defect";
-      this.recordTurn(fp, undecided, "decision", "", decision);
-      return true; // both decided now
-    }
-
-    // If opponent already decided, force current speaker to decide immediately (no extra message)
+    // If opponent already decided, current speaker must decide immediately
     const opponentLocked = speaker === "a" ? conv.lockedInB : conv.lockedInA;
     if (opponentLocked !== null) {
       if (self.isExternal && this.onRequestExternalTurn) {
@@ -430,7 +400,6 @@ export class SimulationEngine {
             currentSpeaker: "a",
             lockedInA: null,
             lockedInB: null,
-            forcedDecideNext: false,
             waitingForExternal: false,
           },
           matchRecord: null,
@@ -522,23 +491,24 @@ export class SimulationEngine {
     turnType: "message" | "decision",
     content: string,
     decision?: Decision,
-  ): void {
+  ): { ok: true } | { ok: false; error: string } {
     const fp = this.frozenPairs.find((f) => f.aId === aId && f.bId === bId);
-    if (!fp) return;
+    if (!fp) return { ok: false, error: "No active match" };
 
     const conv = fp.conversation;
 
     // Idempotency guard: if turn was already resolved (e.g. by timeout sweep), skip
-    if (!conv.waitingForExternal) return;
+    if (!conv.waitingForExternal) return { ok: false, error: "Turn already resolved" };
 
-    // If forced to decide but they sent a message, force decision instead
-    if (conv.forcedDecideNext && turnType !== "decision") {
-      this.recordTurn(fp, side, "decision", "", decision ?? "defect");
-    } else {
-      this.recordTurn(fp, side, turnType, content, decision);
+    // If opponent already decided and external sends a message, reject it
+    const oppLocked = side === "a" ? conv.lockedInB : conv.lockedInA;
+    if (oppLocked !== null && turnType !== "decision") {
+      return { ok: false, error: "You must submit a decision (cooperate or defect). Your opponent has already decided." };
     }
 
+    this.recordTurn(fp, side, turnType, content, decision);
     conv.waitingForExternal = false;
+    return { ok: true };
   }
 
   // Keep old method signature as a shim for backwards compatibility

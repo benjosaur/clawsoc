@@ -102,7 +102,8 @@ const llmAvailable = initLlm();
 const llmCallback = (aId: string, bId: string, side: "a" | "b", self: import("./src/simulation/types").Particle, opponent: import("./src/simulation/types").Particle, conversationSoFar: import("./src/simulation/types").ConversationTurn[]) => {
   requestLlmMessage(self, opponent, side, conversationSoFar)
     .then((content) => {
-      engine.resolveExternalTurn(aId, bId, side, "message", content);
+      const result = engine.resolveExternalTurn(aId, bId, side, "message", content);
+      if (!result.ok) console.warn(`[llm] Late response discarded for ${self.id}: ${result.error}`);
     })
     .catch((err) => {
       console.error(`[llm] Failed for ${self.id}:`, err);
@@ -398,14 +399,28 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       return jsonResponse(res, 409, { error: "No pending match — it's not your turn", status: currentStatus, nextAction: na });
     }
 
-    // Set up result waiter before submitting action
-    const resultPromise = agentManager.waitForResult(username, pending.aId, pending.bId);
+    // Reject messages when a decision is required
+    if (pending.forcedDecide && turnType === "message") {
+      return jsonResponse(res, 400, {
+        error: "You must submit a decision (cooperate or defect). Messages are not allowed at this point.",
+        mustDecide: true,
+        nextAction: "POST /api/agent/turn — send {type:'decision', decision:'cooperate'|'defect'}",
+      });
+    }
+
     agentManager.clearPendingMatch(username);
 
     // Submit the turn to the engine
     const content = turnType === "message" ? censorText(body.content || "") : "";
     const decision = turnType === "decision" ? (body.decision as Decision) : undefined;
-    engine.resolveExternalTurn(pending.aId, pending.bId, pending.side, turnType, content, decision);
+    const turnResult = engine.resolveExternalTurn(pending.aId, pending.bId, pending.side, turnType, content, decision);
+    if (!turnResult.ok) {
+      agentManager.setPendingMatch(username, pending);
+      return jsonResponse(res, 400, { error: turnResult.error, mustDecide: true });
+    }
+
+    // Set up result waiter after successful submission
+    const resultPromise = agentManager.waitForResult(username, pending.aId, pending.bId);
 
     // Wait for either: next turn (opponent responded) or match result (both decided)
     try {
