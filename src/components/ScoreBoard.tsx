@@ -2,7 +2,6 @@
 
 import { useRef, useEffect } from "react";
 import type { StrategyType } from "@/simulation/types";
-import { STRATEGY_SHORT, STRATEGY_TOOLTIP, useStrategyTip, StrategyTipPortal } from "@/components/StrategyTip";
 
 interface ParticleData {
   id: string;
@@ -31,8 +30,6 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect,
       : b.r30Avg - a.r30Avg || b.r30Total - a.r30Total || b.avgScore - a.avgScore
   );
   const selectedRef = useRef<HTMLDivElement>(null);
-  const { tip, showTip, hideTip } = useStrategyTip();
-
   useEffect(() => {
     if (selectedId != null && selectedRef.current) {
       selectedRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -93,13 +90,6 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect,
               <span className={`flex-1 truncate ${p.strategy === "external" ? "" : "text-zinc-600"}`} style={p.strategy === "external" ? { color: "#E54D2E" } : undefined}>
                 {p.id}
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 online-dot align-middle ml-0.5" />
-                <span
-                  className="text-zinc-500 text-[9px] tracking-wide ml-1"
-                  onMouseEnter={STRATEGY_TOOLTIP[p.strategy] ? (e) => showTip(e, STRATEGY_TOOLTIP[p.strategy]!) : undefined}
-                  onMouseLeave={STRATEGY_TOOLTIP[p.strategy] ? hideTip : undefined}
-                >
-                  {STRATEGY_SHORT[p.strategy] ?? ""}
-                </span>
               </span>
               {(mode === "all" || mode === "total") && (
                 <>
@@ -125,7 +115,6 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect,
           );
         })}
       </div>
-      <StrategyTipPortal tip={tip} />
     </>
   );
 }
