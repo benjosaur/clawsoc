@@ -21,7 +21,9 @@ export type SimEvent =
       ax: number; ay: number; avx: number; avy: number;
       bx: number; by: number; bvx: number; bvy: number;
     }
-  | { e: "add"; id: string; x: number; y: number; vx: number; vy: number; strategy: StrategyType }
+  | { e: "add"; id: string; x: number; y: number; vx: number; vy: number; strategy: StrategyType;
+      score: number; hue: number; avgScore: number; r30Total: number; r30Avg: number;
+      cc: number; cd: number; dc: number; dd: number }
   | { e: "remove"; id: string }
   | { e: "park"; id: string }
   | { e: "unpark"; id: string; x: number; y: number; vx: number; vy: number };

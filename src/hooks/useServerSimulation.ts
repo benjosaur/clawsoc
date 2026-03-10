@@ -203,11 +203,13 @@ export function useServerSimulation() {
         sim.particles.push(cp);
         map.set(ev.id, cp);
         staticMetaRef.current.set(ev.id, { id: ev.id, strategy: ev.strategy });
+        const hue = ev.hue;
         metaRef.current.set(ev.id, {
           id: ev.id, strategy: ev.strategy,
-          color: "hsl(60,50%,45%)", score: 0, avgScore: 0,
-          r30Total: 0, r30Avg: 0,
-          cc: 0, cd: 0, dc: 0, dd: 0,
+          color: hue < 0 ? "hsl(60,50%,45%)" : `hsl(${hue},70%,42%)`,
+          score: ev.score, avgScore: ev.avgScore,
+          r30Total: ev.r30Total, r30Avg: ev.r30Avg,
+          cc: ev.cc, cd: ev.cd, dc: ev.dc, dd: ev.dd,
         });
         metaChanged = true;
         if (ev.strategy === "external") {

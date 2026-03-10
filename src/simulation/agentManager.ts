@@ -67,6 +67,7 @@ export class AgentManager {
   private agentIps = new Map<string, string>(); // username → client IP
   private readonly maxAgentsPerIp = 5;
   private spawningUsers = new Set<string>();
+  private scoreLogCache = new Map<string, { ts: number; pts: number }[]>();
   private redis: Redis | null = null;
   private config: SimulationConfig;
   private redisExpected: boolean;
@@ -138,6 +139,7 @@ export class AgentManager {
     const npc = npcs[Math.floor(Math.random() * npcs.length)];
     await this.snapshotRecord(npc);
     await this.upsertHallOfFameEntry(npc);
+    this.scoreLogCache.set(npc.id, npc.scoreLog);
     engine.removeParticle(npc.id);
 
     const config = engine.config;
@@ -164,8 +166,8 @@ export class AgentManager {
       externalOwner: username,
     };
 
-    engine.addParticle(particle);
-
+    // NOTE: caller is responsible for calling engine.addParticle(particle)
+    // after restoring any persisted state (score, matchHistory, scoreLog).
     return { particle, displacedId: npc.id, displacedStrategy: npc.strategy };
   }
 
@@ -359,7 +361,7 @@ export class AgentManager {
         existingAgent.displacedStrategy = result.displacedStrategy;
         existingAgent.joinedAt = Date.now();
 
-        // Restore prior record from Redis
+        // Restore prior record from Redis BEFORE adding to engine
         if (this.redis) {
           const raw = await this.redis.get(`record:${username}`);
           if (raw) {
@@ -373,6 +375,16 @@ export class AgentManager {
           }
           await this.redis.set(`agent:${username}`, JSON.stringify(existingAgent));
         }
+
+        // Restore cached scoreLog (ephemeral, not in Redis)
+        const cached = this.scoreLogCache.get(username);
+        if (cached) {
+          result.particle.scoreLog = cached;
+          this.scoreLogCache.delete(username);
+        }
+
+        // Now add to engine — "add" event carries correct metadata
+        engine.addParticle(result.particle);
 
         return {};
       } finally {
@@ -409,7 +421,7 @@ export class AgentManager {
       this.apiKeyToUsername.set(apiKeyHash, username);
       if (clientIp) this.agentIps.set(username, clientIp);
 
-      // Restore prior record from Redis
+      // Restore prior record from Redis BEFORE adding to engine
       const raw = await this.redis.get(`record:${username}`);
       if (raw) {
         const parsed = ParticleRecordSchema.safeParse(safeJsonParse(raw));
@@ -420,6 +432,16 @@ export class AgentManager {
           console.error(`[AgentManager] Failed to parse record for ${username}:`, parsed.error.message);
         }
       }
+
+      // Restore cached scoreLog (ephemeral, not in Redis)
+      const cached = this.scoreLogCache.get(username);
+      if (cached) {
+        result.particle.scoreLog = cached;
+        this.scoreLogCache.delete(username);
+      }
+
+      // Now add to engine — "add" event carries correct metadata
+      engine.addParticle(result.particle);
 
       await this.redis.set(`agent:${username}`, JSON.stringify(agent));
       return {};
@@ -437,6 +459,8 @@ export class AgentManager {
     if (particle) {
       await this.snapshotRecord(particle);
       await this.upsertHallOfFameEntry(particle);
+      // Cache scoreLog in memory so 30m scores survive rejoin
+      this.scoreLogCache.set(username, particle.scoreLog);
     }
 
     // Remove external particle
@@ -477,6 +501,13 @@ export class AgentManager {
             npc.matchHistory = parsed.data.matchHistory;
           }
         }
+      }
+
+      // Restore cached scoreLog (ephemeral, not in Redis)
+      const cachedLog = this.scoreLogCache.get(agent.displacedId);
+      if (cachedLog) {
+        npc.scoreLog = cachedLog;
+        this.scoreLogCache.delete(agent.displacedId);
       }
 
       engine.addParticle(npc);

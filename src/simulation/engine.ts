@@ -553,11 +553,19 @@ export class SimulationEngine {
   addParticle(p: Particle): void {
     this.particles.push(p);
     this.particleMap.set(p.id, p);
+    let cc = 0, cd = 0, dc = 0, dd = 0;
+    for (const r of Object.values(p.matchHistory)) { cc += r.cc; cd += r.cd; dc += r.dc; dd += r.dd; }
+    const total = cc + cd + dc + dd;
     this.pendingEvents.push({
       e: "add", id: p.id,
       x: r1(p.position.x), y: r1(p.position.y),
       vx: r3(p.velocity.x), vy: r3(p.velocity.y),
       strategy: p.strategy,
+      score: p.score,
+      hue: -1, // server.ts coopHue() will override via pmu
+      avgScore: total > 0 ? Math.round((p.score / total) * 10) / 10 : 0,
+      r30Total: 0, r30Avg: 0, // server.ts rolling30() will override via pmu
+      cc, cd, dc, dd,
     });
     this.pendingMetaUpdates.push(p.id);
   }
