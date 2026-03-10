@@ -125,9 +125,7 @@ export class AgentManager {
     }
   }
 
-  private get hofPriorWeight(): number { return this.config.hofPriorWeight ?? 20; }
-  private get hofGlobalMean(): number { return this.config.hofGlobalMean ?? 2.2215; }
-  private get hofMinGames(): number { return this.config.hofMinGames ?? 20; }
+  private get hofMinGames(): number { return this.config.hofMinGames ?? 100; }
 
   private async displaceAndSpawn(
     username: string,
@@ -625,11 +623,8 @@ export class AgentManager {
     if (games < this.hofMinGames) return;
 
     const avg = particle.score / games;
-    const m = this.hofPriorWeight;
-    const C = this.hofGlobalMean;
-    const rating = (games * avg + m * C) / (games + m);
 
-    await this.redis.zadd("halloffame", rating, particle.id);
+    await this.redis.zadd("halloffame", avg, particle.id);
     await this.redis.hset("halloffame:meta", particle.id, JSON.stringify({
       strategy: particle.strategy,
       totalScore: particle.score,
@@ -651,18 +646,13 @@ export class AgentManager {
     }
     if (this.redis) {
       await this.redis.set("halloffame:stats", JSON.stringify({
-        globalMean: this.hofGlobalMean,
         updatedAt: Date.now(),
-        priorWeight: this.hofPriorWeight,
       }));
     }
     console.log(`[HallOfFame] Updated ${count} qualifying live particles`);
   }
 
   async getHallOfFamePage(page: number, pageSize: number, engine: SimulationEngine): Promise<HallOfFameResponse> {
-    const m = this.hofPriorWeight;
-    const C = this.hofGlobalMean;
-
     if (!this.redis) {
       this.warnIfNoRedis("getHallOfFamePage");
       // Fallback: compute from live particles only
@@ -675,20 +665,18 @@ export class AgentManager {
         }
         if (games < this.hofMinGames) continue;
         const avg = p.score / games;
-        const rating = (games * avg + m * C) / (games + m);
         entries.push({
           label: p.id, strategy: p.strategy, totalScore: p.score,
           avgScore: Math.round(avg * 10000) / 10000,
-          bayesianRating: Math.round(rating * 10000) / 10000,
           games, coopPct: Math.round((coops / games) * 10000) / 100,
           isLive: true, isExternal: p.isExternal,
         });
       }
-      entries.sort((a, b) => b.bayesianRating - a.bayesianRating);
+      entries.sort((a, b) => b.avgScore - a.avgScore);
       const sliced = entries.slice((page - 1) * pageSize, page * pageSize);
       return {
-        entries: sliced, globalMean: C, updatedAt: Date.now(),
-        priorWeight: m, totalEntries: entries.length, page, pageSize,
+        entries: sliced, minGames: this.hofMinGames, updatedAt: Date.now(),
+        totalEntries: entries.length, page, pageSize,
       };
     }
 
@@ -699,18 +687,16 @@ export class AgentManager {
     // ZREVRANGE returns [member, score, member, score, ...]
     const raw = await this.redis.zrevrange("halloffame", start, stop, "WITHSCORES");
     const labels: string[] = [];
-    const ratings: number[] = [];
     for (let i = 0; i < raw.length; i += 2) {
       labels.push(raw[i]);
-      ratings.push(parseFloat(raw[i + 1]));
     }
 
-    const defaultStats = { globalMean: C, updatedAt: 0, priorWeight: m };
+    const defaultStats = { updatedAt: 0 };
 
     if (labels.length === 0) {
       const statsRaw = await this.redis.get("halloffame:stats");
       const stats = statsRaw ? (HofStatsSchema.safeParse(safeJsonParse(statsRaw)).data ?? defaultStats) : defaultStats;
-      return { entries: [], globalMean: stats.globalMean, updatedAt: stats.updatedAt, priorWeight: stats.priorWeight, totalEntries, page, pageSize };
+      return { entries: [], minGames: this.hofMinGames, updatedAt: stats.updatedAt, totalEntries, page, pageSize };
     }
 
     // Fetch metadata for these labels
@@ -723,7 +709,6 @@ export class AgentManager {
 
     for (let i = 0; i < labels.length; i++) {
       const label = labels[i];
-      const rating = ratings[i];
       const metaStr = metaRaw[i];
       if (!metaStr) continue;
       const parsed = HofMetaSchema.safeParse(safeJsonParse(metaStr));
@@ -734,7 +719,6 @@ export class AgentManager {
         strategy: meta.strategy,
         totalScore: meta.totalScore,
         avgScore: meta.avgScore,
-        bayesianRating: Math.round(rating * 10000) / 10000,
         games: meta.games,
         coopPct: meta.coopPct,
         isLive: liveLabels.has(label),
@@ -743,8 +727,8 @@ export class AgentManager {
     }
 
     return {
-      entries, globalMean: stats.globalMean, updatedAt: stats.updatedAt,
-      priorWeight: stats.priorWeight, totalEntries, page, pageSize,
+      entries, minGames: this.hofMinGames, updatedAt: stats.updatedAt,
+      totalEntries, page, pageSize,
     };
   }
 

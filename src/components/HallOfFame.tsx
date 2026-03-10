@@ -72,7 +72,7 @@ export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
         </h2>
         {data && (
           <div className="text-xs text-zinc-500 text-center mb-2">
-            Only those with {data.priorWeight} games are worthy to enter
+            Only those with {data.minGames}+ games are worthy to enter
           </div>
         )}
         <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-3">
@@ -101,7 +101,6 @@ export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
           {includeBots && <span className="w-10">Strat</span>}
           <span className="w-10 text-right">Games</span>
           <span className="w-12 text-right">Avg</span>
-          <span className="w-16 text-right">Rating</span>
         </div>
 
         <div className="space-y-0.5 overflow-y-auto min-h-0 flex-1">
@@ -123,7 +122,7 @@ export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
             )
           ) : (includeBots ? data.entries : data.entries.filter(e => e.isExternal)).length === 0 ? (
             <div className="text-xs text-zinc-300 font-mono py-4 text-center">
-              No players qualify yet (need {data.priorWeight}+ games)
+              No players qualify yet (need {data.minGames}+ games)
             </div>
           ) : (
             (includeBots ? data.entries : data.entries.filter(e => e.isExternal)).map((entry, i) => {
@@ -166,11 +165,8 @@ export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
                   <span className="text-zinc-600 w-10 text-right tabular-nums" title="Games played">
                     {entry.games}
                   </span>
-                  <span className="text-zinc-600 w-12 text-right tabular-nums" title="Avg score">
+                  <span className="text-zinc-900 font-semibold w-12 text-right tabular-nums" title="Avg score">
                     {entry.avgScore.toFixed(2)}
-                  </span>
-                  <span className="text-zinc-900 font-semibold w-16 text-right tabular-nums" title="Bayesian rating">
-                    {entry.bayesianRating.toFixed(4)}
                   </span>
                 </div>
               );
