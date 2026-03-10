@@ -216,7 +216,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     }
 
     // Guard: particle is currently mid-match (colliding)
-    const particle = engine.particles.find((p) => p.id === username);
+    const particle = engine.getParticle(username);
     if (particle?.state === "colliding") {
       return jsonResponse(res, 409, {
         error: "Your particle just collided and a decision will be requested shortly.",
@@ -252,7 +252,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
 
   // GET /api/agent/status — non-blocking score/match check
   if (pathname === "/api/agent/status" && method === "GET") {
-    const particle = engine.particles.find((p) => p.id === username);
+    const particle = engine.getParticle(username);
     const pending = agentManager.getPendingMatch(username);
 
     let status: string;
@@ -310,7 +310,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
 
     const pending = agentManager.getPendingMatch(username);
     if (!pending) {
-      const particle = engine.particles.find((p) => p.id === username);
+      const particle = engine.getParticle(username);
       const currentStatus = !particle ? "offline" : particle.state === "parked" ? "parked" : "moving";
       const na = !particle
         ? "GET /api/agent/match to rejoin the arena"
@@ -327,7 +327,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       pending.aId,
       pending.bId,
       pending.side,
-      censorText(message || ""),
+      censorText((message || "").trim()),
       decision as Decision,
     );
     agentManager.clearPendingMatch(username);
@@ -441,7 +441,7 @@ function buildEventFrame(events: SimEvent[], syncPos = false, metaUpdatedIds: st
     for (const id of metaUpdatedIds) {
       if (seen.has(id)) continue;
       seen.add(id);
-      const p = engine.particles.find((pp) => pp.id === id);
+      const p = engine.getParticle(id);
       if (!p) continue;
       const hue = coopHue(p);
       const matches = totalMatches(p.matchHistory);
@@ -595,9 +595,7 @@ async function main() {
           return;
         }
         // Check if player is currently live
-        const liveParticle = engine.particles.find(
-          (p) => p.id.toLowerCase() === name.toLowerCase(),
-        );
+        const liveParticle = engine.getParticle(name.toLowerCase());
         if (liveParticle) {
           jsonResponse(res, 200, { status: "live", id: liveParticle.id });
           return;
@@ -693,62 +691,77 @@ async function main() {
     }
   }, 15_000);
 
+  const WS_BUFFER_THRESHOLD = 1024 * 1024; // 1MB — skip frames for slow clients
+
   function broadcastToAll(msg: string) {
     for (const ws of clients) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+      if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < WS_BUFFER_THRESHOLD) {
+        ws.send(msg);
+      }
     }
   }
 
   // Simulation loop: 100ms interval, 6 engine steps per interval
   let intervalCount = 0;
+  let consecutiveErrors = 0;
   setInterval(() => {
-    for (let i = 0; i < 6; i++) engine.step();
+    try {
+      for (let i = 0; i < 6; i++) engine.step();
+      consecutiveErrors = 0;
 
-    // Timeout sweep: kick external agents that haven't responded in 60s
-    const now = Date.now();
-    for (const [username, match] of agentManager.getAllPendingMatches()) {
-      if (now - match.createdAt > 60_000) {
-        engine.abortPair(match.aId, match.bId);
-        agentManager.removeAgent(username, engine).catch((err) =>
-          console.error(`[server] removeAgent failed for ${username}:`, err)
-        );
-      }
-    }
-
-    // Parked timeout: kick agents idle for 30s after match
-    for (const [username, parkedTime] of agentManager.getParkedAgents()) {
-      if (now - parkedTime > 30_000) {
-        agentManager.removeAgent(username, engine).catch((err) =>
-          console.error(`[server] parked timeout removeAgent failed for ${username}:`, err)
-        );
-      }
-    }
-
-    // Drain events accumulated during this interval's steps
-    const events = engine.drainEvents();
-    // Patch greeting onto "add" events for external agents
-    for (const ev of events) {
-      if (ev.e === "add") {
-        const p = engine.particles.find((pp) => pp.id === ev.id);
-        if (p?.isExternal && p.externalOwner) {
-          const greeting = agentManager.getAgentByUsername(p.externalOwner)?.greeting;
-          if (greeting) ev.greeting = greeting;
+      // Timeout sweep: kick external agents that haven't responded in 60s
+      const now = Date.now();
+      for (const [username, match] of agentManager.getAllPendingMatches()) {
+        if (now - match.createdAt > 60_000) {
+          engine.abortPair(match.aId, match.bId);
+          agentManager.removeAgent(username, engine).catch((err) =>
+            console.error(`[server] removeAgent failed for ${username}:`, err)
+          );
         }
       }
-    }
-    const metaUpdatedIds = engine.drainMetaUpdates();
-    const gameLogEntries = engine.drainGameLog();
-    intervalCount++;
-    const syncPos = intervalCount % 120 === 0; // position sync every ~12s
-    const eventMsg = buildEventFrame(events, syncPos, metaUpdatedIds, gameLogEntries);
 
-    // Every 300th interval (~30s): broadcast slow frame as safety net / catch-up
-    const slow = intervalCount % 300 === 0 ? buildSlowFrame() : null;
+      // Parked timeout: kick agents idle for 30s after match
+      for (const [username, parkedTime] of agentManager.getParkedAgents()) {
+        if (now - parkedTime > 30_000) {
+          agentManager.removeAgent(username, engine).catch((err) =>
+            console.error(`[server] parked timeout removeAgent failed for ${username}:`, err)
+          );
+        }
+      }
 
-    for (const ws of clients) {
-      if (ws.readyState === WebSocket.OPEN) {
-        if (eventMsg) ws.send(eventMsg);
-        if (slow) ws.send(slow);
+      // Drain events accumulated during this interval's steps
+      const events = engine.drainEvents();
+      // Patch greeting onto "add" events for external agents
+      for (const ev of events) {
+        if (ev.e === "add") {
+          const p = engine.getParticle(ev.id);
+          if (p?.isExternal && p.externalOwner) {
+            const greeting = agentManager.getAgentByUsername(p.externalOwner)?.greeting;
+            if (greeting) ev.greeting = greeting;
+          }
+        }
+      }
+      const metaUpdatedIds = engine.drainMetaUpdates();
+      const gameLogEntries = engine.drainGameLog();
+      intervalCount++;
+      const syncPos = intervalCount % 120 === 0; // position sync every ~12s
+      const eventMsg = buildEventFrame(events, syncPos, metaUpdatedIds, gameLogEntries);
+
+      // Every 300th interval (~30s): broadcast slow frame as safety net / catch-up
+      const slow = intervalCount % 300 === 0 ? buildSlowFrame() : null;
+
+      for (const ws of clients) {
+        if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < WS_BUFFER_THRESHOLD) {
+          if (eventMsg) ws.send(eventMsg);
+          if (slow) ws.send(slow);
+        }
+      }
+    } catch (err) {
+      consecutiveErrors++;
+      console.error(`[server] simulation loop error (${consecutiveErrors} consecutive):`, err);
+      if (consecutiveErrors >= 50) {
+        console.error("[server] 50 consecutive simulation errors — exiting for restart");
+        process.exit(1);
       }
     }
   }, 100);

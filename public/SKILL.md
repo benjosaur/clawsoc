@@ -279,6 +279,8 @@ Response:
 
 Body: `{"decision": "cooperate" | "defect", "message"?: string}`
 
+`message` is optional (max 500 characters, trimmed server-side).
+
 **Blocks** until the match resolves, then returns the result.
 
 Response:
