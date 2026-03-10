@@ -9,6 +9,7 @@ import { generateMessage } from "./src/simulation/messages";
 import { AgentManager } from "./src/simulation/agentManager";
 import { handleAdminAPI } from "./src/simulation/adminApi";
 import { censorText } from "./src/simulation/profanity";
+import { agentApiLimiter, registerLimiter } from "./src/simulation/rateLimit";
 import type { PendingMatch } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent } from "./src/simulation/protocol";
 
@@ -76,12 +77,31 @@ engine.onMatchResolved = (record, aId, bId) => {
 
 // --- Agent HTTP API ---
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage, maxBytes = 10_240): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (c: Buffer) => chunks.push(c));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString()));
-    req.on("error", reject);
+    let size = 0;
+    let settled = false;
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      req.destroy();
+      reject(err);
+    };
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > maxBytes) {
+        fail(new Error("body_too_large"));
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks).toString());
+    });
+    req.on("error", (err) => fail(err));
   });
 }
 
@@ -103,6 +123,16 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     return;
   }
 
+  // Rate limiting per IP
+  const clientIp = (req.headers["fly-client-ip"] as string) || req.socket.remoteAddress || "unknown";
+  const isRegisterRoute = pathname === "/api/agent/register" || pathname === "/api/agent/check-username";
+  const limiter = isRegisterRoute ? registerLimiter : agentApiLimiter;
+  if (!limiter.consume(clientIp)) {
+    const retryAfter = limiter.retryAfter(clientIp);
+    res.setHeader("Retry-After", String(retryAfter));
+    return jsonResponse(res, 429, { error: "Too many requests", retryAfter });
+  }
+
   // GET /api/agent/check-username — unauthenticated availability check
   if (pathname === "/api/agent/check-username" && method === "GET") {
     const url = new URL(req.url ?? "", `http://${req.headers.host}`);
@@ -113,14 +143,22 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
 
   // POST /api/agent/register — first-time registration
   if (pathname === "/api/agent/register" && method === "POST") {
-    const raw = await readBody(req);
+    let raw: string;
+    try {
+      raw = await readBody(req);
+    } catch (err) {
+      if ((err as Error).message === "body_too_large") {
+        return jsonResponse(res, 413, { error: "Request body too large (max 10KB)" });
+      }
+      return jsonResponse(res, 400, { error: "Failed to read request body" });
+    }
     let body: { username?: string; greeting?: string };
     try {
       body = JSON.parse(raw);
     } catch {
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
-    const result = await agentManager.register(body.username ?? "", body.greeting ?? "", engine);
+    const result = await agentManager.register(body.username ?? "", body.greeting ?? "", engine, clientIp);
     if ("error" in result) {
       const status = result.error === "arena_full" ? 503 : 400;
       return jsonResponse(res, status, result);
@@ -151,7 +189,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
 
   // GET /api/agent/match — blocks until a collision happens (auto-rejoins if needed)
   if (pathname === "/api/agent/match" && method === "GET") {
-    const rejoin = await agentManager.ensureInArena(username, apiKeyHash, engine);
+    const rejoin = await agentManager.ensureInArena(username, apiKeyHash, engine, clientIp);
     if (rejoin.error) {
       const status = rejoin.error === "arena_full" ? 503 : 400;
       return jsonResponse(res, status, { error: rejoin.error });
@@ -248,7 +286,15 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
 
   // POST /api/agent/decide — blocks until match resolves, returns result
   if (pathname === "/api/agent/decide" && method === "POST") {
-    const raw = await readBody(req);
+    let raw: string;
+    try {
+      raw = await readBody(req);
+    } catch (err) {
+      if ((err as Error).message === "body_too_large") {
+        return jsonResponse(res, 413, { error: "Request body too large (max 10KB)" });
+      }
+      return jsonResponse(res, 400, { error: "Failed to read request body" });
+    }
     let body: { message?: string; decision?: string };
     try {
       body = JSON.parse(raw);
@@ -256,7 +302,8 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       return jsonResponse(res, 400, { error: "Invalid JSON" });
     }
 
-    const { message, decision } = body;
+    const message = body.message?.slice(0, 500);
+    const { decision } = body;
     if (!decision || (decision !== "cooperate" && decision !== "defect")) {
       return jsonResponse(res, 400, { error: "decision must be 'cooperate' or 'defect'" });
     }
