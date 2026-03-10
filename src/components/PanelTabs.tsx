@@ -2,33 +2,31 @@
 
 import { useState, useEffect } from "react";
 
-type Tab = "avg" | "total" | "log" | "player";
+type Tab = "scores" | "log" | "player";
 
 interface TabDef { id: Tab; label: string }
 
 interface Props {
-  avgPanel: React.ReactNode;
-  totalPanel: React.ReactNode;
+  scorePanel: React.ReactNode;
   logPanel: React.ReactNode;
   playerPanel?: React.ReactNode;
 }
 
-export default function PanelTabs({ avgPanel, totalPanel, logPanel, playerPanel }: Props) {
+export default function PanelTabs({ scorePanel, logPanel, playerPanel }: Props) {
   const tabs: TabDef[] = [
-    { id: "total", label: "Total Score" },
-    { id: "avg", label: "Avg Score" },
+    { id: "scores", label: "Scoreboard" },
     { id: "log", label: "Game Log" },
   ];
   if (playerPanel) tabs.push({ id: "player", label: "Player" });
 
-  const [active, setActive] = useState<Tab>("total");
+  const [active, setActive] = useState<Tab>("scores");
 
   // Auto-switch to player tab when a player is selected
   useEffect(() => {
     if (playerPanel) {
       setActive("player");
     } else {
-      setActive((prev) => (prev === "player" ? "total" : prev));
+      setActive((prev) => (prev === "player" ? "scores" : prev));
     }
   }, [playerPanel != null]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -50,8 +48,7 @@ export default function PanelTabs({ avgPanel, totalPanel, logPanel, playerPanel 
         ))}
       </div>
       <div className="flex-1 min-h-0 overflow-auto pt-2">
-        {active === "avg" && avgPanel}
-        {active === "total" && totalPanel}
+        {active === "scores" && scorePanel}
         {active === "log" && logPanel}
         {active === "player" && playerPanel}
       </div>

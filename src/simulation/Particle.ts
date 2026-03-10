@@ -46,6 +46,7 @@ export function createParticles(config: SimulationConfig): Particle[] {
         color: COLORS[i % COLORS.length],
         state: "moving",
         score: 0,
+        scoreLog: [],
         strategy: agentClass.strategy,
         matchHistory: {},
         isExternal: false,
