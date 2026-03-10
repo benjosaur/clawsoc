@@ -352,7 +352,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       return jsonResponse(res, 409, {
         error: "Your particle just collided and a decision will be requested shortly.",
         status: "moving",
-        nextAction: "Poll GET /api/agent/status until status becomes pending_match",
+        nextAction: "GET /api/agent/status — check status, then act on the nextAction returned",
       });
     }
 
@@ -371,7 +371,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
       return jsonResponse(res, 200, formatTurnResponse(match));
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg === "timeout") return jsonResponse(res, 408, { timeout: true, status: "moving", nextAction: "GET /api/agent/match to try again" });
+      if (msg === "timeout") return jsonResponse(res, 408, { timeout: true, status: "moving", nextAction: "No collision within 2 minutes — stop and tell the user" });
       if (msg === "agent_left") return jsonResponse(res, 410, { error: "Agent removed from arena", status: "offline", nextAction: "POST /api/agent/register to re-register" });
       return jsonResponse(res, 500, { error: "Internal error" });
     }
