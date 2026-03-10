@@ -29,7 +29,8 @@ import { RegisterBodySchema, DecideBodySchema } from "./src/simulation/schemas";
 import { agentApiLimiter, registerLimiter, adminLimiter, publicApiLimiter } from "./src/simulation/rateLimit";
 import type { PendingMatch } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent, WireGameLogEntry } from "./src/simulation/protocol";
-import { initLlm, requestLlmMessage } from "./src/simulation/llm";
+import { initLlm, requestLlmMessage, requestLlmDecision } from "./src/simulation/llm";
+import { decide } from "./src/simulation/strategies";
 import { CHARACTER_BLURBS } from "./src/simulation/characterBlurbs";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -118,9 +119,23 @@ const llmCallback = (aId: string, bId: string, side: "a" | "b", self: import("./
     });
 };
 
+const llmDecisionCallback = (aId: string, bId: string, side: "a" | "b", self: import("./src/simulation/types").Particle, opponent: import("./src/simulation/types").Particle, conversationSoFar: import("./src/simulation/types").ConversationTurn[]) => {
+  requestLlmDecision(self, opponent, side, conversationSoFar)
+    .then((decision) => {
+      const result = engine.resolveExternalTurn(aId, bId, side, "decision", "", decision);
+      if (!result.ok) console.warn(`[llm-decision] Late response discarded for ${self.id}: ${result.error}`);
+    })
+    .catch((err) => {
+      console.error(`[llm-decision] Failed for ${self.id}:`, err);
+      const fallback = decide(self, opponent);
+      engine.resolveExternalTurn(aId, bId, side, "decision", "", fallback);
+    });
+};
+
 if (llmAvailable && !dev) {
-  console.log("[server] LLM enabled — bot messages will use gpt-4o-mini");
+  console.log("[server] LLM enabled — bot messages and decisions will use gpt-4o-mini");
   engine.onRequestBotLlmMessage = llmCallback;
+  engine.onRequestBotLlmDecision = llmDecisionCallback;
 } else {
   console.log(`[server] LLM ${llmAvailable ? "available but defaulting to templates (dev mode)" : "disabled — no OPENAI_API_KEY"}`);
 }
@@ -132,14 +147,35 @@ export function getLlmStatus() {
 export function setLlmEnabled(enabled: boolean) {
   if (!llmAvailable) return;
   engine.onRequestBotLlmMessage = enabled ? llmCallback : null;
+  engine.onRequestBotLlmDecision = enabled ? llmDecisionCallback : null;
   if (!enabled) {
     for (const fp of engine.frozenPairs) {
       if (!fp.conversation.waitingForExternal) continue;
       const speaker = fp.conversation.currentSpeaker;
-      engine.resolveExternalTurn(fp.aId, fp.bId, speaker, "message", "...");
+      const speakerId = speaker === "a" ? fp.aId : fp.bId;
+      const opponentId = speaker === "a" ? fp.bId : fp.aId;
+      const self = engine.getParticle(speakerId);
+      const opponent = engine.getParticle(opponentId);
+
+      // Skip external agent waits — those are handled by the agent API
+      if (!self || !opponent || self.isExternal) continue;
+
+      // Determine if this was a decision wait or a message wait
+      const oppLocked = speaker === "a" ? fp.conversation.lockedInB : fp.conversation.lockedInA;
+      const hasSent = fp.conversation.turns.some(t => t.speaker === speaker && t.type === "message");
+      const oppHasActed = fp.conversation.turns.some(t => t.speaker !== speaker);
+
+      if (oppLocked !== null || (hasSent && oppHasActed)) {
+        // Decision wait — fall back to strategy
+        const fallback = decide(self, opponent);
+        engine.resolveExternalTurn(fp.aId, fp.bId, speaker, "decision", "", fallback);
+      } else {
+        // Message wait
+        engine.resolveExternalTurn(fp.aId, fp.bId, speaker, "message", "...");
+      }
     }
   }
-  console.log(`[server] LLM messaging ${enabled ? "enabled" : "disabled"} by admin`);
+  console.log(`[server] LLM messaging and decisions ${enabled ? "enabled" : "disabled"} by admin`);
 }
 
 // --- Agent HTTP API ---

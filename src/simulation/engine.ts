@@ -47,6 +47,15 @@ export type BotLlmMessageCallback = (
   conversationSoFar: ConversationTurn[],
 ) => void;
 
+export type BotLlmDecisionCallback = (
+  aId: string,
+  bId: string,
+  side: "a" | "b",
+  self: Particle,
+  opponent: Particle,
+  conversationSoFar: ConversationTurn[],
+) => void;
+
 export type MatchResolvedCallback = (
   record: MatchRecord,
   aId: string,
@@ -68,6 +77,7 @@ export class SimulationEngine {
   pendingGameLog: GameLogEntry[] = [];
   onRequestExternalTurn: ExternalTurnCallback | null = null;
   onRequestBotLlmMessage: BotLlmMessageCallback | null = null;
+  onRequestBotLlmDecision: BotLlmDecisionCallback | null = null;
   onMatchResolved: MatchResolvedCallback | null = null;
   onParticleParked: ((particleId: string, username: string) => void) | null = null;
 
@@ -144,6 +154,11 @@ export class SimulationEngine {
         this.onRequestExternalTurn(fp.aId, fp.bId, speaker, self, opponent, conv.turns, true);
         return false;
       }
+      if (this.onRequestBotLlmDecision) {
+        conv.waitingForExternal = true;
+        this.onRequestBotLlmDecision(fp.aId, fp.bId, speaker, self, opponent, conv.turns);
+        return false;
+      }
       const decision = decide(self, opponent);
       this.recordTurn(fp, speaker, "decision", "", decision);
       return true; // both decided
@@ -158,6 +173,11 @@ export class SimulationEngine {
 
     const action = botChooseTurnAction(self, opponent, conv);
     if (action.type === "decision") {
+      if (this.onRequestBotLlmDecision) {
+        conv.waitingForExternal = true;
+        this.onRequestBotLlmDecision(fp.aId, fp.bId, speaker, self, opponent, conv.turns);
+        return false;
+      }
       this.recordTurn(fp, speaker, "decision", "", action.decision);
     } else if (this.onRequestBotLlmMessage) {
       conv.waitingForExternal = true;
