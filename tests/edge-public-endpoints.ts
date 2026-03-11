@@ -182,7 +182,7 @@ async function testPlayerLookupEdges() {
   });
 
   await test("CORS header present on player lookup", async () => {
-    const res = await tracedFetch(`${BASE}/api/player/lookup?name=nobody_xyz_999`);
+    const res = await tracedFetch(`${BASE}/api/player/lookup?name=nob_999`);
     const acao = res.headers.get("access-control-allow-origin");
     expect(acao === "*", `expected ACAO *, got '${acao}'`);
   });

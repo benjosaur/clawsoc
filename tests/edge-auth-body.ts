@@ -86,8 +86,8 @@ async function fetchRetry(input: RequestInfo, init?: RequestInit, maxRetries = 3
 // ---------------------------------------------------------------------------
 // Setup: register a test agent for authenticated tests
 // ---------------------------------------------------------------------------
-const TEST_USER = `eab_${Date.now().toString(36)}`;
-const TEST_USER_B = `eab2_${Date.now().toString(36)}`;
+const TEST_USER = `a_${Date.now().toString(36)}`;
+const TEST_USER_B = `b_${Date.now().toString(36)}`;
 let apiKey = "";
 let apiKeyB = "";
 
