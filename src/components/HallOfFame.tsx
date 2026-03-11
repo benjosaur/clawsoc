@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { HallOfFameResponse } from "@/simulation/types";
 import { STRATEGY_SHORT, STRATEGY_TOOLTIP, useStrategyTip, StrategyTipPortal } from "@/components/StrategyTip";
 
@@ -18,16 +18,20 @@ export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
   const [page, setPage] = useState(1);
   const [includeBots, setIncludeBots] = useState(false);
   const { tip, showTip, hideTip } = useStrategyTip();
+  const fetchIdRef = useRef(0);
 
-  const fetchPage = (p: number) => {
+  const fetchPage = (p: number, bots: boolean) => {
     setError(null);
-    fetch(`/api/halloffame?page=${p}&pageSize=${PAGE_SIZE}`)
+    const id = ++fetchIdRef.current;
+    const params = `page=${p}&pageSize=${PAGE_SIZE}${bots ? "" : "&humansOnly=1"}`;
+    fetch(`/api/halloffame?${params}`)
       .then((r) => {
         if (!r.ok) throw new Error(`Server returned ${r.status}`);
         return r.json();
       })
-      .then((d) => setData(d))
+      .then((d) => { if (id === fetchIdRef.current) setData(d); })
       .catch((err) => {
+        if (id !== fetchIdRef.current) return;
         console.error("[HallOfFame] fetch failed:", err);
         setError("Failed to load leaderboard");
       });
@@ -38,13 +42,13 @@ export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
     setData(null);
     setError(null);
     setPage(1);
-    fetchPage(1);
+    fetchPage(1, includeBots);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goToPage = (p: number) => {
     setPage(p);
     setData(null);
-    fetchPage(p);
+    fetchPage(p, includeBots);
   };
 
   if (!open) return null;
@@ -78,7 +82,13 @@ export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
         <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-3">
           <span>Updated when a player leaves or hourly on the server</span>
           <button
-            onClick={() => setIncludeBots(!includeBots)}
+            onClick={() => {
+              const next = !includeBots;
+              setIncludeBots(next);
+              setPage(1);
+              setData(null);
+              fetchPage(1, next);
+            }}
             className="flex items-center gap-2 cursor-pointer select-none text-zinc-500 hover:text-zinc-700 transition-colors"
           >
             <span>Include bots</span>
@@ -109,7 +119,7 @@ export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
               <div className="flex flex-col items-center justify-center py-8 gap-2">
                 <span className="text-xs text-red-500 font-mono">{error}</span>
                 <button
-                  onClick={() => fetchPage(page)}
+                  onClick={() => fetchPage(page, includeBots)}
                   className="text-xs text-zinc-500 hover:text-zinc-700 underline cursor-pointer"
                 >
                   Retry
@@ -120,12 +130,12 @@ export default function HallOfFame({ open, onClose, onSelectPlayer }: Props) {
                 loading...
               </div>
             )
-          ) : (includeBots ? data.entries : data.entries.filter(e => e.isExternal)).length === 0 ? (
+          ) : data.entries.length === 0 ? (
             <div className="text-xs text-zinc-300 font-mono py-4 text-center">
               No players qualify yet (need {data.minGames}+ games)
             </div>
           ) : (
-            (includeBots ? data.entries : data.entries.filter(e => e.isExternal)).map((entry, i) => {
+            data.entries.map((entry, i) => {
               const rank = (data.page - 1) * data.pageSize + i + 1;
               const hue = Math.round((entry.coopPct / 100) * 120);
               const color = `hsl(${hue},70%,42%)`;

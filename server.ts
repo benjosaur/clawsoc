@@ -952,7 +952,8 @@ async function main() {
         res.setHeader("Cache-Control", "public, max-age=60");
         const page = Math.max(1, parseInt(parsed.query.page as string, 10) || 1);
         const pageSize = Math.min(100, Math.max(1, parseInt(parsed.query.pageSize as string, 10) || 50));
-        const data = await agentManager.getHallOfFamePage(page, pageSize, engine);
+        const humansOnly = parsed.query.humansOnly === "1";
+        const data = await agentManager.getHallOfFamePage(page, pageSize, engine, humansOnly);
         jsonResponse(res, 200, data);
       } catch (err) {
         console.error("Hall of fame error:", err);
