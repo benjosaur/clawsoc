@@ -139,6 +139,21 @@ export default function AdminPage() {
     fetchData(password);
   };
 
+  const handleDelete = async (username: string) => {
+    if (!window.confirm(`Permanently delete "${username}"? This removes all their data and cannot be undone.`)) return;
+    const res = await fetch("/api/admin/delete", {
+      method: "POST",
+      headers: authHeaders(password),
+      body: JSON.stringify({ username }),
+    });
+    if (res.status === 401) {
+      setAuthenticated(false);
+      setError("Session expired");
+      return;
+    }
+    fetchData(password);
+  };
+
   const handleToggleLlm = async () => {
     const res = await fetch("/api/admin/llm", {
       method: "POST",
@@ -253,7 +268,7 @@ export default function AdminPage() {
           ) : (
             <div className="border border-zinc-200 rounded overflow-hidden">
               <div
-                className="grid grid-cols-[1fr_70px_60px_60px_70px_60px] gap-2 px-3 py-2
+                className="grid grid-cols-[1fr_70px_60px_60px_70px_100px] gap-2 px-3 py-2
                   text-[10px] font-medium text-zinc-400 uppercase bg-zinc-50
                   border-b border-zinc-200"
               >
@@ -287,7 +302,7 @@ export default function AdminPage() {
               {sortedActive.map((u) => (
                 <div
                   key={u.username}
-                  className="grid grid-cols-[1fr_70px_60px_60px_70px_60px] gap-2 px-3 py-2
+                  className="grid grid-cols-[1fr_70px_60px_60px_70px_100px] gap-2 px-3 py-2
                     text-xs font-mono border-b border-zinc-100 last:border-b-0
                     items-center"
                 >
@@ -319,13 +334,22 @@ export default function AdminPage() {
                           : "offline"}
                     </span>
                   </span>
-                  <button
-                    onClick={() => handleBan(u.username)}
-                    className="px-2 py-0.5 text-[10px] border border-red-200
-                      text-red-500 rounded hover:bg-red-50"
-                  >
-                    Ban
-                  </button>
+                  <span className="flex gap-1">
+                    <button
+                      onClick={() => handleBan(u.username)}
+                      className="px-2 py-0.5 text-[10px] border border-red-200
+                        text-red-500 rounded hover:bg-red-50"
+                    >
+                      Ban
+                    </button>
+                    <button
+                      onClick={() => handleDelete(u.username)}
+                      className="px-2 py-0.5 text-[10px] border border-zinc-200
+                        text-zinc-400 rounded hover:bg-zinc-50"
+                    >
+                      Delete
+                    </button>
+                  </span>
                 </div>
               ))}
             </div>
@@ -342,7 +366,7 @@ export default function AdminPage() {
           ) : (
             <div className="border border-zinc-200 rounded overflow-hidden">
               <div
-                className="grid grid-cols-[1fr_70px_60px_60px_60px] gap-2 px-3 py-2
+                className="grid grid-cols-[1fr_70px_60px_60px_100px] gap-2 px-3 py-2
                   text-[10px] font-medium text-zinc-400 uppercase bg-zinc-50
                   border-b border-zinc-200"
               >
@@ -355,7 +379,7 @@ export default function AdminPage() {
               {bannedUsers.map((u) => (
                 <div
                   key={u.username}
-                  className="grid grid-cols-[1fr_70px_60px_60px_60px] gap-2 px-3 py-2
+                  className="grid grid-cols-[1fr_70px_60px_60px_100px] gap-2 px-3 py-2
                     text-xs font-mono border-b border-zinc-100 last:border-b-0
                     items-center"
                 >
@@ -369,13 +393,22 @@ export default function AdminPage() {
                   <span className="text-zinc-500">
                     {u.totalGames > 0 ? `${u.coopPct}%` : "\u2014"}
                   </span>
-                  <button
-                    onClick={() => handleUnban(u.username)}
-                    className="px-2 py-0.5 text-[10px] border border-emerald-200
-                      text-emerald-600 rounded hover:bg-emerald-50"
-                  >
-                    Unban
-                  </button>
+                  <span className="flex gap-1">
+                    <button
+                      onClick={() => handleUnban(u.username)}
+                      className="px-2 py-0.5 text-[10px] border border-emerald-200
+                        text-emerald-600 rounded hover:bg-emerald-50"
+                    >
+                      Unban
+                    </button>
+                    <button
+                      onClick={() => handleDelete(u.username)}
+                      className="px-2 py-0.5 text-[10px] border border-zinc-200
+                        text-zinc-400 rounded hover:bg-zinc-50"
+                    >
+                      Delete
+                    </button>
+                  </span>
                 </div>
               ))}
             </div>

@@ -41,6 +41,7 @@ type Redis = {
   sadd(key: string, ...members: string[]): Promise<unknown>;
   srem(key: string, ...members: string[]): Promise<unknown>;
   smembers(key: string): Promise<string[]>;
+  hdel(key: string, ...fields: string[]): Promise<unknown>;
   quit(): Promise<unknown>;
 };
 
@@ -863,6 +864,34 @@ export class AgentManager {
     this.bannedUsers.delete(lower);
     if (this.redis) {
       await this.redis.srem("banned", lower);
+    }
+  }
+
+  async deleteUser(username: string, engine: SimulationEngine): Promise<void> {
+    const lower = username.toLowerCase();
+
+    // Remove from arena if live (respawns displaced NPC)
+    if (this.agents.has(lower)) {
+      await this.removeAgent(lower, engine);
+    } else {
+      // Clean up apiKeyToUsername mapping restored from Redis at startup
+      for (const [hash, name] of this.apiKeyToUsername) {
+        if (name === lower) { this.apiKeyToUsername.delete(hash); break; }
+      }
+    }
+
+    // Remove from banned set
+    this.bannedUsers.delete(lower);
+
+    // Clean up in-memory caches
+    this.scoreLogCache.delete(lower);
+
+    // Purge all Redis keys
+    if (this.redis) {
+      await this.redis.del(`owner:${lower}`, `agent:${lower}`, `record:${lower}`);
+      await this.redis.srem("banned", lower);
+      await this.redis.zrem("halloffame", lower);
+      await this.redis.hdel("halloffame:meta", lower);
     }
   }
 
