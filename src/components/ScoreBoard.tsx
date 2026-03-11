@@ -23,6 +23,8 @@ interface Props {
   mode?: ScoreMode;
 }
 
+const WINDOW_SIZE = 5;
+
 export default function ScoreBoard({ particles, selectedId, singleRow, onSelect, mode = "all" }: Props) {
   const sorted = [...particles].sort((a, b) =>
     mode === "total"
@@ -31,16 +33,30 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect,
   );
   const selectedRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (selectedId != null && selectedRef.current) {
+    if (selectedId != null && !singleRow && selectedRef.current) {
       selectedRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
-  }, [selectedId]);
+  }, [selectedId, singleRow]);
 
-  const showSingle = singleRow && selectedId != null;
+  const showWindow = singleRow && selectedId != null;
+  let rows: ParticleData[];
+  let rankOffset = 0;
 
-  const rows = showSingle
-    ? sorted.filter((p) => p.id === selectedId)
-    : sorted;
+  if (showWindow) {
+    const idx = sorted.findIndex((p) => p.id === selectedId);
+    if (idx === -1) {
+      rows = sorted;
+    } else {
+      const half = Math.floor(WINDOW_SIZE / 2);
+      let start = idx - half;
+      if (start < 0) start = 0;
+      if (start + WINDOW_SIZE > sorted.length) start = Math.max(0, sorted.length - WINDOW_SIZE);
+      rows = sorted.slice(start, start + WINDOW_SIZE);
+      rankOffset = start;
+    }
+  } else {
+    rows = sorted;
+  }
 
   return (
     <>
@@ -70,14 +86,14 @@ export default function ScoreBoard({ particles, selectedId, singleRow, onSelect,
       </div>
       <div className="space-y-0 overflow-y-auto min-h-0 flex-1">
         {rows.map((p, rowIndex) => {
-          const rank = showSingle ? sorted.indexOf(p) + 1 : rowIndex + 1;
+          const rank = rankOffset + rowIndex + 1;
           const isSelected = selectedId != null && p.id === selectedId;
           return (
             <div
               key={p.id}
               ref={isSelected ? selectedRef : undefined}
-              className={`flex items-center gap-1.5 text-[11px] font-mono py-px cursor-pointer hover:bg-zinc-50 ${
-                isSelected ? "bg-amber-50 rounded" : ""
+              className={`flex items-center gap-1.5 text-[11px] font-mono py-px cursor-pointer ${
+                isSelected ? "bg-amber-50 rounded" : "hover:bg-zinc-50"
               }`}
               onClick={() => onSelect?.(isSelected ? null : p.id)}
             >
