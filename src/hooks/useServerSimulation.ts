@@ -195,8 +195,23 @@ export function useServerSimulation() {
         // remaining batch steps after unfreezing. Compensate so the client
         // starts from the server's current position.
         const ff = Math.max(0, frame.tick - ev.tick);
-        if (a) { a.x = ev.ax + ev.avx * ff; a.y = ev.ay + ev.avy * ff; a.vx = ev.avx; a.vy = ev.avy; a.state = 0; }
-        if (b) { b.x = ev.bx + ev.bvx * ff; b.y = ev.by + ev.bvy * ff; b.vx = ev.bvx; b.vy = ev.bvy; b.state = 0; }
+        if (a) {
+          if (a.state === 3) {
+            // Already parked (external) — set separated position, no fast-forward
+            a.x = ev.ax; a.y = ev.ay; a.cx = 0; a.cy = 0;
+          } else {
+            a.x = ev.ax + ev.avx * ff; a.y = ev.ay + ev.avy * ff;
+            a.vx = ev.avx; a.vy = ev.avy; a.state = 0; a.cx = 0; a.cy = 0;
+          }
+        }
+        if (b) {
+          if (b.state === 3) {
+            b.x = ev.bx; b.y = ev.by; b.cx = 0; b.cy = 0;
+          } else {
+            b.x = ev.bx + ev.bvx * ff; b.y = ev.by + ev.bvy * ff;
+            b.vx = ev.bvx; b.vy = ev.bvy; b.state = 0; b.cx = 0; b.cy = 0;
+          }
+        }
       } else if (ev.e === "add") {
         const radius = sim.config.particleRadius;
         const cp: ClientParticle = { id: ev.id, x: ev.x, y: ev.y, vx: ev.vx, vy: ev.vy, radius, state: 0, cx: 0, cy: 0, tx: 0, ty: 0, tvx: 0, tvy: 0, freezeAt: 0 };
