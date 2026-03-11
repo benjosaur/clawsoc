@@ -87,7 +87,7 @@ function expandConversation(compact: (string | number)[]): ConversationTurn[] {
 }
 
 /** Expand a compact wire game log entry to the full MatchRecord. */
-function expandWireEntry(wire: WireGameLogEntry): GameLogEntry {
+function expandWireEntry(wire: WireGameLogEntry, staticMeta: Map<string, { id: string; strategy: StrategyType }>): GameLogEntry {
   const conversation = expandConversation(wire.conversation);
   const firstA = conversation.find((t) => t.speaker === "a" && t.type === "message");
   const firstB = conversation.find((t) => t.speaker === "b" && t.type === "message");
@@ -95,8 +95,8 @@ function expandWireEntry(wire: WireGameLogEntry): GameLogEntry {
     type: "match",
     id: wire.id,
     tick: 0,
-    particleA: wire.particleA,
-    particleB: wire.particleB,
+    particleA: { id: wire.particleA, strategy: staticMeta.get(wire.particleA)?.strategy ?? "random" },
+    particleB: { id: wire.particleB, strategy: staticMeta.get(wire.particleB)?.strategy ?? "random" },
     decisionA: wire.decisionA,
     decisionB: wire.decisionB,
     scoreA: wire.scoreA,
@@ -291,7 +291,7 @@ export function useServerSimulation() {
     // Process game log entries + derive outcome matrix client-side
     if (frame.log && frame.log.length > 0) {
       const meta = metaRef.current;
-      const expanded = frame.log.map(expandWireEntry);
+      const expanded = frame.log.map((w) => expandWireEntry(w, staticMetaRef.current));
       const seen = new Set(gameLogRef.current.map((e) => e.id));
       const fresh = expanded.filter((e) => !seen.has(e.id));
       if (fresh.length > 0) {

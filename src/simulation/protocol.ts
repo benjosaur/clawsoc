@@ -48,8 +48,8 @@ export interface InitFrame {
 export interface WireMatchRecord {
   type: "match";
   id: string;
-  particleA: { id: string; strategy: StrategyType };
-  particleB: { id: string; strategy: StrategyType };
+  particleA: string;
+  particleB: string;
   decisionA: Decision;
   decisionB: Decision;
   scoreA: number;

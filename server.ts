@@ -630,8 +630,8 @@ function compactGameLogEntry(entry: GameLogEntry): WireGameLogEntry | null {
   return {
     type: "match",
     id: entry.id,
-    particleA: entry.particleA,
-    particleB: entry.particleB,
+    particleA: entry.particleA.id,
+    particleB: entry.particleB.id,
     decisionA: entry.decisionA,
     decisionB: entry.decisionB,
     scoreA: entry.scoreA,
