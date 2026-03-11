@@ -221,7 +221,7 @@ export const DEFAULT_CONFIG: SimulationConfig = {
     },
   ],
   particleRadius: 5,
-  minSpeed: 0.15,
+  minSpeed: 0.2,
   maxSpeed: 0.3,
   freezeDurationTicks: 45,
 
