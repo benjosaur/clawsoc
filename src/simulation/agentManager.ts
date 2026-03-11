@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "crypto";
 import { DEFAULT_CONFIG, type ConversationTurn, type Decision, type MatchRecord, type Particle, type SimulationConfig, type StrategyType, type HallOfFameEntry, type HallOfFameResponse } from "./types";
 import type { SimulationEngine } from "./engine";
 import { validateNoProfanity } from "./profanity";
-import { ParticleRecordSchema, GlobalStatsSchema, HofStatsSchema, HofMetaSchema, safeJsonParse } from "./schemas";
+import { ParticleRecordSchema, AgentRedisSchema, GlobalStatsSchema, HofStatsSchema, HofMetaSchema, safeJsonParse } from "./schemas";
 
 export interface ExternalAgent {
   apiKeyHash: string;
@@ -51,6 +51,17 @@ function hashKey(apiKey: string): string {
 
 function generateApiKey(): string {
   return "claw_" + randomBytes(24).toString("base64url");
+}
+
+export interface RegisteredUser {
+  username: string;
+  score: number;
+  totalGames: number;
+  coopPct: number;
+  isLive: boolean;
+  isSessionActive: boolean;
+  isBanned: boolean;
+  joinedAt: number | null;
 }
 
 export class AgentManager {
@@ -872,6 +883,92 @@ export class AgentManager {
 
   getAllAgents(): Map<string, ExternalAgent> {
     return this.agents;
+  }
+
+  private computeStats(matchHistory: Record<string, { cc: number; cd: number; dc: number; dd: number }>): { totalGames: number; coopPct: number } {
+    let totalGames = 0, coops = 0;
+    for (const r of Object.values(matchHistory)) {
+      totalGames += r.cc + r.cd + r.dc + r.dd;
+      coops += r.cc + r.cd;
+    }
+    return {
+      totalGames,
+      coopPct: totalGames > 0 ? Math.round((coops / totalGames) * 10000) / 100 : 0,
+    };
+  }
+
+  async getAllRegisteredUsers(engine: SimulationEngine): Promise<RegisteredUser[]> {
+    const liveIds = new Set(engine.particles.map(p => p.id));
+
+    if (!this.redis) {
+      // Fallback: in-memory agents only
+      const results: RegisteredUser[] = [];
+      for (const [username, agent] of this.agents) {
+        const particle = engine.getParticle(username);
+        let score = 0, totalGames = 0, coopPct = 0;
+        if (particle) {
+          score = particle.score;
+          ({ totalGames, coopPct } = this.computeStats(particle.matchHistory));
+        }
+        results.push({
+          username, score, totalGames, coopPct,
+          isLive: liveIds.has(username),
+          isSessionActive: true,
+          isBanned: this.bannedUsers.has(username),
+          joinedAt: agent.joinedAt,
+        });
+      }
+      return results;
+    }
+
+    const ownerKeys = await this.redis.keys("owner:*");
+    const results: RegisteredUser[] = [];
+
+    for (const key of ownerKeys) {
+      const username = key.slice("owner:".length);
+      let score = 0, totalGames = 0, coopPct = 0;
+
+      // Prefer live particle data
+      const particle = engine.getParticle(username);
+      if (particle) {
+        score = particle.score;
+        ({ totalGames, coopPct } = this.computeStats(particle.matchHistory));
+      } else {
+        const raw = await this.redis!.get(`record:${username}`);
+        if (raw) {
+          const parsed = ParticleRecordSchema.safeParse(safeJsonParse(raw));
+          if (parsed.success) {
+            score = parsed.data.score;
+            ({ totalGames, coopPct } = this.computeStats(parsed.data.matchHistory));
+          }
+        }
+      }
+
+      // Get joinedAt
+      let joinedAt: number | null = null;
+      const inMemory = this.agents.get(username);
+      if (inMemory) {
+        joinedAt = inMemory.joinedAt;
+      } else {
+        const agentRaw = await this.redis!.get(`agent:${username}`);
+        if (agentRaw) {
+          const parsed = AgentRedisSchema.safeParse(safeJsonParse(agentRaw));
+          if (parsed.success && parsed.data.joinedAt) {
+            joinedAt = parsed.data.joinedAt;
+          }
+        }
+      }
+
+      results.push({
+        username, score, totalGames, coopPct,
+        isLive: liveIds.has(username),
+        isSessionActive: this.agents.has(username),
+        isBanned: this.bannedUsers.has(username),
+        joinedAt,
+      });
+    }
+
+    return results;
   }
 
 }

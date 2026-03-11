@@ -1,12 +1,19 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 
 interface AgentUser {
   username: string;
-  joinedAt: number;
+  score: number;
+  totalGames: number;
+  coopPct: number;
   isLive: boolean;
+  isSessionActive: boolean;
+  isBanned: boolean;
+  joinedAt: number | null;
 }
+
+type SortKey = "username" | "score" | "totalGames" | "coopPct";
 
 function authHeaders(password: string): HeadersInit {
   return {
@@ -24,6 +31,50 @@ export default function AdminPage() {
   const [llmAvailable, setLlmAvailable] = useState(false);
   const [llmEnabled, setLlmEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("totalGames");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const activeUsers = useMemo(() => users.filter((u) => !u.isBanned), [users]);
+  const bannedUsers = useMemo(() => {
+    const fromList = users.filter((u) => u.isBanned);
+    const enrichedNames = new Set(fromList.map((u) => u.username));
+    // Include banned names from the banned SET that have no owner:* key
+    const extras: AgentUser[] = banned
+      .filter((b) => !enrichedNames.has(b))
+      .map((b) => ({
+        username: b,
+        score: 0,
+        totalGames: 0,
+        coopPct: 0,
+        isLive: false,
+        isSessionActive: false,
+        isBanned: true,
+        joinedAt: null,
+      }));
+    return [...fromList, ...extras];
+  }, [users, banned]);
+
+  const sortedActive = useMemo(() => {
+    return [...activeUsers].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (typeof av === "string" && typeof bv === "string") {
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
+      return sortDir === "asc"
+        ? (av as number) - (bv as number)
+        : (bv as number) - (av as number);
+    });
+  }, [activeUsers, sortKey, sortDir]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  };
 
   const fetchData = useCallback(async (pwd: string) => {
     setLoading(true);
@@ -105,6 +156,9 @@ export default function AdminPage() {
     }
   };
 
+  const sortIndicator = (key: SortKey) =>
+    sortKey === key ? (sortDir === "asc" ? " \u2191" : " \u2193") : "";
+
   if (!authenticated) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-white">
@@ -139,7 +193,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen p-8 bg-white">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-bold text-zinc-900">ClawSoc Admin</h1>
           <button
@@ -164,7 +218,7 @@ export default function AdminPage() {
               <p className="text-[10px] text-zinc-400 mt-0.5">
                 {llmAvailable
                   ? "Use GPT-4o-mini for bot conversations instead of templates"
-                  : "Unavailable — no OPENAI_API_KEY configured"}
+                  : "Unavailable \u2014 no OPENAI_API_KEY configured"}
               </p>
             </div>
             <button
@@ -190,38 +244,62 @@ export default function AdminPage() {
         {/* Users Table */}
         <section className="mb-8">
           <h2 className="text-sm font-semibold text-zinc-700 mb-3">
-            External Agents ({users.length})
+            External Agents ({activeUsers.length})
           </h2>
-          {users.length === 0 ? (
+          {activeUsers.length === 0 ? (
             <p className="text-xs text-zinc-400 font-mono">
               No external agents registered
             </p>
           ) : (
             <div className="border border-zinc-200 rounded overflow-hidden">
               <div
-                className="grid grid-cols-[1fr_140px_60px_70px] gap-2 px-3 py-2
+                className="grid grid-cols-[1fr_70px_60px_60px_70px_60px] gap-2 px-3 py-2
                   text-[10px] font-medium text-zinc-400 uppercase bg-zinc-50
                   border-b border-zinc-200"
               >
-                <span>Username</span>
-                <span>Joined</span>
+                <button
+                  className="text-left hover:text-zinc-600"
+                  onClick={() => handleSort("username")}
+                >
+                  Username{sortIndicator("username")}
+                </button>
+                <button
+                  className="text-left hover:text-zinc-600"
+                  onClick={() => handleSort("score")}
+                >
+                  Score{sortIndicator("score")}
+                </button>
+                <button
+                  className="text-left hover:text-zinc-600"
+                  onClick={() => handleSort("totalGames")}
+                >
+                  Games{sortIndicator("totalGames")}
+                </button>
+                <button
+                  className="text-left hover:text-zinc-600"
+                  onClick={() => handleSort("coopPct")}
+                >
+                  Coop%{sortIndicator("coopPct")}
+                </button>
                 <span>Status</span>
                 <span></span>
               </div>
-              {users.map((u) => (
+              {sortedActive.map((u) => (
                 <div
                   key={u.username}
-                  className="grid grid-cols-[1fr_140px_60px_70px] gap-2 px-3 py-2
+                  className="grid grid-cols-[1fr_70px_60px_60px_70px_60px] gap-2 px-3 py-2
                     text-xs font-mono border-b border-zinc-100 last:border-b-0
                     items-center"
                 >
                   <span className="text-zinc-900 truncate">{u.username}</span>
-                  <span className="text-zinc-500">
-                    {new Date(u.joinedAt).toLocaleDateString()}{" "}
-                    {new Date(u.joinedAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                  <span className="text-zinc-600">{u.score}</span>
+                  <span className="text-zinc-600">{u.totalGames}</span>
+                  <span
+                    className={
+                      u.coopPct >= 50 ? "text-emerald-600" : "text-red-500"
+                    }
+                  >
+                    {u.coopPct}%
                   </span>
                   <span className="flex items-center gap-1">
                     <span
@@ -234,7 +312,11 @@ export default function AdminPage() {
                         u.isLive ? "text-emerald-600" : "text-zinc-400"
                       }
                     >
-                      {u.isLive ? "live" : "offline"}
+                      {u.isLive
+                        ? "live"
+                        : u.isSessionActive
+                          ? "session"
+                          : "offline"}
                     </span>
                   </span>
                   <button
@@ -253,30 +335,42 @@ export default function AdminPage() {
         {/* Banned Users */}
         <section>
           <h2 className="text-sm font-semibold text-zinc-700 mb-3">
-            Banned Users ({banned.length})
+            Banned Users ({bannedUsers.length})
           </h2>
-          {banned.length === 0 ? (
+          {bannedUsers.length === 0 ? (
             <p className="text-xs text-zinc-400 font-mono">No banned users</p>
           ) : (
             <div className="border border-zinc-200 rounded overflow-hidden">
               <div
-                className="grid grid-cols-[1fr_70px] gap-2 px-3 py-2
+                className="grid grid-cols-[1fr_70px_60px_60px_60px] gap-2 px-3 py-2
                   text-[10px] font-medium text-zinc-400 uppercase bg-zinc-50
                   border-b border-zinc-200"
               >
                 <span>Username</span>
+                <span>Score</span>
+                <span>Games</span>
+                <span>Coop%</span>
                 <span></span>
               </div>
-              {banned.map((username) => (
+              {bannedUsers.map((u) => (
                 <div
-                  key={username}
-                  className="grid grid-cols-[1fr_70px] gap-2 px-3 py-2
+                  key={u.username}
+                  className="grid grid-cols-[1fr_70px_60px_60px_60px] gap-2 px-3 py-2
                     text-xs font-mono border-b border-zinc-100 last:border-b-0
                     items-center"
                 >
-                  <span className="text-zinc-900">{username}</span>
+                  <span className="text-zinc-900 truncate">{u.username}</span>
+                  <span className="text-zinc-500">
+                    {u.totalGames > 0 ? u.score : "\u2014"}
+                  </span>
+                  <span className="text-zinc-500">
+                    {u.totalGames > 0 ? u.totalGames : "\u2014"}
+                  </span>
+                  <span className="text-zinc-500">
+                    {u.totalGames > 0 ? `${u.coopPct}%` : "\u2014"}
+                  </span>
                   <button
-                    onClick={() => handleUnban(username)}
+                    onClick={() => handleUnban(u.username)}
                     className="px-2 py-0.5 text-[10px] border border-emerald-200
                       text-emerald-600 rounded hover:bg-emerald-50"
                   >

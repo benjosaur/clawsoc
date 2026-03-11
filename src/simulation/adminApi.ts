@@ -90,14 +90,7 @@ export async function handleAdminAPI(
 
   // GET /api/admin/users
   if (pathname === "/api/admin/users" && method === "GET") {
-    const agents = agentManager.getAllAgents();
-    const liveIds = new Set(engine.particles.map((p) => p.id));
-    const users = Array.from(agents.entries()).map(([username, agent]) => ({
-      username,
-      joinedAt: agent.joinedAt,
-      isLive: liveIds.has(username),
-      hasEnteredArena: agent.displacedId !== null,
-    }));
+    const users = await agentManager.getAllRegisteredUsers(engine);
     return jsonResponse(res, 200, { users });
   }
 
