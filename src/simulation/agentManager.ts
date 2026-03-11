@@ -132,9 +132,65 @@ export class AgentManager {
   private async displaceAndSpawn(
     username: string,
     engine: SimulationEngine,
-  ): Promise<{ particle: Particle; displacedId: string; displacedStrategy: StrategyType } | { error: string }> {
+  ): Promise<{ particle: Particle; displacedId: string | null; displacedStrategy: StrategyType | null } | { error: string }> {
     const npcs = engine.particles.filter((p) => !p.isExternal);
-    if (npcs.length === 0) return { error: "arena_full" };
+
+    // No NPCs left — evict the longest-staying external agent
+    if (npcs.length === 0) {
+      let oldestName: string | null = null;
+      let oldestJoinedAt = Infinity;
+      for (const [name, agent] of this.agents) {
+        if (name === username) continue;
+        if (this.spawningUsers.has(name)) continue;
+        if (!engine.getParticle(name)) continue;
+        if (agent.joinedAt < oldestJoinedAt) {
+          oldestJoinedAt = agent.joinedAt;
+          oldestName = name;
+        }
+      }
+      if (!oldestName) return { error: "arena_full" };
+
+      const evicted = this.agents.get(oldestName)!;
+      const evictedParticle = engine.getParticle(oldestName);
+      if (evictedParticle) {
+        await this.snapshotRecord(evictedParticle);
+        await this.upsertHallOfFameEntry(evictedParticle);
+        this.scoreLogCache.set(oldestName, evictedParticle.scoreLog);
+      }
+      engine.removeParticle(oldestName);
+      this.cleanupAgentState(oldestName, "evicted");
+
+      // New agent inherits the evicted agent's displaced NPC — skip NPC respawn
+      const config = engine.config;
+      const margin = config.particleRadius * 3;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = config.minSpeed + Math.random() * (config.maxSpeed - config.minSpeed);
+
+      const particle: Particle = {
+        id: username,
+        position: {
+          x: margin + Math.random() * (config.canvasWidth - margin * 2),
+          y: margin + Math.random() * (config.canvasHeight - margin * 2),
+        },
+        velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+        radius: config.particleRadius,
+        mass: 1,
+        color: `hsl(${Math.round(Math.random() * 360)},70%,42%)`,
+        state: "moving",
+        score: 0,
+        scoreLog: [],
+        strategy: "external",
+        matchHistory: {},
+        isExternal: true,
+        externalOwner: username,
+      };
+
+      return {
+        particle,
+        displacedId: evicted.displacedId,
+        displacedStrategy: evicted.displacedStrategy,
+      };
+    }
 
     const npc = npcs[Math.floor(Math.random() * npcs.length)];
     await this.snapshotRecord(npc);
@@ -513,12 +569,17 @@ export class AgentManager {
       engine.addParticle(npc);
     }
 
-    // Clean up agent records and waiters
+    this.cleanupAgentState(username);
+
+  }
+
+  private cleanupAgentState(username: string, reason: "agent_left" | "evicted" = "agent_left"): void {
+    const agent = this.agents.get(username);
     this.pendingMatches.delete(username);
     const matchWaiter = this.matchWaiters.get(username);
     if (matchWaiter) {
       this.matchWaiters.delete(username);
-      matchWaiter.reject(new Error("agent_left"));
+      matchWaiter.reject(new Error(reason));
     }
     this.turnWaiters.delete(username);
     const resultKey = this.activeResultKeys.get(username);
@@ -532,9 +593,8 @@ export class AgentManager {
     }
     this.parkedAt.delete(username);
     this.agentIps.delete(username);
-    this.apiKeyToUsername.delete(agent.apiKeyHash);
+    if (agent) this.apiKeyToUsername.delete(agent.apiKeyHash);
     this.agents.delete(username);
-
   }
 
   async snapshotRecord(particle: Particle): Promise<void> {

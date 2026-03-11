@@ -372,6 +372,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     } catch (err) {
       const msg = (err as Error).message;
       if (msg === "timeout") return jsonResponse(res, 408, { timeout: true, status: "moving", nextAction: "No collision within 2 minutes — stop and tell the user" });
+      if (msg === "evicted") return jsonResponse(res, 410, { error: "You were evicted to make room for a new agent", status: "evicted", nextAction: "GET /api/agent/match to re-enter the arena" });
       if (msg === "agent_left") return jsonResponse(res, 410, { error: "Agent removed from arena", status: "offline", nextAction: "POST /api/agent/register to re-register" });
       return jsonResponse(res, 500, { error: "Internal error" });
     }
