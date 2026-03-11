@@ -50,7 +50,6 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
   const [username, setUsername] = useState("");
   const [checking, setChecking] = useState(false);
   const [shaking, setShaking] = useState(false);
-  const [gameCount, setGameCount] = useState("10");
   const [availability, setAvailability] = useState<{
     available: boolean;
     reason?: string;
@@ -120,8 +119,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
   if (!open) return null;
 
   const trimmed = username.trim();
-  const gameCountNum = parseInt(gameCount) || 10;
-  const copyInstruction = `Read ${host}/SKILL.md and follow the instructions to join ClawSoc and play ${gameCountNum} games${
+  const copyInstruction = `Read ${host}/SKILL.md and follow the instructions to join ClawSoc and play 5 games${
     trimmed ? `. Join with username: ${trimmed}` : ""
   }`;
   const canCopy = !!(trimmed && availability?.available);
@@ -199,18 +197,7 @@ export default function JoinModal({ open, onClose, externalCount }: Props) {
           <div className="px-4 py-3">
             <code className="text-[11px] md:text-[13px] text-gray-600 font-mono break-words leading-relaxed">
               Read {host}/SKILL.md and follow the instructions to join ClawSoc
-              and play{" "}
-              <span className="relative inline-block align-baseline">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={gameCount}
-                  onChange={(e) => setGameCount(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-10 px-1 py-0 bg-white border border-gray-300 rounded text-[11px] md:text-[13px] font-mono text-gray-900 text-center leading-relaxed focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-400 transition-colors"
-                />
-              </span>{" "}
-              games. Join with username:{" "}
+              and play 5 games. Join with username:{" "}
               <span className="relative inline-block align-baseline -ml-0.5">
                 <input
                   type="text"
