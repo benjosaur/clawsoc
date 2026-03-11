@@ -26,7 +26,7 @@ import { AgentManager } from "./src/simulation/agentManager";
 import { handleAdminAPI } from "./src/simulation/adminApi";
 import { censorText } from "./src/simulation/profanity";
 import { RegisterBodySchema, DecideBodySchema } from "./src/simulation/schemas";
-import { agentApiLimiter, registerLimiter, adminLimiter, publicApiLimiter } from "./src/simulation/rateLimit";
+import { adminLimiter } from "./src/simulation/rateLimit";
 import type { PendingMatch } from "./src/simulation/agentManager";
 import type { InitFrame, EventFrame, SlowFrame, SimEvent, WireGameLogEntry } from "./src/simulation/protocol";
 import { initLlm, requestLlmMessage, requestLlmDecision } from "./src/simulation/llm";
@@ -247,16 +247,6 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     return;
   }
 
-  // Rate limiting per IP
-  const clientIp = (req.headers["fly-client-ip"] as string) || req.socket.remoteAddress || "unknown";
-  const isRegisterRoute = pathname === "/api/agent/register" || pathname === "/api/agent/check-username";
-  const limiter = isRegisterRoute ? registerLimiter : agentApiLimiter;
-  if (!limiter.consume(clientIp)) {
-    const retryAfter = limiter.retryAfter(clientIp);
-    res.setHeader("Retry-After", String(retryAfter));
-    return jsonResponse(res, 429, { error: "Too many requests", retryAfter });
-  }
-
   // GET /api/agent/check-username — unauthenticated availability check
   if (pathname === "/api/agent/check-username" && method === "GET") {
     const url = new URL(req.url ?? "", `http://${req.headers.host}`);
@@ -286,7 +276,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
     if (!parsed.success) {
       return jsonResponse(res, 400, { error: "Invalid request body" });
     }
-    const result = await agentManager.register(parsed.data.username, clientIp);
+    const result = await agentManager.register(parsed.data.username);
     if ("error" in result) {
       return jsonResponse(res, 400, result);
     }
@@ -316,7 +306,7 @@ async function handleAgentAPI(req: IncomingMessage, res: ServerResponse, pathnam
 
   // GET /api/agent/match — blocks until a collision happens (auto-rejoins if needed)
   if (pathname === "/api/agent/match" && method === "GET") {
-    const rejoin = await agentManager.ensureInArena(username, apiKeyHash, engine, clientIp);
+    const rejoin = await agentManager.ensureInArena(username, apiKeyHash, engine);
     if (rejoin.error) {
       const status = rejoin.error === "arena_full" ? 503 : 400;
       return jsonResponse(res, status, { error: rejoin.error });
@@ -890,17 +880,6 @@ async function main() {
         jsonResponse(res, 500, { error: "Internal server error" });
       }
       return;
-    }
-
-    // Rate limit public read endpoints
-    if (pathname === "/api/player/lookup" || pathname === "/api/halloffame") {
-      const clientIp = (req.headers["fly-client-ip"] as string) || req.socket.remoteAddress || "unknown";
-      if (!publicApiLimiter.consume(clientIp)) {
-        const retryAfter = publicApiLimiter.retryAfter(clientIp);
-        res.setHeader("Retry-After", String(retryAfter));
-        jsonResponse(res, 429, { error: "Too many requests", retryAfter });
-        return;
-      }
     }
 
     // Player lookup endpoint (public, no auth)
