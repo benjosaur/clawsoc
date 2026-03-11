@@ -281,7 +281,7 @@ export default function Home() {
 
         {/* Desktop sidebar — match canvas height */}
         <div
-          className="relative z-10 bg-[#fafafa] shadow-[0_0_16px_8px_#fafafa] hidden md:flex min-w-72 lg:min-w-80 xl:min-w-96 flex-col gap-1"
+          className="relative z-10 bg-[#fafafa] shadow-[0_0_16px_8px_#fafafa] hidden md:flex min-w-72 lg:min-w-80 xl:min-w-96 flex-col gap-1 overflow-hidden"
           style={{ flex: "1 0 0%", height: canvasHeight }}
         >
           <div className="flex-shrink-0 pb-1" data-no-deselect>
