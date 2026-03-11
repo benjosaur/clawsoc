@@ -132,13 +132,8 @@ const llmDecisionCallback = (aId: string, bId: string, side: "a" | "b", self: im
     });
 };
 
-if (llmAvailable && !dev) {
-  console.log("[server] LLM enabled — bot messages and decisions will use gpt-4o-mini");
-  engine.onRequestBotLlmMessage = llmCallback;
-  engine.onRequestBotLlmDecision = llmDecisionCallback;
-} else {
-  console.log(`[server] LLM ${llmAvailable ? "available but defaulting to templates (dev mode)" : "disabled — no OPENAI_API_KEY"}`);
-}
+// LLM defaults OFF — enable via admin panel
+console.log(`[server] LLM ${llmAvailable ? "available (off by default — enable via admin)" : "disabled — no OPENAI_API_KEY"}`);
 
 export function getLlmStatus() {
   return { available: llmAvailable, enabled: engine.onRequestBotLlmMessage !== null };
