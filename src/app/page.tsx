@@ -67,6 +67,13 @@ export default function Home() {
     return () => document.removeEventListener('click', handleGlobalClick);
   }, []);
 
+  // Clear selection when selected particle leaves the game
+  useEffect(() => {
+    if (selectedId != null && !state.particles.some(p => p.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [selectedId, state.particles]);
+
   const searchDatabase = useCallback(async (query: string) => {
     setSearching(true);
     setOfflinePlayer(null);
