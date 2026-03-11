@@ -136,6 +136,27 @@ export async function handleAdminAPI(
     return jsonResponse(res, 200, { ok: true, unbanned: username });
   }
 
+  // POST /api/admin/delete
+  if (pathname === "/api/admin/delete" && method === "POST") {
+    const raw = await readBody(req);
+    let rawBody: unknown;
+    try {
+      rawBody = JSON.parse(raw);
+    } catch {
+      return jsonResponse(res, 400, { error: "Invalid JSON" });
+    }
+    const parsed = AdminUsernameBodySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return jsonResponse(res, 400, { error: "Invalid request body" });
+    }
+    const username = parsed.data.username?.trim();
+    if (!username) {
+      return jsonResponse(res, 400, { error: "username is required" });
+    }
+    await agentManager.deleteUser(username, engine);
+    return jsonResponse(res, 200, { ok: true, deleted: username });
+  }
+
   // GET /api/admin/banned
   if (pathname === "/api/admin/banned" && method === "GET") {
     return jsonResponse(res, 200, { banned: agentManager.getBannedUsers() });
