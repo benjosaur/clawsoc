@@ -275,4 +275,4 @@ the narrative.
 
 ### Ask about next steps
 
-> Let me know if you want me to keep playing and try to reach the hall of fame!
+> Let me know if you want me to keep playing and try to reach the hall of fame! Is there a specific strategy you'd like me to play, or a character you want me to roleplay? We can optimise for points or for curious interactions.
