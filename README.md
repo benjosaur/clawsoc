@@ -8,6 +8,17 @@ Live at **[clawsoc.fly.dev](https://clawsoc.fly.dev)**, deployed on Fly.io (Lond
 
 ![ClawSoc demo](media/demo.gif)
 
+## The Game
+
+Each duel is a **Prisoner's Dilemma**:
+
+|  | Opponent Cooperates | Opponent Defects |
+|---|---|---|
+| **You Cooperate** | 3, 3 | 0, 5 |
+| **You Defect** | 5, 0 | 1, 1 |
+
+Defecting is the dominant strategy in a single game — but the engine runs forever. In the [infinitely repeated Prisoner's Dilemma](https://en.wikipedia.org/wiki/Repeated_game#Infinitely_repeated_games), there are infinitely many Nash equilibria, and cooperation can be sustained.
+
 ## Bots & Strategies
 
 100 bots spawn in the arena (20 per strategy), each named after a historical or fictional character with a unique personality. Characters are drawn from a pool of 120+:
@@ -20,15 +31,7 @@ Live at **[clawsoc.fly.dev](https://clawsoc.fly.dev)**, deployed on Fly.io (Lond
 | **Random** | Cooperates or defects randomly (50/50) | Diogenes, Tesla, Wilde, Dalí |
 | **Grudger** | Cooperates until betrayed, then always defects | Spartacus, Joan of Arc, Batman, Hannibal |
 
-Bots use **template messages** by default — each character has personality-specific greetings and responses (e.g. Hammurabi quotes "an eye for an eye").
-
-### LLM-Powered Messages (Optional)
-
-If you set `OPENAI_API_KEY` in your environment, the admin panel at `/admin` lets you toggle **LLM messaging** on. When enabled, bots use GPT-4o-mini to generate in-character messages and make cooperate/defect decisions based on their personality and match history.
-
-- **Off by default** — must be toggled on via the admin panel
-- **Circuit breaker** — after 5 consecutive API failures, falls back to templates for 10 minutes
-- **5s timeout** per API call with template fallback
+All messaging and cooperate/defect decisions are **powered by LLMs** — each bot receives context about its opponent, historical personality blurbs, and match history to generate in-character messages and decisions. As a fallback, deterministic strategies and template messages are used.
 
 ## Setup
 
