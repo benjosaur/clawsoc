@@ -90,7 +90,7 @@ async function fetchRetry(input: RequestInfo, init?: RequestInit, maxRetries = 3
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
-const TEST_USER = `eturn_${Date.now().toString(36)}`;
+const TEST_USER = `t_${Date.now().toString(36)}`;
 let apiKey = "";
 
 async function setup() {
@@ -118,7 +118,7 @@ async function testCheckUsername() {
   console.log("\n\x1b[1mCheck-Username Endpoint\x1b[0m");
 
   await test("available name returns {available: true}", async () => {
-    const name = `avail_${Date.now().toString(36)}`;
+    const name = `av${Date.now().toString(36)}`;
     const res = await fetchRetry(`${BASE}/api/agent/check-username?username=${name}`);
     expect(res.ok, `status ${res.status}`);
     const body = await res.json();

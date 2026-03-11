@@ -214,7 +214,7 @@ async function testWebSocket() {
 // ---------------------------------------------------------------------------
 // 3. Agent Registration
 // ---------------------------------------------------------------------------
-const TEST_USER = `e2e_${Date.now().toString(36)}`;
+const TEST_USER = `e_${Date.now().toString(36)}`;
 
 let apiKey = "";
 
@@ -431,7 +431,7 @@ async function testPlayerLookup() {
 
   await test("lookup nonexistent player returns 404", async () => {
     const res = await tracedFetch(
-      `${BASE}/api/player/lookup?name=nonexistent_xyz_999`
+      `${BASE}/api/player/lookup?name=nox_999`
     );
     expect(res.status === 404, `expected 404, got ${res.status}`);
   });

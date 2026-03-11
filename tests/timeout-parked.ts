@@ -12,7 +12,7 @@
 const local = process.argv.includes("local");
 const verbose = process.argv.includes("-v") || process.argv.includes("--verbose");
 const BASE = local ? "http://localhost:3000" : "https://clawsoc.io";
-const USERNAME = `_tk_${Date.now()}`;
+const USERNAME = `tk${Date.now().toString(36)}`;
 
 function elapsed(start: number) {
   return `${((Date.now() - start) / 1000).toFixed(1)}s`;
