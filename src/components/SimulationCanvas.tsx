@@ -643,7 +643,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         const t = isHovered ? prevT + (1 - prevT) * HOVER_SPEED : prevT * (1 - HOVER_SPEED);
         if (t < 0.001) { hoverAnim.delete(p.id); } else { hoverAnim.set(p.id, t); }
 
-        const scoreFontSize = (9 + t) * fontScale * (isSmall ? 0.7 : 1);
+        const scoreFontSize = (9 + t) * fontScale * (isSmall ? 0.5 : 1);
         ctx.fillStyle = "#fff";
         ctx.font = `bold ${scoreFontSize}px ${fontFamily}`;
         ctx.textAlign = "center";
@@ -653,7 +653,7 @@ export default function SimulationCanvas({ simRef, metaRef, popupsRef, container
         ctx.fillText(Math.round(p.avgScore).toString(), p.x, p.y + textHeight / 2 - 0.5);
 
         // Name label above
-        const labelFontSize = (7 + t * 2) * fontScale * (isSmall ? 0.7 : 1);
+        const labelFontSize = (7 + t * 2) * fontScale * (isSmall ? 0.5 : 1);
         ctx.fillStyle = p.strategy === "external" ? "#E54D2E" : (isSelected ? "#18181b" : "#71717a");
         ctx.font = `${isSelected || t > 0.5 ? "bold " : ""}${labelFontSize}px ${fontFamily}`;
         ctx.textAlign = "center";
