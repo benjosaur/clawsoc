@@ -756,12 +756,13 @@ export class AgentManager {
     console.log(`[HallOfFame] Updated ${count} qualifying live particles`);
   }
 
-  async getHallOfFamePage(page: number, pageSize: number, engine: SimulationEngine): Promise<HallOfFameResponse> {
+  async getHallOfFamePage(page: number, pageSize: number, engine: SimulationEngine, humansOnly?: boolean): Promise<HallOfFameResponse> {
     if (!this.redis) {
       this.warnIfNoRedis("getHallOfFamePage");
       // Fallback: compute from live particles only
       const entries: HallOfFameEntry[] = [];
       for (const p of engine.particles) {
+        if (humansOnly && !p.isExternal) continue;
         let games = 0, coops = 0;
         for (const r of Object.values(p.matchHistory)) {
           games += r.cc + r.cd + r.dc + r.dd;
@@ -784,6 +785,49 @@ export class AgentManager {
       };
     }
 
+    const defaultStats = { updatedAt: 0 };
+
+    if (humansOnly) {
+      // Fetch all entries then filter to humans — dataset is small enough
+      const raw = await this.redis.zrevrange("halloffame", 0, -1, "WITHSCORES");
+      const allLabels: string[] = [];
+      for (let i = 0; i < raw.length; i += 2) {
+        allLabels.push(raw[i]);
+      }
+
+      const statsRaw = await this.redis.get("halloffame:stats");
+      const stats = statsRaw ? (HofStatsSchema.safeParse(safeJsonParse(statsRaw)).data ?? defaultStats) : defaultStats;
+
+      if (allLabels.length === 0) {
+        return { entries: [], minGames: this.hofMinGames, updatedAt: stats.updatedAt, totalEntries: 0, page, pageSize };
+      }
+
+      const metaRaw = await this.redis.hmget("halloffame:meta", ...allLabels);
+      const liveLabels = new Set(engine.particles.map(p => p.id));
+      const allEntries: HallOfFameEntry[] = [];
+
+      for (let i = 0; i < allLabels.length; i++) {
+        const metaStr = metaRaw[i];
+        if (!metaStr) continue;
+        const parsed = HofMetaSchema.safeParse(safeJsonParse(metaStr));
+        if (!parsed.success) continue;
+        const meta = parsed.data;
+        if (!meta.isExternal) continue;
+        allEntries.push({
+          label: allLabels[i], strategy: meta.strategy, totalScore: meta.totalScore,
+          avgScore: meta.avgScore, games: meta.games, coopPct: meta.coopPct,
+          isLive: liveLabels.has(allLabels[i]), isExternal: true,
+        });
+      }
+
+      const start = (page - 1) * pageSize;
+      const sliced = allEntries.slice(start, start + pageSize);
+      return {
+        entries: sliced, minGames: this.hofMinGames, updatedAt: stats.updatedAt,
+        totalEntries: allEntries.length, page, pageSize,
+      };
+    }
+
     const totalEntries = await this.redis.zcard("halloffame");
     const start = (page - 1) * pageSize;
     const stop = start + pageSize - 1;
@@ -794,8 +838,6 @@ export class AgentManager {
     for (let i = 0; i < raw.length; i += 2) {
       labels.push(raw[i]);
     }
-
-    const defaultStats = { updatedAt: 0 };
 
     if (labels.length === 0) {
       const statsRaw = await this.redis.get("halloffame:stats");
