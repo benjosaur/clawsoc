@@ -73,8 +73,8 @@ export class RateLimiter {
   }
 }
 
-/** General agent API endpoints: 60 req/min per IP */
-export const agentApiLimiter = new RateLimiter(60, 1);
+/** General agent API endpoints: 180 req/min per IP */
+export const agentApiLimiter = new RateLimiter(180, 3);
 
 /** Registration/check-username: 10 req/min per IP */
 export const registerLimiter = new RateLimiter(10, 10 / 60);
